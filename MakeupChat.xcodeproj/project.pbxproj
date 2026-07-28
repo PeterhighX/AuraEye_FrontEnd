@@ -1,0 +1,607 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		71A56F9D820F4D6EBA28FF9C /* CabinetSectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF82E8B7851D4C798305E0D3 /* CabinetSectionHeader.swift */; };
+		5398B14D9C654B9BBE113213 /* CameraPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0687403EBC444042B8C17AE1 /* CameraPickerView.swift */; };
+		C945D6CEBBF5496EBEFC2E0C /* ChatBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E413FB9F8DBF4A4C92AF37EE /* ChatBubbleView.swift */; };
+		1F6D0886E0FC41ADBAE39918 /* CosmeticImagePlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */; };
+		CACC9235D5DE4CCF90775BD6 /* CosmeticProductCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EAA981411D4150821F0026 /* CosmeticProductCard.swift */; };
+		190FA228BCBD414C81A6EFE7 /* GradientBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */; };
+		44F8CF83FFB04535A2B8852A /* HomeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65E8B42F5E34163A60327F0 /* HomeComponents.swift */; };
+		421A78BFF89F43C49C2F1CAE /* LocalImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D9292628274DAA81F9707A /* LocalImageView.swift */; };
+		E5BBBA9CB80147FF8423B986 /* MakeupFlowHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */; };
+		A0298E26DFD248D9B63B93D3 /* MakeupInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1CB1A810A544545917E00E5 /* MakeupInputBar.swift */; };
+		D06D071735694F6CB4BC9E47 /* OnboardingStepPreviewPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F5495661EED411488631B67 /* OnboardingStepPreviewPlaceholder.swift */; };
+		FEE4B7004550451DA62A2B1A /* OnboardingStepRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */; };
+		96B832B95FDA4EA4AE95942F /* ProfileComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2D36A90F0F47F895C8E493 /* ProfileComponents.swift */; };
+		00AA29009FFF48569B711095 /* ProfileHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */; };
+		E6AED591F1454547A1B3AE8F /* StepPreviewThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2592F2B2A7A44ADC8155C62A /* StepPreviewThumbnail.swift */; };
+		AF958119723D4E1D827164FF /* SuggestionChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC6AAF507C94CBBA90912ED /* SuggestionChipsView.swift */; };
+		667BAE35653B4EC19E7574A1 /* TipBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC29B045D74844DDBC7221CB /* TipBarView.swift */; };
+		B5A5C745B13B429F8BAC98E2 /* WeatherSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1BDC37469D47A4A6737DCC /* WeatherSummaryCard.swift */; };
+		91717E57C3C24C8EA59017D2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D923C6A2AE4830BA53CFAC /* ContentView.swift */; };
+		6889DE6DAA444FACAD0ED4FA /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B775AF9ECF74516B2ED2A9A /* DatabaseManager.swift */; };
+		1E7783F7E44843B9B2482169 /* DatabaseSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BABBD7DC5CF4CD696BC78A1 /* DatabaseSeeder.swift */; };
+		652D9AF2B4D14773B67ED202 /* Schema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D88721A8CC4A599A7DB4EC /* Schema.swift */; };
+		F4AE45A40A484409AA22212C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBC6A33E5A54F29A9A14162 /* AppTheme.swift */; };
+		1145699A7B7B4299A6D05654 /* MakeupChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1A31DB3CA5451B80EBD6CE /* MakeupChatApp.swift */; };
+		1FE96C860D4C47E9805DE1C1 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1BA1A902504A43A819BEE6 /* AppRoute.swift */; };
+		F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D27055640E4E4BAF83ADD9 /* AppSession.swift */; };
+		64978A80C6B7488C8A5FE582 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B905280BC9546369F252175 /* ChatMessage.swift */; };
+		B404C19562B24943A09E7098 /* CosmeticCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */; };
+		0C51702F98FE4BD5A9116621 /* CosmeticItemDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */; };
+		AE0C417244FA4D7F98C2A0C5 /* OnboardingStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95AEE21700EF49A8A4A42950 /* OnboardingStep.swift */; };
+		F24644F0D7BA42009F39002F /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0683978D3E420C8AA42807 /* ProfileModels.swift */; };
+		E59ECDE30CA44AADA5DC3BF6 /* TipLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD26DA534B784B35BAEA4192 /* TipLibrary.swift */; };
+		76700A8E693A47FFAE17AB36 /* AppRouteDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D8571DA4EB4F4AB8DB21EB /* AppRouteDestination.swift */; };
+		91C6F9D125DA48E1BCA58197 /* ChatRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */; };
+		CF41D675A99C49A59499296C /* CosmeticsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */; };
+		DFE07800092E4D9BB0DEB5D8 /* EyeStyleRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */; };
+		95F3076D013949FD94FFA844 /* MakeupCatalogRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E207F777F7144CB98D76AED /* MakeupCatalogRepository.swift */; };
+		8CB06EBBCA9C48C2A05C2E4A /* OnboardingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B5C938F7524C4EA6C828A9 /* OnboardingRepository.swift */; };
+		33004651F1F945289F520AFD /* UserRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97E76971D064523B4D89FAC /* UserRepository.swift */; };
+		9700981FA36B432197B1EB9E /* ChatSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE39EBC169214B0FA1CD0789 /* ChatSessionService.swift */; };
+		B30000000000000000000001 /* AIAgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000002 /* AIAgentService.swift */; };
+		B30000000000000000000003 /* MakeupExplanationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000004 /* MakeupExplanationService.swift */; };
+		5D84D88B95CB499BAD34CE15 /* CosmeticsRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */; };
+		68A7A170EFE048FFAB8E9E52 /* FaceScanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */; };
+		B20000000000000000000001 /* FaceAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* FaceAnalysisService.swift */; };
+		9130B1E37EA4446BBB42ADFC /* MakeupPreviewThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */; };
+		4512A532E1624202915935F6 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */; };
+		40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8F842357654825A117FBDB /* SyncService.swift */; };
+		A43425BDA5374801BF35A2D6 /* LocalMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DDE7FDFC6E4AF6B00BE06E /* LocalMediaStore.swift */; };
+		8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */; };
+		AAE7BAC217714EDFAB9EEC6A /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12CF94986254D17BB169BFA /* ChatViewModel.swift */; };
+		F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */; };
+		CC62D26E1BFD4CD0977BE5FE /* FirstTimeUseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */; };
+		50E7A3E296254A6E83018653 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */; };
+		B959416B14CC41ADA1F7EC7E /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */; };
+		B20000000000000000000003 /* UserProfileSetupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* UserProfileSetupViewModel.swift */; };
+		1758DD65105A44E5912808DE /* ChatConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D59D7C7ACFD4F46B44A7FBC /* ChatConversationView.swift */; };
+		E55D52EE7D7048E9B90D0BA0 /* DisplayCabinetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */; };
+		A6DFD2ACA0B34B22B21D57DB /* FirstTimeUseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */; };
+		EFA36B954A85485D85DB3599 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5CC419665F41C69594A3D8 /* HomeView.swift */; };
+		E916CC97DB304069962716CE /* MakeupCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */; };
+		02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */; };
+		8822AE718B7D44629D66BD32 /* MakeupStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */; };
+		7AA4FCC389DE4B53AC061CB0 /* MyTasksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8819141714564BF69C1C2EBD /* MyTasksSheet.swift */; };
+		99CCA6634F3C4FD383E00AA5 /* NegativeOneScreen01View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2C6DC6C2754055AFA27A8D /* NegativeOneScreen01View.swift */; };
+		1022CE4C77584DB7B4719786 /* NegativeOneScreen02View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5167CF2B2DB44014B0E56A44 /* NegativeOneScreen02View.swift */; };
+		668F88E302E743B69D2F86FF /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B0F26EB2E943E28F1083EE /* PlaceholderTabView.swift */; };
+		5EB9A4B3323A4AD0836F43C1 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCDFF56C0C8E47EB9C54B46E /* ProfileView.swift */; };
+		FD200DEA3B3E41D8BD0BD0BF /* UserProfileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCF3251D2B34B1AA460A9BB /* UserProfileDetailView.swift */; };
+		B20000000000000000000005 /* UserProfileSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* UserProfileSetupView.swift */; };
+		568459DCBE274424864294B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6C944130539C44F3B528B2F8 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1000000000000000000000E /* MakeupChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MakeupChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF82E8B7851D4C798305E0D3 /* CabinetSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CabinetSectionHeader.swift"; sourceTree = "<group>"; };
+		0687403EBC444042B8C17AE1 /* CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraPickerView.swift"; sourceTree = "<group>"; };
+		E413FB9F8DBF4A4C92AF37EE /* ChatBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatBubbleView.swift"; sourceTree = "<group>"; };
+		05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticImagePlaceholder.swift"; sourceTree = "<group>"; };
+		51EAA981411D4150821F0026 /* CosmeticProductCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticProductCard.swift"; sourceTree = "<group>"; };
+		66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GradientBackgroundView.swift"; sourceTree = "<group>"; };
+		F65E8B42F5E34163A60327F0 /* HomeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeComponents.swift"; sourceTree = "<group>"; };
+		C2D9292628274DAA81F9707A /* LocalImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalImageView.swift"; sourceTree = "<group>"; };
+		4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupFlowHeaderView.swift"; sourceTree = "<group>"; };
+		E1CB1A810A544545917E00E5 /* MakeupInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupInputBar.swift"; sourceTree = "<group>"; };
+		3F5495661EED411488631B67 /* OnboardingStepPreviewPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingStepPreviewPlaceholder.swift"; sourceTree = "<group>"; };
+		F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingStepRow.swift"; sourceTree = "<group>"; };
+		0E2D36A90F0F47F895C8E493 /* ProfileComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileComponents.swift"; sourceTree = "<group>"; };
+		F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileHeaderView.swift"; sourceTree = "<group>"; };
+		2592F2B2A7A44ADC8155C62A /* StepPreviewThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StepPreviewThumbnail.swift"; sourceTree = "<group>"; };
+		EFC6AAF507C94CBBA90912ED /* SuggestionChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SuggestionChipsView.swift"; sourceTree = "<group>"; };
+		EC29B045D74844DDBC7221CB /* TipBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TipBarView.swift"; sourceTree = "<group>"; };
+		2F1BDC37469D47A4A6737DCC /* WeatherSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WeatherSummaryCard.swift"; sourceTree = "<group>"; };
+		05D923C6A2AE4830BA53CFAC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ContentView.swift"; sourceTree = "<group>"; };
+		6B775AF9ECF74516B2ED2A9A /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DatabaseManager.swift"; sourceTree = "<group>"; };
+		3BABBD7DC5CF4CD696BC78A1 /* DatabaseSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DatabaseSeeder.swift"; sourceTree = "<group>"; };
+		56D88721A8CC4A599A7DB4EC /* Schema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Schema.swift"; sourceTree = "<group>"; };
+		EBBC6A33E5A54F29A9A14162 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppTheme.swift"; sourceTree = "<group>"; };
+		CA1A31DB3CA5451B80EBD6CE /* MakeupChatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupChatApp.swift"; sourceTree = "<group>"; };
+		CF1BA1A902504A43A819BEE6 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppRoute.swift"; sourceTree = "<group>"; };
+		95D27055640E4E4BAF83ADD9 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSession.swift"; sourceTree = "<group>"; };
+		0B905280BC9546369F252175 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatMessage.swift"; sourceTree = "<group>"; };
+		7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticCategory.swift"; sourceTree = "<group>"; };
+		8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticItemDisplay.swift"; sourceTree = "<group>"; };
+		95AEE21700EF49A8A4A42950 /* OnboardingStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingStep.swift"; sourceTree = "<group>"; };
+		AA0683978D3E420C8AA42807 /* ProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileModels.swift"; sourceTree = "<group>"; };
+		AD26DA534B784B35BAEA4192 /* TipLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TipLibrary.swift"; sourceTree = "<group>"; };
+		23D8571DA4EB4F4AB8DB21EB /* AppRouteDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppRouteDestination.swift"; sourceTree = "<group>"; };
+		4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatRepository.swift"; sourceTree = "<group>"; };
+		A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticsRepository.swift"; sourceTree = "<group>"; };
+		36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EyeStyleRepository.swift"; sourceTree = "<group>"; };
+		2E207F777F7144CB98D76AED /* MakeupCatalogRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupCatalogRepository.swift"; sourceTree = "<group>"; };
+		B4B5C938F7524C4EA6C828A9 /* OnboardingRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingRepository.swift"; sourceTree = "<group>"; };
+		B97E76971D064523B4D89FAC /* UserRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserRepository.swift"; sourceTree = "<group>"; };
+		EE39EBC169214B0FA1CD0789 /* ChatSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatSessionService.swift"; sourceTree = "<group>"; };
+		B30000000000000000000002 /* AIAgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIAgentService.swift"; sourceTree = "<group>"; };
+		B30000000000000000000004 /* MakeupExplanationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupExplanationService.swift"; sourceTree = "<group>"; };
+		BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticsRecognitionService.swift"; sourceTree = "<group>"; };
+		88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FaceScanService.swift"; sourceTree = "<group>"; };
+		B20000000000000000000002 /* FaceAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FaceAnalysisService.swift"; sourceTree = "<group>"; };
+		76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupPreviewThumbnailRenderer.swift"; sourceTree = "<group>"; };
+		DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingService.swift"; sourceTree = "<group>"; };
+		1F8F842357654825A117FBDB /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SyncService.swift"; sourceTree = "<group>"; };
+		E5DDE7FDFC6E4AF6B00BE06E /* LocalMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalMediaStore.swift"; sourceTree = "<group>"; };
+		B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaPathMigrator.swift"; sourceTree = "<group>"; };
+		F12CF94986254D17BB169BFA /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatViewModel.swift"; sourceTree = "<group>"; };
+		15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DisplayCabinetViewModel.swift"; sourceTree = "<group>"; };
+		1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FirstTimeUseViewModel.swift"; sourceTree = "<group>"; };
+		3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeViewModel.swift"; sourceTree = "<group>"; };
+		AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileViewModel.swift"; sourceTree = "<group>"; };
+		B20000000000000000000004 /* UserProfileSetupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserProfileSetupViewModel.swift"; sourceTree = "<group>"; };
+		0D59D7C7ACFD4F46B44A7FBC /* ChatConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatConversationView.swift"; sourceTree = "<group>"; };
+		91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DisplayCabinetView.swift"; sourceTree = "<group>"; };
+		8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FirstTimeUseView.swift"; sourceTree = "<group>"; };
+		8D5CC419665F41C69594A3D8 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeView.swift"; sourceTree = "<group>"; };
+		AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupCompleteView.swift"; sourceTree = "<group>"; };
+		4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupPreviewView.swift"; sourceTree = "<group>"; };
+		F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupStepsView.swift"; sourceTree = "<group>"; };
+		8819141714564BF69C1C2EBD /* MyTasksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MyTasksSheet.swift"; sourceTree = "<group>"; };
+		1D2C6DC6C2754055AFA27A8D /* NegativeOneScreen01View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NegativeOneScreen01View.swift"; sourceTree = "<group>"; };
+		5167CF2B2DB44014B0E56A44 /* NegativeOneScreen02View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NegativeOneScreen02View.swift"; sourceTree = "<group>"; };
+		C6B0F26EB2E943E28F1083EE /* PlaceholderTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlaceholderTabView.swift"; sourceTree = "<group>"; };
+		CCDFF56C0C8E47EB9C54B46E /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileView.swift"; sourceTree = "<group>"; };
+		4BCF3251D2B34B1AA460A9BB /* UserProfileDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserProfileDetailView.swift"; sourceTree = "<group>"; };
+		B20000000000000000000006 /* UserProfileSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserProfileSetupView.swift"; sourceTree = "<group>"; };
+		6C944130539C44F3B528B2F8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		ED0EBF32066C4D09A1CD3608 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1000000000000000000000B = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000000D /* MakeupChat */,
+				A1000000000000000000000C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1000000000000000000000C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000000E /* MakeupChat.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000000D /* MakeupChat */ = {
+			isa = PBXGroup;
+			children = (
+				05D923C6A2AE4830BA53CFAC /* ContentView.swift */,
+				CA1A31DB3CA5451B80EBD6CE /* MakeupChatApp.swift */,
+				0E686291765348C588EA8996 /* Models */,
+				152ECFDCE80644D9B456152D /* Database */,
+				8D57918213B14D418999C31C /* Storage */,
+				A799DC10421B43AE873825D8 /* Repositories */,
+				3E3312AD544E43B79F16AC75 /* Services */,
+				6B1004A038314259A790B2E3 /* ViewModels */,
+				8DFE9946230640C79F2053E5 /* Navigation */,
+				51DA0CB9D3D14A3882C1C6A1 /* Design */,
+				F8AA73CDAA5D4D20BF004C75 /* Components */,
+				AD42CBA390FE425895EE44D9 /* Views */,
+				7D5DCB44BC9541C7B16F43CC /* Resources */,
+			);
+			path = MakeupChat;
+			sourceTree = "<group>";
+		};
+		0E686291765348C588EA8996 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				CF1BA1A902504A43A819BEE6 /* AppRoute.swift */,
+				95D27055640E4E4BAF83ADD9 /* AppSession.swift */,
+				0B905280BC9546369F252175 /* ChatMessage.swift */,
+				7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */,
+				8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */,
+				95AEE21700EF49A8A4A42950 /* OnboardingStep.swift */,
+				AA0683978D3E420C8AA42807 /* ProfileModels.swift */,
+				AD26DA534B784B35BAEA4192 /* TipLibrary.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		152ECFDCE80644D9B456152D /* Database */ = {
+			isa = PBXGroup;
+			children = (
+				6B775AF9ECF74516B2ED2A9A /* DatabaseManager.swift */,
+				3BABBD7DC5CF4CD696BC78A1 /* DatabaseSeeder.swift */,
+				56D88721A8CC4A599A7DB4EC /* Schema.swift */,
+			);
+			path = Database;
+			sourceTree = "<group>";
+		};
+		8D57918213B14D418999C31C /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				E5DDE7FDFC6E4AF6B00BE06E /* LocalMediaStore.swift */,
+				B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
+		A799DC10421B43AE873825D8 /* Repositories */ = {
+			isa = PBXGroup;
+			children = (
+				4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */,
+				A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */,
+				36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */,
+				2E207F777F7144CB98D76AED /* MakeupCatalogRepository.swift */,
+				B4B5C938F7524C4EA6C828A9 /* OnboardingRepository.swift */,
+				B97E76971D064523B4D89FAC /* UserRepository.swift */,
+			);
+			path = Repositories;
+			sourceTree = "<group>";
+		};
+		3E3312AD544E43B79F16AC75 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B30000000000000000000002 /* AIAgentService.swift */,
+				B30000000000000000000004 /* MakeupExplanationService.swift */,
+				EE39EBC169214B0FA1CD0789 /* ChatSessionService.swift */,
+				BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */,
+				88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */,
+				B20000000000000000000002 /* FaceAnalysisService.swift */,
+				76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */,
+				DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */,
+				1F8F842357654825A117FBDB /* SyncService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		6B1004A038314259A790B2E3 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				F12CF94986254D17BB169BFA /* ChatViewModel.swift */,
+				15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */,
+				1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */,
+				3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */,
+				AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */,
+				B20000000000000000000004 /* UserProfileSetupViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		8DFE9946230640C79F2053E5 /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				23D8571DA4EB4F4AB8DB21EB /* AppRouteDestination.swift */,
+			);
+			path = Navigation;
+			sourceTree = "<group>";
+		};
+		51DA0CB9D3D14A3882C1C6A1 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				EBBC6A33E5A54F29A9A14162 /* AppTheme.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		F8AA73CDAA5D4D20BF004C75 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				BF82E8B7851D4C798305E0D3 /* CabinetSectionHeader.swift */,
+				0687403EBC444042B8C17AE1 /* CameraPickerView.swift */,
+				E413FB9F8DBF4A4C92AF37EE /* ChatBubbleView.swift */,
+				05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */,
+				51EAA981411D4150821F0026 /* CosmeticProductCard.swift */,
+				66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */,
+				F65E8B42F5E34163A60327F0 /* HomeComponents.swift */,
+				C2D9292628274DAA81F9707A /* LocalImageView.swift */,
+				4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */,
+				E1CB1A810A544545917E00E5 /* MakeupInputBar.swift */,
+				3F5495661EED411488631B67 /* OnboardingStepPreviewPlaceholder.swift */,
+				F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */,
+				0E2D36A90F0F47F895C8E493 /* ProfileComponents.swift */,
+				F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */,
+				2592F2B2A7A44ADC8155C62A /* StepPreviewThumbnail.swift */,
+				EFC6AAF507C94CBBA90912ED /* SuggestionChipsView.swift */,
+				EC29B045D74844DDBC7221CB /* TipBarView.swift */,
+				2F1BDC37469D47A4A6737DCC /* WeatherSummaryCard.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		AD42CBA390FE425895EE44D9 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				0D59D7C7ACFD4F46B44A7FBC /* ChatConversationView.swift */,
+				91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */,
+				8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */,
+				8D5CC419665F41C69594A3D8 /* HomeView.swift */,
+				AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */,
+				4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */,
+				F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */,
+				8819141714564BF69C1C2EBD /* MyTasksSheet.swift */,
+				1D2C6DC6C2754055AFA27A8D /* NegativeOneScreen01View.swift */,
+				5167CF2B2DB44014B0E56A44 /* NegativeOneScreen02View.swift */,
+				C6B0F26EB2E943E28F1083EE /* PlaceholderTabView.swift */,
+				CCDFF56C0C8E47EB9C54B46E /* ProfileView.swift */,
+				4BCF3251D2B34B1AA460A9BB /* UserProfileDetailView.swift */,
+				B20000000000000000000006 /* UserProfileSetupView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		7D5DCB44BC9541C7B16F43CC /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				6C944130539C44F3B528B2F8 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000000000000000000002 /* MakeupChat */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000006 /* Build configuration list for PBXNativeTarget "MakeupChat" */;
+			buildPhases = (
+				A10000000000000000000003 /* Sources */,
+				A10000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MakeupChat;
+			productName = MakeupChat;
+			productReference = A1000000000000000000000E /* MakeupChat.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A10000000000000000000002 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = A10000000000000000000005 /* Build configuration list for PBXProject "MakeupChat" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				"zh-Hans",
+				Base,
+			);
+			mainGroup = A1000000000000000000000B;
+			productRefGroup = A1000000000000000000000C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000000000000000000002 /* MakeupChat */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				568459DCBE274424864294B1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71A56F9D820F4D6EBA28FF9C /* CabinetSectionHeader.swift in Sources */,
+				5398B14D9C654B9BBE113213 /* CameraPickerView.swift in Sources */,
+				C945D6CEBBF5496EBEFC2E0C /* ChatBubbleView.swift in Sources */,
+				1F6D0886E0FC41ADBAE39918 /* CosmeticImagePlaceholder.swift in Sources */,
+				CACC9235D5DE4CCF90775BD6 /* CosmeticProductCard.swift in Sources */,
+				190FA228BCBD414C81A6EFE7 /* GradientBackgroundView.swift in Sources */,
+				44F8CF83FFB04535A2B8852A /* HomeComponents.swift in Sources */,
+				421A78BFF89F43C49C2F1CAE /* LocalImageView.swift in Sources */,
+				E5BBBA9CB80147FF8423B986 /* MakeupFlowHeaderView.swift in Sources */,
+				A0298E26DFD248D9B63B93D3 /* MakeupInputBar.swift in Sources */,
+				D06D071735694F6CB4BC9E47 /* OnboardingStepPreviewPlaceholder.swift in Sources */,
+				FEE4B7004550451DA62A2B1A /* OnboardingStepRow.swift in Sources */,
+				96B832B95FDA4EA4AE95942F /* ProfileComponents.swift in Sources */,
+				00AA29009FFF48569B711095 /* ProfileHeaderView.swift in Sources */,
+				E6AED591F1454547A1B3AE8F /* StepPreviewThumbnail.swift in Sources */,
+				AF958119723D4E1D827164FF /* SuggestionChipsView.swift in Sources */,
+				667BAE35653B4EC19E7574A1 /* TipBarView.swift in Sources */,
+				B5A5C745B13B429F8BAC98E2 /* WeatherSummaryCard.swift in Sources */,
+				91717E57C3C24C8EA59017D2 /* ContentView.swift in Sources */,
+				6889DE6DAA444FACAD0ED4FA /* DatabaseManager.swift in Sources */,
+				1E7783F7E44843B9B2482169 /* DatabaseSeeder.swift in Sources */,
+				652D9AF2B4D14773B67ED202 /* Schema.swift in Sources */,
+				F4AE45A40A484409AA22212C /* AppTheme.swift in Sources */,
+				1145699A7B7B4299A6D05654 /* MakeupChatApp.swift in Sources */,
+				1FE96C860D4C47E9805DE1C1 /* AppRoute.swift in Sources */,
+				F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */,
+				64978A80C6B7488C8A5FE582 /* ChatMessage.swift in Sources */,
+				B404C19562B24943A09E7098 /* CosmeticCategory.swift in Sources */,
+				0C51702F98FE4BD5A9116621 /* CosmeticItemDisplay.swift in Sources */,
+				AE0C417244FA4D7F98C2A0C5 /* OnboardingStep.swift in Sources */,
+				F24644F0D7BA42009F39002F /* ProfileModels.swift in Sources */,
+				E59ECDE30CA44AADA5DC3BF6 /* TipLibrary.swift in Sources */,
+				76700A8E693A47FFAE17AB36 /* AppRouteDestination.swift in Sources */,
+				91C6F9D125DA48E1BCA58197 /* ChatRepository.swift in Sources */,
+				CF41D675A99C49A59499296C /* CosmeticsRepository.swift in Sources */,
+				DFE07800092E4D9BB0DEB5D8 /* EyeStyleRepository.swift in Sources */,
+				95F3076D013949FD94FFA844 /* MakeupCatalogRepository.swift in Sources */,
+				8CB06EBBCA9C48C2A05C2E4A /* OnboardingRepository.swift in Sources */,
+				33004651F1F945289F520AFD /* UserRepository.swift in Sources */,
+				9700981FA36B432197B1EB9E /* ChatSessionService.swift in Sources */,
+				B30000000000000000000001 /* AIAgentService.swift in Sources */,
+				B30000000000000000000003 /* MakeupExplanationService.swift in Sources */,
+				5D84D88B95CB499BAD34CE15 /* CosmeticsRecognitionService.swift in Sources */,
+				68A7A170EFE048FFAB8E9E52 /* FaceScanService.swift in Sources */,
+				B20000000000000000000001 /* FaceAnalysisService.swift in Sources */,
+				9130B1E37EA4446BBB42ADFC /* MakeupPreviewThumbnailRenderer.swift in Sources */,
+				4512A532E1624202915935F6 /* OnboardingService.swift in Sources */,
+				40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */,
+				A43425BDA5374801BF35A2D6 /* LocalMediaStore.swift in Sources */,
+				8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */,
+				AAE7BAC217714EDFAB9EEC6A /* ChatViewModel.swift in Sources */,
+				F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */,
+				CC62D26E1BFD4CD0977BE5FE /* FirstTimeUseViewModel.swift in Sources */,
+				50E7A3E296254A6E83018653 /* HomeViewModel.swift in Sources */,
+				B959416B14CC41ADA1F7EC7E /* ProfileViewModel.swift in Sources */,
+				B20000000000000000000003 /* UserProfileSetupViewModel.swift in Sources */,
+				1758DD65105A44E5912808DE /* ChatConversationView.swift in Sources */,
+				E55D52EE7D7048E9B90D0BA0 /* DisplayCabinetView.swift in Sources */,
+				A6DFD2ACA0B34B22B21D57DB /* FirstTimeUseView.swift in Sources */,
+				EFA36B954A85485D85DB3599 /* HomeView.swift in Sources */,
+				E916CC97DB304069962716CE /* MakeupCompleteView.swift in Sources */,
+				02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */,
+				8822AE718B7D44629D66BD32 /* MakeupStepsView.swift in Sources */,
+				7AA4FCC389DE4B53AC061CB0 /* MyTasksSheet.swift in Sources */,
+				99CCA6634F3C4FD383E00AA5 /* NegativeOneScreen01View.swift in Sources */,
+				1022CE4C77584DB7B4719786 /* NegativeOneScreen02View.swift in Sources */,
+				668F88E302E743B69D2F86FF /* PlaceholderTabView.swift in Sources */,
+				5EB9A4B3323A4AD0836F43C1 /* ProfileView.swift in Sources */,
+				FD200DEA3B3E41D8BD0BD0BF /* UserProfileDetailView.swift in Sources */,
+				B20000000000000000000005 /* UserProfileSetupView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A10000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				ONLY_ACTIVE_ARCH = NO;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A10000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "需要使用相机扫描面部，建立您的专属用户档案。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取相册中的照片，用于识别并添加化妆品。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "-lsqlite3";
+				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "需要使用相机扫描面部，建立您的专属用户档案。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取相册中的照片，用于识别并添加化妆品。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "-lsqlite3";
+				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000000000000000000005 /* Build configuration list for PBXProject "MakeupChat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000007 /* Debug */,
+				A10000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000006 /* Build configuration list for PBXNativeTarget "MakeupChat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000009 /* Debug */,
+				A1000000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000000000000000000001 /* Project object */;
+}

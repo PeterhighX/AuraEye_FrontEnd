@@ -1,0 +1,50 @@
+import Foundation
+
+extension CosmeticItem {
+    /// 展示名称 — 后台识别接入后由 `brush_json.name` 或识别结果填充
+    var displayName: String {
+        if let name = brushMetadata?["name"] as? String, !name.isEmpty {
+            return name
+        }
+        if sku.hasPrefix("scan_") {
+            return "\(CosmeticCategory.normalize(makeupCategory))产品"
+        }
+        return sku.replacingOccurrences(of: "_", with: " ")
+    }
+
+    var tags: [String] {
+        if let makeupTab,
+           makeupTab.hasPrefix("["),
+           let data = makeupTab.data(using: .utf8),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [String] {
+            return array
+        }
+        if let makeupTab, !makeupTab.isEmpty {
+            return [makeupTab]
+        }
+        return []
+    }
+
+    /// 品牌色值 — 后台识别后写入 `makeup_colors`
+    var colorHexes: [String] {
+        guard
+            let makeupColorsJSON,
+            let data = makeupColorsJSON.data(using: .utf8),
+            let array = try? JSONSerialization.jsonObject(with: data) as? [String]
+        else { return [] }
+        return array
+    }
+
+    var category: CosmeticCategory? {
+        CosmeticCategory.from(raw: makeupCategory)
+    }
+
+    private var brushMetadata: [String: Any]? {
+        guard
+            let brushJSON,
+            let data = brushJSON.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return object
+    }
+}
