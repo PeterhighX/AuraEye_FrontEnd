@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>colors</key>
+	<array/>
+	<key>images</key>
+	<array>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Resources/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameAvatarAI</string>
+			<key>relativePath</key>
+			<string>./AvatarAI.imageset</string>
+			<key>swiftSymbol</key>
+			<string>avatarAI</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Resources/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameAvatarAI2</string>
+			<key>relativePath</key>
+			<string>./AvatarAI2.imageset</string>
+			<key>swiftSymbol</key>
+			<string>avatarAI2</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Resources/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameAvatarUser</string>
+			<key>relativePath</key>
+			<string>./AvatarUser.imageset</string>
+			<key>swiftSymbol</key>
+			<string>avatarUser</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Resources/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameAvatarUserMsg</string>
+			<key>relativePath</key>
+			<string>./AvatarUserMsg.imageset</string>
+			<key>swiftSymbol</key>
+			<string>avatarUserMsg</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Resources/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameParkPhoto</string>
+			<key>relativePath</key>
+			<string>./ParkPhoto.imageset</string>
+			<key>swiftSymbol</key>
+			<string>parkPhoto</string>
+		</dict>
+	</array>
+	<key>symbols</key>
+	<array/>
+</dict>
+</plist>

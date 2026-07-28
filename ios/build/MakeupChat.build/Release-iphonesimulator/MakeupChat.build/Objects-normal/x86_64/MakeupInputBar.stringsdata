@@ -1,0 +1,16 @@
+{
+  "source": "/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Components/MakeupInputBar.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "来探寻今日的妆容灵感",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 16
+        }
+      }
+    ]
+  },
+  "version": 1
+}

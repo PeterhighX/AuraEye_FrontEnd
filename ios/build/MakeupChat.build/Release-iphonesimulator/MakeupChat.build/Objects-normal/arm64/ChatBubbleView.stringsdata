@@ -1,0 +1,24 @@
+{
+  "source": "/Users/xlzj/figma/makeup-chat-screen/ios/MakeupChat/Components/ChatBubbleView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Mrs Zhang",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 26
+        }
+      },
+      {
+        "comment": "",
+        "key": "，请给我一张图片帮你生成今日的妆容",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 27
+        }
+      }
+    ]
+  },
+  "version": 1
+}
