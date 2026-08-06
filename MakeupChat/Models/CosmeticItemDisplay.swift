@@ -39,6 +39,27 @@ extension CosmeticItem {
         CosmeticCategory.from(raw: makeupCategory)
     }
 
+    var colorFamilyText: String {
+        tags.first ?? "待模型分析色系"
+    }
+
+    var materialText: String {
+        if let material = brushMetadata?["material"] as? String, !material.isEmpty {
+            return material
+        }
+        return tags.first ?? "待模型分析材质"
+    }
+
+    var summaryText: String {
+        if let summary = brushMetadata?["summary"] as? String, !summary.isEmpty {
+            return summary
+        }
+        if tags.count > 1 {
+            return tags[1]
+        }
+        return category == .eyeliner ? "顺滑显色，适合勾勒眼线" : "柔软抓粉，适合自然晕染"
+    }
+
     private var brushMetadata: [String: Any]? {
         guard
             let brushJSON,

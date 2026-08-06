@@ -6,6 +6,7 @@ struct MakeupInputBar: View {
     var onSend: () -> Void
     var onCamera: () -> Void
     var onUpload: () -> Void
+    var isKeyboardPresented = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -16,26 +17,43 @@ struct MakeupInputBar: View {
             TextField("来探寻今日的妆容灵感", text: $text)
                 .font(.system(size: 12, weight: .light))
                 .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4))
+                .keyboardType(.default)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
                 .focused(focusBinding)
                 .submitLabel(.send)
                 .onSubmit(onSend)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(.white)
+                .contentShape(Capsule())
+                .background {
+                    Capsule()
+                        .fill(Color.white)
+                }
                 .clipShape(Capsule())
-                .frame(width: 260)
+                .frame(width: 260, height: 36)
                 .padding(.horizontal, 8)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        DispatchQueue.main.async {
+                            focusBinding.wrappedValue = true
+                        }
+                    }
+                )
+                .accessibilityLabel("对话输入框")
+                .accessibilityHint("轻点后使用系统键盘输入消息")
 
             Button(action: onSend) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 17))
+                Image(systemName: "arrow.up.circle")
+                    .font(.system(size: 28, weight: .regular))
                     .foregroundStyle(Color(red: 0.3, green: 0.3, blue: 0.3))
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.top, isKeyboardPresented ? 0 : 8)
+        .padding(.bottom, isKeyboardPresented ? 0 : 8)
     }
 
     private func iconButton(_ systemName: String, size: CGFloat, action: @escaping () -> Void) -> some View {

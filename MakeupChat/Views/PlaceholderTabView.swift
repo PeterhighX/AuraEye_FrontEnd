@@ -5,9 +5,6 @@ struct PlaceholderTabView: View {
     let systemImage: String
 
     var body: some View {
-        ZStack {
-            GradientBackgroundView()
-            ContentUnavailableView(title, systemImage: systemImage, description: Text("即将上线"))
-        }
+        ContentUnavailableView(title, systemImage: systemImage, description: Text("即将上线"))
     }
 }

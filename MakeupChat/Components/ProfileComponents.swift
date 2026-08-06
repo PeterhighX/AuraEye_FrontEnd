@@ -6,14 +6,13 @@ struct MakeupHistoryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(red: 0.95, green: 0.94, blue: 0.94))
+                Image(item.imageAssetName)
+                    .resizable()
+                    .scaledToFill()
                     .frame(width: 120, height: 120)
-                    .overlay {
-                        Image(systemName: "eye.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(Color(red: 0.77, green: 0.65, blue: 0.52).opacity(0.55))
-                    }
+                    .scaleEffect(1.1)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: Color.black.opacity(0.08), radius: 2)
 
                 VStack(spacing: 10) {
@@ -26,20 +25,13 @@ struct MakeupHistoryCard: View {
                 .frame(height: 102)
             }
 
-            Text(item.title)
+            Text("\(item.makeupCount)上妆")
                 .font(.system(size: 16, weight: .light))
                 .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
 
-            HStack(spacing: 6) {
-                ForEach(item.tags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: 11, weight: .light))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 2)
-                        .background(tagBackground(for: tag))
-                        .clipShape(Capsule())
-                }
-            }
+            Text(item.makeupTime)
+            .font(.system(size: 10, weight: .light))
+            .foregroundStyle(.secondary)
         }
         .padding(12)
         .frame(width: 184)
@@ -48,11 +40,6 @@ struct MakeupHistoryCard: View {
         .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
     }
 
-    private func tagBackground(for tag: String) -> Color {
-        tag == item.tags.first
-            ? Color(red: 1.0, green: 0.93, blue: 0.91)
-            : Color(red: 1.0, green: 0.88, blue: 0.85)
-    }
 }
 
 struct ProfileQuickAction: View {

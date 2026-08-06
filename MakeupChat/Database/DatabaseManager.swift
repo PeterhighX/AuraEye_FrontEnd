@@ -88,6 +88,7 @@ final class DatabaseManager {
 
     private func seedIfNeeded() {
         guard let db else { return }
+        DemoDataSeeder.seedIfNeeded(into: db)
         let count = scalarInt(db, sql: "SELECT COUNT(*) FROM users;") ?? 0
         guard count == 0 else { return }
 

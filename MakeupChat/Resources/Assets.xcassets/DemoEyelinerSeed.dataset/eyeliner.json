@@ -1,0 +1,25 @@
+{
+  "recognition_level": "L2",
+  "items": [
+    {
+      "item_index": 0,
+      "category": "eyeliner",
+      "category_label_zh": "眼线产品",
+      "category_confidence": 0.94,
+      "bbox_0_999": [110, 300, 900, 610],
+      "brand_text": "AuraEye Demo",
+      "product_name_text": "顺滑眼线笔",
+      "shade_text": "深咖色",
+      "visible_texts": ["持久", "易勾勒"],
+      "colors": [
+        {"hex": "#3D2B26", "proportion": 1.0}
+      ],
+      "needs_confirmation": true,
+      "knowledge_keys": ["cosmetic.eyeliner", "shade.deep_brown"]
+    }
+  ],
+  "warnings": [],
+  "knowledge_keys": ["cosmetic.eyeliner"],
+  "result_source": "demo_fallback",
+  "schema_version": "1.0"
+}

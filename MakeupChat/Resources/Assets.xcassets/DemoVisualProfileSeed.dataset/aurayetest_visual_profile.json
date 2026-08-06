@@ -1,0 +1,36 @@
+{
+  "profile_snapshot": {
+    "face": {
+      "shape": "oval",
+      "shape_label_zh": "鹅蛋脸"
+    },
+    "eyes": {
+      "shape": "almond",
+      "shape_label_zh": "杏眼"
+    },
+    "brows": {
+      "shape": "soft_arch",
+      "shape_label_zh": "自然弯眉"
+    },
+    "skin": {
+      "tone": "fair_pink",
+      "tone_label_zh": "粉皮（偏白）",
+      "undertone": "cool"
+    },
+    "provenance": [
+      {
+        "source": "reviewed_demo_seed",
+        "dataset_version": "demo-assets-v1"
+      }
+    ]
+  },
+  "narrative": {
+    "overall": "面部轮廓柔和，适合轻盈、干净的日常妆感。",
+    "eye_details": "杏眼线条自然，可用低饱和眼影加强通透感。",
+    "style_recommendation": "清透自然"
+  },
+  "narrative_status": "succeeded",
+  "warnings": [],
+  "result_source": "demo_seed",
+  "schema_version": "1.0"
+}

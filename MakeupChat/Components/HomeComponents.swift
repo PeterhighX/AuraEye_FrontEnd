@@ -14,23 +14,16 @@ struct HomeRecommendedLookCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ZStack(alignment: .bottom) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(red: 243 / 255, green: 240 / 255, blue: 239 / 255))
-                    .frame(width: 120, height: 142)
-
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(red: 243 / 255, green: 240 / 255, blue: 239 / 255))
-                    .frame(width: 110, height: 120)
-                    .overlay {
-                        Image(look.imageAssetName)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 110, height: 120)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                Image(look.imageAssetName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 120)
+                    // 源 SVG 自带 4pt 投影留白，放大后再裁切，避免预览出现边线。
+                    .scaleEffect(1.1)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: Color.black.opacity(0.08), radius: 2)
-                    .offset(y: -9)
 
                 Text(look.title)
                     .font(.system(size: 14, weight: .light))
@@ -38,9 +31,11 @@ struct HomeRecommendedLookCard: View {
                     .foregroundStyle(Color(red: 38 / 255, green: 38 / 255, blue: 38 / 255))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
             }
-            .frame(width: 120, height: 151)
+            .padding(.bottom, 8)
+            .frame(width: 120)
+            .background(Color(red: 243 / 255, green: 240 / 255, blue: 239 / 255))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
 
             Text(look.tag)
                 .font(.system(size: 11, weight: .light))
@@ -76,6 +71,7 @@ private extension Color {
 }
 
 struct HomeTeachingCard: View {
+    let weather: LiveWeatherSnapshot
     let onQuickStart: () -> Void
 
     var body: some View {
@@ -85,12 +81,13 @@ struct HomeTeachingCard: View {
                 .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
                 .frame(height: 148)
 
-            Image("HomeWeatherCloud")
-                .resizable()
-                .scaledToFit()
+            Image(systemName: weather.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 68))
                 .frame(width: 120, height: 90)
                 .padding(.leading, 18)
                 .offset(y: -20)
+                .contentTransition(.symbolEffect(.replace))
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text("上妆教学")
@@ -109,14 +106,14 @@ struct HomeTeachingCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .center, spacing: 0) {
                     HStack(alignment: .top, spacing: 2) {
-                        Text("26")
+                        Text("\(weather.temperature)")
                             .font(.system(size: 24, weight: .semibold))
                             .tracking(0)
                             .foregroundStyle(Color(red: 85 / 255, green: 85 / 255, blue: 85 / 255))
                         VStack(alignment: .leading, spacing: 0) {
                             Text("℃")
                                 .font(.system(size: 10, weight: .regular, design: .rounded))
-                            Text("多云")
+                            Text(weather.conditionText)
                                 .font(.system(size: 10, weight: .regular, design: .rounded))
                         }
                         .foregroundStyle(Color(red: 157 / 255, green: 157 / 255, blue: 157 / 255))
@@ -124,7 +121,7 @@ struct HomeTeachingCard: View {
 
                     Spacer()
 
-                    Text("福田区")
+                    Text(weather.district)
                         .font(.system(size: 12, weight: .light))
                         .tracking(0)
                         .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
@@ -145,9 +142,11 @@ struct HomeTeachingCard: View {
                                 .opacity(0.45)
                         )
                         .frame(height: 9)
-                    Capsule()
-                        .fill(Color(red: 1, green: 139 / 255, blue: 104 / 255))
-                        .frame(width: 46, height: 9)
+                    GeometryReader { proxy in
+                        Capsule()
+                            .fill(Color(red: 1, green: 139 / 255, blue: 104 / 255))
+                            .frame(width: proxy.size.width * weather.uvProgress, height: 9)
+                    }
                 }
                 .frame(width: 140)
 
@@ -159,7 +158,7 @@ struct HomeTeachingCard: View {
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                     }
                     Spacer()
-                    Text("弱")
+                    Text(weather.uvDescription)
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                 }
                 .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))

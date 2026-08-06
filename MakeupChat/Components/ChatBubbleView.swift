@@ -7,13 +7,13 @@ struct ChatBubbleView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if message.sender == .ai {
-                avatarImage(message.aiAvatarName)
+                avatarImage("FirstTimeAssistant")
                 bubbleContent
                 Color.clear.frame(width: 36, height: 36)
             } else {
                 Color.clear.frame(width: 36, height: 36)
                 bubbleContent
-                avatarImage("AvatarUserMsg")
+                avatarImage("AvatarUser")
             }
         }
     }
@@ -23,8 +23,8 @@ struct ChatBubbleView: View {
         VStack(alignment: .leading, spacing: 10) {
             if message.sender == .ai, message.text.contains("Mrs Zhang") {
                 (
-                    Text("Mrs Zhang").font(.system(size: 14, weight: .regular, design: .rounded))
-                    + Text("，请给我一张图片帮你生成今日的妆容")
+                    Text("Mrs Zhang.").font(.system(size: 14, weight: .regular, design: .rounded))
+                    + Text(" 请给我一张图片帮你生成今日的妆容")
                         .font(.system(size: 14, weight: .thin))
                 )
                 .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))

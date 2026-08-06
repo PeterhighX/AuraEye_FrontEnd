@@ -10,6 +10,8 @@ struct FirstTimeUseView: View {
     @State private var showCamera = false
     @State private var showImageSourcePicker = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
+    @State private var loadingIconRotation = 0.0
+    @State private var loadingTextPulse = false
 
     init(session: AppSession, path: Binding<NavigationPath>) {
         self.session = session
@@ -19,8 +21,6 @@ struct FirstTimeUseView: View {
 
     var body: some View {
         ZStack {
-            HomeBackgroundView()
-
             VStack(spacing: 0) {
                 MakeupFlowHeaderView(title: "妆容预览", usesPreviewAssets: true) {
                     dismiss()
@@ -29,13 +29,11 @@ struct FirstTimeUseView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        WeatherSummaryCard(
-                            aiMessage: """
-                            今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！
-                            您是第一次使用APP，推荐先完善用户档案再开始化妆，下面是推荐的妆容！！
-                            """,
-                            showFirstTimeHint: true
-                        )
+                        Image("OnboardingStepsWeatherComposed")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .accessibilityLabel("首次使用步骤天气卡片")
 
                         TipBarView(tips: ["眼周油脂盖住之后后续颜色更容易显色。"])
 
@@ -60,7 +58,7 @@ struct FirstTimeUseView: View {
 
             VStack {
                 Spacer()
-                if viewModel.hasStartedProgress {
+                if viewModel.showsCaptureProgress {
                     statusBar
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
@@ -70,9 +68,14 @@ struct FirstTimeUseView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { viewModel.reload() }
+        .onAppear {
+            viewModel.reload()
+        }
         .onChange(of: viewModel.pendingNavigation) { _, navigation in
             switch navigation {
+            case .onboardingCabinet:
+                path.append(AppRoute.onboardingCabinet)
+                viewModel.clearNavigation()
             case .makeupPreview:
                 path.append(AppRoute.makeupPreview)
                 viewModel.clearNavigation()
@@ -87,67 +90,155 @@ struct FirstTimeUseView: View {
                 cameraDevice: viewModel.cameraTarget == .face ? .front : .rear
             )
         }
-        .confirmationDialog(
-            viewModel.cameraTarget == .face ? "扫描脸部" : "扫描化妆品",
-            isPresented: $showImageSourcePicker,
-            titleVisibility: .visible
-        ) {
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("拍照") {
-                    imageSource = .camera
-                    showCamera = true
+        .alert(
+            viewModel.recognitionErrorTitle,
+            isPresented: Binding(
+                get: { viewModel.recognitionErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.clearRecognitionError()
+                    }
                 }
+            )
+        ) {
+            Button("重新识别") {
+                viewModel.clearRecognitionError()
+                showImageSourcePicker = true
             }
-            Button("从相册选择") {
-                imageSource = .photoLibrary
-                showCamera = true
+            Button("取消", role: .cancel) {
+                viewModel.clearRecognitionError()
             }
-            Button("取消", role: .cancel) {}
         } message: {
-            Text("可以调用设备摄像头，也可以选择设备上已经下载的图片。")
+            Text(
+                viewModel.recognitionErrorMessage
+                    ?? "未能确认所选图片是化妆品，请调整角度后重新拍摄。"
+            )
         }
         .overlay {
-            if let product = viewModel.pendingProduct {
+            if showImageSourcePicker {
+                MediaSourceDialog(
+                    onCamera: {
+                        imageSource = .camera
+                        showImageSourcePicker = false
+                        showCamera = true
+                    },
+                    onLibrary: {
+                        imageSource = .photoLibrary
+                        showImageSourcePicker = false
+                        showCamera = true
+                    },
+                    onCancel: { showImageSourcePicker = false }
+                )
+            } else if let product = viewModel.pendingProduct {
                 productConfirmation(product)
+            } else if viewModel.processingStage == .makeup {
+                generationWaitingOverlay
             }
         }
+    }
+
+    private var generationWaitingOverlay: some View {
+        ZStack {
+            Color.white.opacity(0.96)
+                .ignoresSafeArea()
+
+            VStack(spacing: 22) {
+                Image("PracticeToolIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 96, height: 96)
+                    .rotationEffect(.degrees(loadingIconRotation))
+
+                Text("正在生成专属妆容…")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                .scaleEffect(loadingTextPulse ? 1.012 : 0.995)
+                .offset(y: loadingTextPulse ? -1 : 1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear {
+            loadingIconRotation = 0
+            loadingTextPulse = false
+            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
+                loadingIconRotation = 360
+            }
+            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                loadingTextPulse = true
+            }
+        }
+        .transition(.opacity)
+        .zIndex(20)
     }
 
     private var statusBar: some View {
-        HStack(spacing: 0) {
-            Text(statusTag)
-                .font(AppTheme.Typography.statusBar)
-                .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                .padding(.horizontal, 13)
-                .frame(height: 36)
-                .background(AppTheme.ColorToken.accentCoral)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(red: 1, green: 154 / 255, blue: 124 / 255))
+                .frame(
+                    width: 362 * min(max(viewModel.profileAnalysisProgress, 0), 1),
+                    height: 36
+                )
+                .overlay(alignment: .trailing) {
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.48), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 38)
+                    .offset(x: loadingTextPulse ? 20 : -42)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            if viewModel.isProcessing {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(.leading, 8)
+            HStack(spacing: 8) {
+                Text(statusTag)
+                    .font(AppTheme.Typography.statusBar)
+                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
+
+                Text(viewModel.statusText)
+                    .font(AppTheme.Typography.statusBar)
+                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                    .lineLimit(1)
+                    .animation(AppTheme.Motion.statusFade, value: viewModel.statusText)
+
+                Spacer(minLength: 0)
             }
-
-            Text(viewModel.statusText)
-                .font(AppTheme.Typography.statusBar)
-                .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                .lineLimit(1)
-                .padding(.leading, 8)
-                .animation(AppTheme.Motion.statusFade, value: viewModel.statusText)
-
-            Spacer()
-
-            ProgressView(value: viewModel.preparationProgress)
-                .tint(AppTheme.ColorToken.accentCoral)
-                .frame(width: 72)
+            .padding(.horizontal, 12)
         }
         .padding(4)
+        .frame(width: 370, height: 44)
         .background(Color.white.opacity(0.25))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color(red: 38 / 255, green: 38 / 255, blue: 38 / 255).opacity(0.25), lineWidth: 0.1)
+        }
+        .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
+        .animation(
+            .easeInOut(duration: 0.22),
+            value: viewModel.profileAnalysisProgress
+        )
+        .onAppear {
+            loadingTextPulse = false
+            withAnimation(.linear(duration: 1.05).repeatForever(autoreverses: false)) {
+                loadingTextPulse = true
+            }
+        }
     }
 
     private var statusTag: String {
+        switch viewModel.processingStage {
+        case .profile:
+            return "扫描脸部，"
+        case .cosmetics:
+            return "扫描化妆品，"
+        case .makeup:
+            return "选择妆容，"
+        case .none:
+            break
+        }
+
         if let active = viewModel.steps.first(where: { $0.isActive && !$0.isCompleted }) {
             switch active.stepKey {
             case .userProfile: return "扫描脸部，"
@@ -159,6 +250,13 @@ struct FirstTimeUseView: View {
     }
 
     private func handleStepTap(_ step: OnboardingStep) {
+        if step.stepKey == .cosmetics,
+           !session.onboardingCosmeticCategories.isEmpty,
+           !session.hasAllRequiredOnboardingCosmetics {
+            path.append(AppRoute.onboardingCabinet)
+            return
+        }
+
         if let target = viewModel.cameraTargetForStep(step) {
             viewModel.cameraTarget = target
             showImageSourcePicker = true
@@ -169,36 +267,49 @@ struct FirstTimeUseView: View {
         }
     }
 
-    private func productConfirmation(_: CosmeticsRecognitionResult) -> some View {
+    private func productConfirmation(_ product: CosmeticsRecognitionResult) -> some View {
         ZStack {
             Color.black.opacity(0.58).ignoresSafeArea()
 
-            Image("ProductAddPrompt")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 300, height: 364)
-                .overlay {
-                    VStack(spacing: 10) {
-                        Spacer()
+            VStack(spacing: 16) {
+                Text(product.displayName)
+                    .font(.title3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Button(action: viewModel.rejectPendingProduct) {
-                            Color.clear
-                                .contentShape(RoundedRectangle(cornerRadius: 25))
-                        }
-                        .frame(height: 50)
-                        .accessibilityLabel("拒绝")
+                LocalImageView(storedPath: product.previewPath)
+                    .frame(width: 160, height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                        Button(action: viewModel.confirmPendingProduct) {
-                            Color.clear
-                                .contentShape(RoundedRectangle(cornerRadius: 25))
-                        }
-                        .frame(height: 50)
-                        .accessibilityLabel("添加")
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-                }
-                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+                Text(product.category)
+                    .font(.caption)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color(.secondarySystemFill), in: Capsule())
+
+                Button("拒绝", action: viewModel.rejectPendingProduct)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color(.systemGray5), in: Capsule())
+
+                Button("添加", action: viewModel.confirmPendingProduct)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(
+                        Color(red: 104 / 255, green: 106 / 255, blue: 219 / 255),
+                        in: Capsule()
+                    )
+            }
+            .padding(24)
+            .frame(width: 300)
+            .background(
+                .ultraThinMaterial,
+                in: RoundedRectangle(cornerRadius: 32)
+            )
+            .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
         }
     }
 }

@@ -52,6 +52,12 @@ final class ChatViewModel {
                 _ = try chatService.persistUserText(text, user: user)
                 reload()
 
+                // 预设演示先保留用户文字，待用户选图后再由 Agent 一次性回应。
+                if text.contains("这是我的图片，我想看到在公园玩耍的样子") {
+                    isLoading = false
+                    return
+                }
+
                 let thinking = ChatMessage(
                     sender: .ai,
                     text: "正在理解你的需求并整理妆容建议…",
@@ -96,8 +102,6 @@ final class ChatViewModel {
             do {
                 _ = try chatService.attachPhoto(image, user: user)
                 reload()
-                try await Task.sleep(for: .milliseconds(1100))
-                isMakeupReady = true
             } catch {
                 // 后续远端 Agent 接入后在此映射上传/生成错误。
             }

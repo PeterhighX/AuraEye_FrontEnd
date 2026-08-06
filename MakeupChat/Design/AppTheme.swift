@@ -57,12 +57,12 @@ enum AppTheme {
         static let accentCoral = Color(red: 1.0, green: 0.60, blue: 0.49)
         static let accentOrange = Color(red: 0.99, green: 0.49, blue: 0.33)
         static let stepActive = Color(red: 1.0, green: 0.88, blue: 0.85)
-        static let stepCompleted = Color.green
+        static let stepCompleted = Color(red: 1.0, green: 154 / 255, blue: 124 / 255)
         static let stepPending = Color(red: 0.85, green: 0.85, blue: 0.85)
         static let cardFill = Color.white.opacity(0.4)
         static let buttonPrimary = Color(red: 0.15, green: 0.15, blue: 0.15)
         static let buttonDisabled = Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.55)
-        static let buttonSuccess = Color.green
+        static let buttonSuccess = Color(red: 1.0, green: 154 / 255, blue: 124 / 255)
     }
 
     // MARK: - Motion（系统弹簧曲线）

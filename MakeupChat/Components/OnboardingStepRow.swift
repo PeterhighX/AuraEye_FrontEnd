@@ -6,21 +6,9 @@ struct OnboardingStepRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 18) {
             StepPreviewThumbnail(step: step)
                 .padding(.leading, 16)
-                .overlay(alignment: .topTrailing) {
-                    if step.isCompleted {
-                        Image(systemName: AppTheme.Symbol.checkmark)
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                            .padding(4)
-                            .background(AppTheme.ColorToken.stepCompleted)
-                            .clipShape(Circle())
-                            .offset(x: 4, y: -10)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
 
             VStack(alignment: .trailing, spacing: 10) {
                 Text(step.title)
@@ -35,22 +23,25 @@ struct OnboardingStepRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .animation(AppTheme.Motion.statusFade, value: step.displaySubtitle)
 
-                HStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(indicatorColor)
-                        .frame(width: 9, height: 24)
-                        .animation(AppTheme.Motion.stepSpring, value: step.status)
+                HStack(spacing: 27) {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                (isActionEnabled || step.isCompleted)
+                                    ? Color(red: 1, green: 225 / 255, blue: 216 / 255)
+                                    : Color(red: 217 / 255, green: 217 / 255, blue: 217 / 255)
+                            )
+                            .frame(width: 9, height: 24)
 
-                    Text("Step \(step.stepNumber)")
-                        .font(AppTheme.Typography.stepLabel)
-                        .foregroundStyle(AppTheme.ColorToken.textSecondary)
-
-                    Spacer()
+                        Text("Step \(step.stepNumber)")
+                            .font(AppTheme.Typography.stepLabel)
+                            .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                    }
 
                     Button(action: action) {
                         Text(step.buttonTitle)
                             .font(AppTheme.Typography.buttonLabel)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(step.isCompleted ? AppTheme.ColorToken.accentCoral : .white)
                             .frame(width: 90, height: 28)
                             .background(buttonBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -59,11 +50,12 @@ struct OnboardingStepRow: View {
                     .disabled(!isActionEnabled)
                     .sensoryFeedback(.success, trigger: step.isCompleted)
                 }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(.trailing, 16)
             .padding(.vertical, 16)
         }
-        .frame(minHeight: 109)
+        .frame(minHeight: 131)
         .background(AppTheme.ColorToken.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
@@ -71,14 +63,8 @@ struct OnboardingStepRow: View {
         .animation(AppTheme.Motion.stepSpring, value: step.status)
     }
 
-    private var indicatorColor: Color {
-        if step.isCompleted { return AppTheme.ColorToken.stepCompleted }
-        if step.isActive { return AppTheme.ColorToken.stepActive }
-        return AppTheme.ColorToken.stepPending
-    }
-
     private var buttonBackground: Color {
-        if step.isCompleted { return AppTheme.ColorToken.buttonSuccess }
+        if step.isCompleted { return AppTheme.ColorToken.accentCoral.opacity(0.14) }
         if step.isActive && isActionEnabled { return AppTheme.ColorToken.buttonPrimary }
         return AppTheme.ColorToken.buttonDisabled
     }

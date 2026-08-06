@@ -1,0 +1,12 @@
+{
+  "data" : [
+    {
+      "filename" : "aurayetest_visual_profile.json",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

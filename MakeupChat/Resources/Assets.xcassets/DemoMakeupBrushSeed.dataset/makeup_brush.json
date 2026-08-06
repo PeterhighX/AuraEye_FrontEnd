@@ -1,0 +1,26 @@
+{
+  "recognition_level": "L2",
+  "items": [
+    {
+      "item_index": 0,
+      "category": "makeup_brush",
+      "category_label_zh": "化妆刷",
+      "category_confidence": 0.95,
+      "bbox_0_999": [180, 80, 820, 940],
+      "brand_text": "AuraEye Demo",
+      "product_name_text": "柔软晕染刷",
+      "shade_text": null,
+      "visible_texts": ["晕染刷", "柔软刷毛"],
+      "colors": [
+        {"hex": "#D9B8A8", "proportion": 0.65},
+        {"hex": "#8F6B5B", "proportion": 0.35}
+      ],
+      "needs_confirmation": true,
+      "knowledge_keys": ["tool.makeup_brush", "tool.blending_brush"]
+    }
+  ],
+  "warnings": [],
+  "knowledge_keys": ["tool.makeup_brush"],
+  "result_source": "demo_fallback",
+  "schema_version": "1.0"
+}

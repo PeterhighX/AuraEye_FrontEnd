@@ -22,7 +22,9 @@ struct LocalAIAgentService: AIAgentServicing {
         try await Task.sleep(for: .milliseconds(900))
 
         let text: String
-        if request.message.contains("图片") || request.message.contains("照片") {
+        if request.message.contains("这是我的图片，我想看到在公园玩耍的样子") {
+            text = "看到你的美照啦！公园的阳光和绿树真的特别有朝气呢，今天的天气也非常适合出去走走，这就给你推荐妆容"
+        } else if request.message.contains("图片") || request.message.contains("照片") {
             text = "可以的，请点击相机图标拍摄，或从设备相册选择一张照片，我会结合你的档案进行分析。"
         } else if request.message.contains("清新") {
             text = "明白啦，我会优先选择低饱和、轻透的眼妆配色，并结合你的眼型给出步骤。"

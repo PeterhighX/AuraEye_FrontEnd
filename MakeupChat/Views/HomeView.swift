@@ -13,57 +13,54 @@ struct HomeView: View {
     @State private var profileImageSource: UIImagePickerController.SourceType = .camera
     @State private var logoRotation = 0.0
     @State private var analysisTextPulse = false
+    @State private var isAIEntryHovered = false
+    @State private var isAIEntryPressed = false
+    @State private var showsAIChat = false
+    @State private var pageTransitionProgress: CGFloat = 0
+    @State private var aiChatViewModel = ChatViewModel()
+    @State private var isClosingAIChat = false
+    @StateObject private var weatherProvider = LiveWeatherProvider()
 
-    private let recommendedLooks: [HomeRecommendedLook] = [
-        HomeRecommendedLook(
-            id: "clear_sweet",
-            title: "清透甜美",
-            tag: "少女感",
-            imageAssetName: "HomeLookClear",
-            swatchHexes: ["#C87A72", "#CE8C80", "#DCADA0"]
-        ),
-        HomeRecommendedLook(
-            id: "chinese_warm",
-            title: "中式温婉",
-            tag: "东方韵味",
-            imageAssetName: "HomeLookWarm",
-            swatchHexes: ["#C15C40", "#C26947", "#EEAC9B"]
-        ),
-        HomeRecommendedLook(
-            id: "hong_kong",
-            title: "气质港风",
-            tag: "复古范",
-            imageAssetName: "HomeLookHongKong",
-            swatchHexes: ["#9E3819", "#D16234", "#E7936A"]
-        )
-    ]
+    private let recommendedLooks = MakeupLookCatalog.plans.map(\.look)
 
     var body: some View {
-        ZStack {
-            HomeBackgroundView()
+        GeometryReader { proxy in
+            ZStack {
+                homeForeground
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .offset(x: pageTransitionProgress * proxy.size.width)
+                    .allowsHitTesting(!showsAIChat)
 
-            VStack(spacing: 0) {
-                homeHeader
-                    .padding(.top, 8)
-
-                ScrollView {
-                    VStack(spacing: 32) {
-                        growthProgress
-                        teachingSection
-                        TipBarView()
-                        recommendedSection
-                    }
-                    .padding(.top, 32)
-                    .padding(.bottom, 100)
+                if showsAIChat {
+                    ChatConversationView(
+                        viewModel: aiChatViewModel,
+                        layoutMode: .full,
+                        onBack: { closeAIChat() },
+                        onMakeupReady: {
+                            session.markMakeupGenerated()
+                            closeAIChat(nextRoute: .makeupPreview)
+                        }
+                    )
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .offset(x: (pageTransitionProgress - 1) * proxy.size.width)
+                    .zIndex(200)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 28)
+                            .onEnded { value in
+                                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
+                                if isHorizontal,
+                                   value.translation.width < -85,
+                                   value.predictedEndTranslation.width < -120 {
+                                    closeAIChat()
+                                }
+                            }
+                    )
                 }
-            }
-
-            if profileSetupViewModel.isAnalyzing {
-                profileAnalysisOverlay
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(showsAIChat ? .hidden : .automatic, for: .tabBar)
         .onAppear {
             viewModel.reload()
             presentRequestedProfileCaptureIfNeeded()
@@ -72,27 +69,6 @@ struct HomeView: View {
             if requested {
                 presentRequestedProfileCaptureIfNeeded()
             }
-        }
-        .confirmationDialog(
-            "创建用户档案",
-            isPresented: $showProfileImageSourcePicker,
-            titleVisibility: .visible
-        ) {
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("拍摄正脸照片") {
-                    profileImageSource = .camera
-                    showProfileImagePicker = true
-                }
-            }
-
-            Button("从相册选择") {
-                profileImageSource = .photoLibrary
-                showProfileImagePicker = true
-            }
-
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("拍摄清晰正脸照片，或选择设备上已经下载的照片。")
         }
         .fullScreenCover(isPresented: $showProfileImagePicker) {
             CameraPickerView(
@@ -114,6 +90,124 @@ struct HomeView: View {
         } message: {
             Text(profileSetupViewModel.errorMessage ?? "")
         }
+        .overlay {
+            if showProfileImageSourcePicker {
+                MediaSourceDialog(
+                    onCamera: {
+                        profileImageSource = .camera
+                        showProfileImageSourcePicker = false
+                        showProfileImagePicker = true
+                    },
+                    onLibrary: {
+                        profileImageSource = .photoLibrary
+                        showProfileImageSourcePicker = false
+                        showProfileImagePicker = true
+                    },
+                    onCancel: { showProfileImageSourcePicker = false }
+                )
+            }
+        }
+    }
+
+    private var homeForeground: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                homeHeader
+                    .padding(.top, 8)
+
+                ScrollView {
+                    VStack(spacing: 32) {
+                        growthProgress
+                        teachingSection
+                        TipBarView()
+                        recommendedSection
+                    }
+                    .padding(.top, 32)
+                    .padding(.bottom, 100)
+                }
+            }
+
+            VStack {
+                HStack {
+                    Image("HomeAIFloating")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 70, height: 44)
+                        // 默认只露出原设计右侧的圆形图标；悬停/按压时向右展开。
+                        .offset(x: isAIEntryExpanded ? 0 : -26)
+                    .frame(width: 70, height: 44, alignment: .leading)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                            isAIEntryHovered = hovering
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
+                                    isAIEntryPressed = true
+                                }
+                            }
+                            .onEnded { _ in
+                                withAnimation(.easeOut(duration: 0.16)) {
+                                    isAIEntryPressed = false
+                                }
+                                openAIChat()
+                            }
+                    )
+                    .accessibilityLabel("打开 AI 妆容助手")
+
+                    Spacer()
+                }
+                .padding(.top, 96)
+                Spacer()
+            }
+
+            if profileSetupViewModel.isAnalyzing {
+                profileAnalysisOverlay
+            }
+        }
+    }
+
+    private var isAIEntryExpanded: Bool {
+        isAIEntryHovered || isAIEntryPressed
+    }
+
+    private func openAIChat() {
+        guard !showsAIChat else { return }
+        isClosingAIChat = false
+        pageTransitionProgress = 0
+        showsAIChat = true
+        session.isAIChatPresented = true
+
+        // 背景不参与动画；两个前景容器像相邻卡片一样整体切换。
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.44, dampingFraction: 0.9)) {
+                pageTransitionProgress = 1
+            }
+        }
+    }
+
+    private func closeAIChat(nextRoute: AppRoute? = nil) {
+        guard showsAIChat, !isClosingAIChat else { return }
+        isClosingAIChat = true
+
+        // 负一屏向左退出、首页从右侧回到原位，Shader 背景保持固定。
+        withAnimation(.easeInOut(duration: 0.3)) {
+            pageTransitionProgress = 0
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            showsAIChat = false
+            session.isAIChatPresented = false
+            isClosingAIChat = false
+            if let nextRoute {
+                path.append(nextRoute)
+            }
+        }
     }
 
     // MARK: - Header
@@ -134,26 +228,15 @@ struct HomeView: View {
     // MARK: - Growth
 
     private var growthProgress: some View {
-        HStack(alignment: .bottom) {
-            Button {
-                path.append(AppRoute.aiChat)
-            } label: {
-                Image("HomeAIEntry")
-                    .resizable()
-                    .scaledToFit()
-                .frame(width: 70, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("打开 AI 妆容助手")
-
+        HStack {
             Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                HStack {
+            VStack(spacing: 5) {
+                HStack(alignment: .center) {
                     Text("成长进度")
                         .font(.system(size: 14, weight: .regular, design: .rounded))
                         .tracking(0)
                         .foregroundStyle(.white)
+                    Spacer()
                     Text("LV.04")
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                         .tracking(0)
@@ -171,6 +254,7 @@ struct HomeView: View {
                 }
                 .frame(width: 165)
             }
+            .frame(width: 165)
         }
         .padding(.trailing, 16)
     }
@@ -179,7 +263,7 @@ struct HomeView: View {
 
     private var teachingSection: some View {
         VStack(spacing: 12) {
-            HomeTeachingCard {
+            HomeTeachingCard(weather: LiveWeatherSnapshot()) {
                 path.append(session.routeForQuickStart())
             }
 
@@ -197,10 +281,10 @@ struct HomeView: View {
                     color: Color(red: 1, green: 181 / 255, blue: 159 / 255),
                     icon: "person.fill"
                 ) {
-                    if session.hasScannedFace {
-                        path.append(AppRoute.userProfile)
+                    if let profileRoute = session.routeForUserProfile() {
+                        path.append(profileRoute)
                     } else {
-                        showProfileImageSourcePicker = true
+                        beginProfileCapture()
                     }
                 }
             }
@@ -214,12 +298,10 @@ struct HomeView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 24) {
-                Image("AuraAyeLogo")
+                Image("PracticeToolIcon")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 132, height: 132)
-                    .frame(width: 132, height: 94, alignment: .top)
-                    .clipped()
+                    .frame(width: 96, height: 96)
                     .rotationEffect(.degrees(logoRotation))
                     .onAppear {
                         withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
@@ -257,6 +339,10 @@ struct HomeView: View {
     private func presentRequestedProfileCaptureIfNeeded() {
         guard session.shouldRequestProfileCapture else { return }
         session.consumeProfileCaptureRequest()
+        beginProfileCapture()
+    }
+
+    private func beginProfileCapture() {
         showProfileImageSourcePicker = true
     }
 
@@ -302,30 +388,16 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
 
-            if session.hasScannedFace {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(recommendedLooks) { look in
-                            HomeRecommendedLookCard(look: look)
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(recommendedLooks) { look in
+                        HomeRecommendedLookCard(look: look)
                     }
-                    .padding(.horizontal, 12)
                 }
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            } else {
-                Text("建立用户档案后，为你生成专属眼妆推荐")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 96)
-                    .background(
-                        Color(red: 243 / 255, green: 240 / 255, blue: 239 / 255).opacity(0.55),
-                        in: RoundedRectangle(cornerRadius: 18)
-                    )
-                    .padding(.horizontal, 16)
+                .padding(.horizontal, 12)
             }
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
-        .animation(.easeOut(duration: 0.25), value: session.hasScannedFace)
     }
 }
 

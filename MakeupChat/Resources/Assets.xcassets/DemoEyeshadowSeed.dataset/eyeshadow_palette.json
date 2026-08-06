@@ -1,0 +1,28 @@
+{
+  "recognition_level": "L2",
+  "items": [
+    {
+      "item_index": 0,
+      "category": "eyeshadow_palette",
+      "category_label_zh": "眼影盘",
+      "category_confidence": 0.96,
+      "bbox_0_999": [80, 120, 920, 870],
+      "brand_text": "AuraEye Demo",
+      "product_name_text": "九色日常眼影盘",
+      "shade_text": "大地色系",
+      "visible_texts": ["九色眼影", "日常通勤"],
+      "colors": [
+        {"hex": "#E8D6C3", "proportion": 0.35},
+        {"hex": "#CBA98E", "proportion": 0.3},
+        {"hex": "#A67C63", "proportion": 0.2},
+        {"hex": "#765746", "proportion": 0.15}
+      ],
+      "needs_confirmation": true,
+      "knowledge_keys": ["cosmetic.eyeshadow_palette", "shade.earth_tone"]
+    }
+  ],
+  "warnings": [],
+  "knowledge_keys": ["cosmetic.eyeshadow_palette"],
+  "result_source": "demo_fallback",
+  "schema_version": "1.0"
+}

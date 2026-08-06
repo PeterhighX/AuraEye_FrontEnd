@@ -2,16 +2,17 @@ import SwiftUI
 
 /// Figma 20:1246 — 妆容完成
 struct MakeupCompleteView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var session: AppSession
     @Binding var path: NavigationPath
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var badgeHasLanded = false
-    @Namespace private var badgeTransition
+    @Binding var selectedTab: Int
+    @State private var hasSavedHistory = false
+    @State private var hasPlayedScrollAnimation = false
+    @State private var scrollReveal: CGFloat = 0
+    @State private var barSettled = false
 
     var body: some View {
         ZStack {
-            GradientBackgroundView()
-
             VStack(spacing: 0) {
                 MakeupFlowHeaderView(title: "妆容完成") {
                     path = NavigationPath()
@@ -19,7 +20,7 @@ struct MakeupCompleteView: View {
                 .padding(.top, 8)
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: 18) {
                         levelCard
                         resultCard
 
@@ -34,72 +35,75 @@ struct MakeupCompleteView: View {
                         .padding(.horizontal, 16)
 
                         HStack(spacing: 12) {
-                            historyCard(title: "清透甜美", tag: "少女感", colors: [
-                                .init(red: 0.86, green: 0.45, blue: 0.42),
-                                .init(red: 0.87, green: 0.55, blue: 0.51),
-                                .init(red: 0.91, green: 0.66, blue: 0.59)
-                            ])
-                            historyCard(title: "中式温婉", tag: "东方韵味", colors: [
-                                .init(red: 0.82, green: 0.25, blue: 0.12),
-                                .init(red: 0.88, green: 0.34, blue: 0.14),
-                                .init(red: 0.96, green: 0.51, blue: 0.35)
-                            ])
+                            historyCard(
+                                plan: MakeupLookCatalog.plan(id: session.selectedLookID),
+                                time: "今天 08:42",
+                                count: "第 8 次"
+                            )
+                            historyCard(
+                                plan: MakeupLookCatalog.plan(id: "chinese_warm"),
+                                time: "7月26日 19:10",
+                                count: "第 7 次"
+                            )
                         }
                         .padding(.horizontal, 16)
 
-                        Button(action: finishAndGoHome) {
-                            Label("返回首页", systemImage: "house.fill")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 48)
-                        }
-                        .buttonStyle(.plain)
-                        .background(
-                            AppTheme.ColorToken.buttonPrimary,
-                            in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.button)
-                        )
-                        .padding(.horizontal, 16)
                     }
-                    .padding(.top, 24)
-                    .padding(.bottom, 36)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
                 }
             }
 
-            if !badgeHasLanded {
-                Image("CompletionBadge")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 176, height: 176)
-                    .matchedGeometryEffect(
-                        id: "completionBadge",
-                        in: badgeTransition,
-                        isSource: true
-                    )
-                    .shadow(
-                        color: AppTheme.ColorToken.accentCoral.opacity(0.34),
-                        radius: 22,
-                        y: 12
-                    )
-                    .accessibilityHidden(true)
-                    .transition(.scale(scale: 0.72).combined(with: .opacity))
-            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            completionNavigationBar
+        }
         .onAppear {
             session.hasCompletedFirstMakeup = true
-            guard !reduceMotion else {
-                badgeHasLanded = true
-                return
-            }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(750))
-                withAnimation(.spring(response: 0.9, dampingFraction: 0.78)) {
-                    badgeHasLanded = true
-                }
-            }
+            playResultScrollIfNeeded()
+            guard !hasSavedHistory else { return }
+            hasSavedHistory = true
+            session.recordCompletedMakeup()
         }
+    }
+
+    private var completionNavigationBar: some View {
+        HStack {
+            completionTab(title: "首页", symbol: "house.fill", tab: .home)
+            completionTab(title: "陈列柜", symbol: "square.grid.2x2.fill", tab: .cabinet)
+            completionTab(title: "我的", symbol: "person.fill", tab: .profile)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 4)
+    }
+
+    private func completionTab(title: String, symbol: String, tab: AppTab) -> some View {
+        Button {
+            path = NavigationPath()
+            selectedTab = tab.rawValue
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: symbol)
+                    .font(.system(size: 21))
+                Text(title)
+                    .font(.caption)
+            }
+            .foregroundStyle(
+                tab == .profile
+                    ? AppTheme.ColorToken.accentOrange
+                    : Color.secondary
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+        }
+        .buttonStyle(.plain)
     }
 
     private var levelCard: some View {
@@ -141,103 +145,124 @@ struct MakeupCompleteView: View {
     }
 
     private var resultCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("你完成了")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    Text("第 8 次的上妆")
-                        .font(.title)
-                    Text("2026.04.08 星期一")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image("CompletionBadge")
+        GeometryReader { proxy in
+            let cardHeight = proxy.size.width * 293 / 402
+            let barHeight = cardHeight * 34 / 293
+            let sheetStart = cardHeight * 14 / 293
+            let revealHeight = max(0, cardHeight - sheetStart) * scrollReveal
+
+            ZStack(alignment: .top) {
+                // 清单主体固定在最终位置，通过向下增长的蒙版形成“从横条卷出”。
+                Image("MakeupCompletionCardRefined")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 82, height: 96)
-                    .matchedGeometryEffect(
-                        id: "completionBadge",
-                        in: badgeTransition,
-                        isSource: false
+                    .frame(width: proxy.size.width, height: cardHeight)
+                    .mask(alignment: .top) {
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: sheetStart)
+                            Rectangle()
+                                .frame(height: revealHeight)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .shadow(
+                        color: .black.opacity(0.08 * Double(scrollReveal)),
+                        radius: 8,
+                        y: 5
                     )
-                    .opacity(badgeHasLanded ? 1 : 0)
-                    .shadow(color: AppTheme.ColorToken.accentCoral.opacity(0.28), radius: 12, y: 8)
-                    .accessibilityLabel("完成妆容勋章")
-            }
 
-            HStack(spacing: 28) {
-                Label("完成率 75%", systemImage: "checkmark.circle.fill")
-                Label("上妆速度 +45%", systemImage: "timer")
+                // 橙色卷轴杆始终位于最上层，主体从它的背后展开。
+                Image("MakeupCompletionCardRefined")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: proxy.size.width, height: cardHeight)
+                    .frame(height: barHeight, alignment: .top)
+                    .clipped()
+                    .scaleEffect(x: barSettled ? 1 : 0.94, y: 1, anchor: .center)
             }
-            .font(.subheadline)
-
-            Text("跟随化妆的感觉如何")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Text("吃力")
-                LinearGradient(
-                    colors: [.pink, .orange, .green],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 4)
-                .overlay {
-                    Circle().fill(.white).stroke(.gray.opacity(0.4)).frame(width: 12, height: 12)
-                }
-                Text("容易")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .frame(width: proxy.size.width, height: cardHeight, alignment: .top)
         }
-        .padding(16)
-        .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-        .padding(.horizontal, 16)
+        .aspectRatio(402 / 293, contentMode: .fit)
+        .padding(.horizontal, 5)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("妆容完成数据卡片")
     }
 
-    private func historyCard(title: String, tag: String, colors: [Color]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.white.opacity(0.5))
-                    .frame(height: 120)
-                    .overlay {
-                        Image(systemName: "eye")
-                            .font(.system(size: 38, weight: .light))
-                            .foregroundStyle(.secondary)
-                    }
+    private func playResultScrollIfNeeded() {
+        guard !hasPlayedScrollAnimation else { return }
+        hasPlayedScrollAnimation = true
 
-                VStack(spacing: 6) {
-                    ForEach(Array(colors.enumerated()), id: \.offset) { _, color in
-                        Circle().fill(color).frame(width: 28, height: 28)
+        if reduceMotion {
+            scrollReveal = 1
+            barSettled = true
+            return
+        }
+
+        scrollReveal = 0
+        barSettled = false
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.76).delay(0.16)) {
+            barSettled = true
+        }
+        withAnimation(.easeOut(duration: 1.15).delay(0.28)) {
+            scrollReveal = 1
+        }
+    }
+
+    private func historyCard(
+        plan: MakeupLookPlan,
+        time: String,
+        count: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(plan.look.imageAssetName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 120)
+                    .scaleEffect(1.1)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                VStack(spacing: 8) {
+                    ForEach(plan.look.swatchHexes, id: \.self) { hex in
+                        Circle()
+                            .fill(Color(completionHex: hex))
+                            .frame(width: 20, height: 20)
                     }
                 }
             }
 
-            Text(title).font(.body)
-            Text(tag)
+            Text("\(count)上妆")
+                .font(.body)
+
+            Text(time)
                 .font(.caption2)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 2)
-                .background(.white.opacity(0.65), in: Capsule())
+                .foregroundStyle(.secondary)
         }
         .padding(12)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.white.opacity(0.52), in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private func finishAndGoHome() {
-        path = NavigationPath()
+}
+
+private extension Color {
+    init(completionHex: String) {
+        let value = UInt64(completionHex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
     }
 }
 
 #Preview {
     NavigationStack {
-        MakeupCompleteView(session: AppSession(), path: .constant(NavigationPath()))
+        MakeupCompleteView(
+            session: AppSession(),
+            path: .constant(NavigationPath()),
+            selectedTab: .constant(AppTab.home.rawValue)
+        )
     }
 }

@@ -77,10 +77,7 @@ enum DatabaseSeeder {
         ])
 
         let demoMessages: [(String, String, String, String?, String?, String)] = [
-            ("ai", "Mrs Zhang，请给我一张图片帮你生成今日的妆容", "AvatarAI", nil, nil, "text"),
-            ("user", "这是我的图片，我想看到在公园玩耍的样子", "AvatarUserMsg", "ParkPhoto", nil, "photo"),
-            ("ai", "看到你的美照啦！公园的阳光和绿树真的特别有朝气呢，今天的天气也刚好非常适合出门走走，这就给你推荐妆容哈", "AvatarAI", nil, nil, "text"),
-            ("ai", "✨ 灵感生成提示：专属的妆容效果已经快马加鞭在生成中啦，", "AvatarAI2", nil, nil, "generating")
+            ("ai", "Mrs Zhang. 请给我一张图片帮你生成今日的妆容", "FirstTimeAssistant", nil, nil, "text")
         ]
 
         for (index, item) in demoMessages.enumerated() {

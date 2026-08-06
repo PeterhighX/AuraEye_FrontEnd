@@ -59,6 +59,7 @@ extension UserIdentityHeaderView where Trailing == EmptyView {
 
 struct ProfileHeaderView: View {
     let user: UserProfile
+    var onBack: () -> Void = {}
 
     var body: some View {
         UserIdentityHeaderView(user: user) {
@@ -76,14 +77,14 @@ struct ProfileHeaderView: View {
                 .background(Color.black.opacity(0.25))
                 .clipShape(Capsule())
 
-                iconButton(systemName: "line.3.horizontal")
-                iconButton(systemName: "chevron.right")
+                iconButton(systemName: "line.3.horizontal", action: {})
+                iconButton(systemName: "chevron.right", action: onBack)
             }
         }
     }
 
-    private func iconButton(systemName: String) -> some View {
-        Button {} label: {
+    private func iconButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
@@ -92,5 +93,6 @@ struct ProfileHeaderView: View {
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(systemName == "chevron.right" ? "返回上一步" : "菜单")
     }
 }

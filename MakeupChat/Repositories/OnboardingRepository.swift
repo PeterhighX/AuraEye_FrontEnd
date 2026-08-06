@@ -40,6 +40,11 @@ final class OnboardingRepository {
                     WHEN 'cosmetics' THEN '✨ 闪闪正在认真翻看宝子自己有哪些化妆品……'
                     ELSE '✨ 正在为你规划最不容易手残的保姆级步骤……'
                 END,
+                preview_asset = CASE step_key
+                    WHEN 'user_profile' THEN 'OnboardingUserProfileProvided'
+                    WHEN 'cosmetics' THEN 'OnboardingCosmeticsProvided'
+                    ELSE 'OnboardingChooseLookProvided'
+                END,
                 preview_path = NULL,
                 updated_at = ?
             WHERE user_id = ?;
@@ -127,6 +132,13 @@ final class OnboardingRepository {
         case .makeupGenerate: nextKey = nil
         }
         guard let nextKey else { return }
+        if let next = try fetchSteps(userId: userId).first(where: { $0.stepKey == nextKey }),
+           next.isCompleted {
+            // 支持用户先从首页/陈列柜完成 Step 2：
+            // Step 1 完成后跳过已完成项，直接激活 Step 3。
+            try activateNextStep(after: nextKey, userId: userId)
+            return
+        }
         try updateStep(userId: userId, key: nextKey, status: .inProgress)
     }
 

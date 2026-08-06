@@ -3,6 +3,7 @@ import SwiftUI
 struct WeatherSummaryCard: View {
     var aiMessage: String
     var showFirstTimeHint: Bool = false
+    var weather = LiveWeatherSnapshot()
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -13,23 +14,24 @@ struct WeatherSummaryCard: View {
                 .offset(y: 19)
 
             HStack(alignment: .bottom) {
-                Image("HomeWeatherCloud")
-                    .resizable()
-                    .scaledToFit()
+                Image(systemName: weather.symbolName)
+                    .symbolRenderingMode(.multicolor)
+                    .font(.system(size: 68))
                     .frame(width: 124, height: 81)
+                    .contentTransition(.symbolEffect(.replace))
 
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
                     HStack {
                         HStack(alignment: .top, spacing: 2) {
-                            Text("26")
+                            Text("\(weather.temperature)")
                                 .font(.system(size: 24, weight: .semibold))
                                 .foregroundStyle(Color(red: 85 / 255, green: 85 / 255, blue: 85 / 255))
                             VStack(alignment: .leading, spacing: 0) {
                                 Text("℃")
                                     .font(.system(size: 10, design: .rounded))
-                                Text("多云")
+                                Text(weather.conditionText)
                                     .font(.system(size: 10, design: .rounded))
                             }
                             .foregroundStyle(Color(red: 157 / 255, green: 157 / 255, blue: 157 / 255))
@@ -37,7 +39,7 @@ struct WeatherSummaryCard: View {
 
                         Spacer()
 
-                        Text("福田区")
+                        Text(weather.district)
                             .font(.system(size: 12, weight: .light))
                             .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
                             .padding(.horizontal, 6)
@@ -50,9 +52,11 @@ struct WeatherSummaryCard: View {
                         Capsule()
                             .fill(Color.white.opacity(0.45))
                             .frame(height: 9)
-                        Capsule()
-                            .fill(Color(red: 1.0, green: 139 / 255, blue: 104 / 255))
-                            .frame(width: 60, height: 9)
+                        GeometryReader { proxy in
+                            Capsule()
+                                .fill(Color(red: 1.0, green: 139 / 255, blue: 104 / 255))
+                                .frame(width: proxy.size.width * weather.uvProgress, height: 9)
+                        }
                     }
                     .frame(width: 183)
 
@@ -63,17 +67,17 @@ struct WeatherSummaryCard: View {
                             Text("紫外线指数")
                                 .font(.system(size: 12))
                         }
-                        Text("19")
+                        Text("\(weather.uvIndex)")
                             .font(.system(size: 12))
                         Spacer()
-                        Text("弱")
+                        Text(weather.uvDescription)
                             .font(.system(size: 12))
                     }
                     .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
                     .frame(width: 183)
                 }
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 16)
             .padding(.top, 4)
 
             HStack(alignment: .top, spacing: 12) {
@@ -100,7 +104,7 @@ struct WeatherSummaryCard: View {
                         )
                     )
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 16)
             .offset(y: 109)
         }
         .frame(height: showFirstTimeHint ? 224 : 180)

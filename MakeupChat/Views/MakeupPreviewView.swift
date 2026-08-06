@@ -7,42 +7,20 @@ struct MakeupPreviewView: View {
     @State private var expandedStep: Int?
     @State private var selectedLookIndex = 0
 
-    private let previewSteps: [(String, Color)] = [
-        ("打底铺色", Color(red: 253 / 255, green: 235 / 255, blue: 235 / 255)),
-        ("修容&阴影", Color(red: 1.0, green: 225 / 255, blue: 216 / 255)),
-        ("眼睑下至", Color(red: 1.0, green: 193 / 255, blue: 174 / 255)),
-        ("卧蚕", Color(red: 1.0, green: 154 / 255, blue: 124 / 255)),
-        ("打底铺色", Color(red: 231 / 255, green: 108 / 255, blue: 69 / 255))
+    private let stepColors: [Color] = [
+        Color(red: 253 / 255, green: 235 / 255, blue: 235 / 255),
+        Color(red: 1.0, green: 225 / 255, blue: 216 / 255),
+        Color(red: 1.0, green: 193 / 255, blue: 174 / 255),
+        Color(red: 1.0, green: 154 / 255, blue: 124 / 255),
+        Color(red: 231 / 255, green: 108 / 255, blue: 69 / 255)
     ]
 
-    private let recommendedLooks: [HomeRecommendedLook] = [
-        HomeRecommendedLook(
-            id: "clear_sweet",
-            title: "清透甜美",
-            tag: "少女感",
-            imageAssetName: "HomeLookClear",
-            swatchHexes: ["#C87A72", "#CE8C80", "#DCADA0"]
-        ),
-        HomeRecommendedLook(
-            id: "chinese_warm",
-            title: "中式温婉",
-            tag: "东方韵味",
-            imageAssetName: "HomeLookWarm",
-            swatchHexes: ["#C15C40", "#C26947", "#EEAC9B"]
-        ),
-        HomeRecommendedLook(
-            id: "hong_kong",
-            title: "气质港风",
-            tag: "复古范",
-            imageAssetName: "HomeLookHongKong",
-            swatchHexes: ["#9E3819", "#D16234", "#E7936A"]
-        )
-    ]
+    private var selectedPlan: MakeupLookPlan {
+        MakeupLookCatalog.plans[selectedLookIndex]
+    }
 
     var body: some View {
         ZStack {
-            HomeBackgroundView()
-
             VStack(spacing: 0) {
                 MakeupFlowHeaderView(title: "妆容预览", usesPreviewAssets: true) {
                     dismiss()
@@ -52,9 +30,11 @@ struct MakeupPreviewView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         if expandedStep == nil {
-                            WeatherSummaryCard(
-                                aiMessage: "今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！"
-                            )
+                            Image("MakeupPreviewWeatherComposed")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity)
+                                .accessibilityLabel("今日天气卡片")
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
@@ -65,17 +45,22 @@ struct MakeupPreviewView: View {
                         )
 
                         recommendedLookCard
+                            .id("look-card-\(selectedPlan.id)")
 
                         VStack(spacing: -64) {
-                            ForEach(Array(previewSteps.enumerated()), id: \.offset) { offset, step in
+                            ForEach(Array(selectedPlan.steps.enumerated()), id: \.element.id) { offset, step in
                                 stepCard(
                                     index: offset + 1,
-                                    title: step.0,
-                                    color: step.1,
-                                    isLast: offset == previewSteps.count - 1
+                                    title: step.title,
+                                    instruction: step.instruction,
+                                    color: stepColors[offset],
+                                    isLast: offset == selectedPlan.steps.count - 1
                                 )
-                                .frame(height: expandedStep == offset ? 273 : (offset == previewSteps.count - 1 ? 87 : 120))
-                                .zIndex(expandedStep == offset ? 10 : Double(offset))
+                                .frame(height: expandedStep == offset ? 273 : 120)
+                                // Keep every step in its original stack order. Later cards
+                                // remain above earlier cards only where the stack overlaps,
+                                // so an expanded card never covers the remaining steps.
+                                .zIndex(Double(offset))
                                 .onTapGesture {
                                     withAnimation(.spring(response: 0.46, dampingFraction: 0.82)) {
                                         expandedStep = expandedStep == offset ? nil : offset
@@ -83,6 +68,9 @@ struct MakeupPreviewView: View {
                                 }
                             }
                         }
+                        // 三套妆容的步骤编号相同，使用方案 ID 强制刷新整组文案，
+                        // 避免 SwiftUI 在切换时复用上一套 step 1...5 的内容。
+                        .id("step-stack-\(selectedPlan.id)")
                         .padding(.horizontal, 16)
                     }
                     .padding(.top, expandedStep == nil ? 24 : 0)
@@ -93,17 +81,23 @@ struct MakeupPreviewView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .onAppear {
+            selectedLookIndex = MakeupLookCatalog.plans.firstIndex(where: { $0.id == session.selectedLookID }) ?? 0
+        }
         .accessibilityAction(.escape) { expandedStep = nil }
     }
 
     private var recommendedLookCard: some View {
-        let look = recommendedLooks[selectedLookIndex]
+        let plan = selectedPlan
+        let look = plan.look
 
         return HStack(spacing: 12) {
             Image(look.imageAssetName)
                 .resizable()
                 .scaledToFill()
                 .frame(width: 120, height: 120)
+                .scaleEffect(1.1)
+                .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .shadow(color: .black.opacity(0.08), radius: 2)
 
@@ -122,7 +116,9 @@ struct MakeupPreviewView: View {
                     Spacer()
                     Button {
                         withAnimation(.easeInOut(duration: 0.22)) {
-                            selectedLookIndex = (selectedLookIndex + 1) % recommendedLooks.count
+                            selectedLookIndex = (selectedLookIndex + 1) % MakeupLookCatalog.plans.count
+                            session.selectedLookID = MakeupLookCatalog.plans[selectedLookIndex].id
+                            expandedStep = nil
                         }
                     } label: {
                         Image("PreviewSwitch")
@@ -134,11 +130,7 @@ struct MakeupPreviewView: View {
                     .accessibilityLabel("切换推荐妆容")
                 }
 
-                Text(look.id == "clear_sweet"
-                    ? "适合日常出行，妆容简单，5分钟画完"
-                    : look.id == "chinese_warm"
-                        ? "适合通勤约会，柔和温婉，8分钟画完"
-                        : "适合聚会拍照，复古利落，10分钟画完")
+                Text(plan.summary)
                     .font(.system(size: 12, weight: .light))
                     .lineSpacing(4)
 
@@ -152,6 +144,8 @@ struct MakeupPreviewView: View {
                     }
                     Spacer()
                     Button {
+                        session.selectedLookID = plan.id
+                        session.markFirstUseCompleted()
                         path.append(AppRoute.makeupSteps)
                     } label: {
                         Text("开始上妆")
@@ -175,24 +169,47 @@ struct MakeupPreviewView: View {
         .padding(.horizontal, 16)
     }
 
-    private func stepCard(index: Int, title: String, color: Color, isLast: Bool = false) -> some View {
-        HStack {
-            HStack(spacing: 17) {
-                Text("step \(index)")
-                    .font(.system(size: 20, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 16, weight: .regular, design: .rounded))
-            }
-            .foregroundStyle(index >= 4 ? .white : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { _ in
-                    Circle()
-                        .fill(index >= 4 ? Color.white : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.3))
-                        .frame(width: 4, height: 4)
+    private func stepCard(
+        index: Int,
+        title: String,
+        instruction: String,
+        color: Color,
+        isLast: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: expandedStep == index - 1 ? 18 : 0) {
+            HStack {
+                HStack(spacing: 17) {
+                    Text("step \(index)")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text(title)
+                        .font(.system(size: 16, weight: .regular, design: .rounded))
                 }
+                .foregroundStyle(index >= 4 ? .white : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(index >= 4 ? Color.white : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.3))
+                            .frame(width: 4, height: 4)
+                    }
+                }
+            }
+
+            if expandedStep == index - 1 {
+                styledMakeupInstruction(
+                    instruction,
+                    bullet: true,
+                    highlightColor: index >= 4
+                        ? .white
+                        : AppTheme.ColorToken.accentCoral
+                )
+                    .font(.system(size: 16, weight: .light))
+                    .lineSpacing(5)
+                    .foregroundStyle(index >= 4 ? .white : Color(red: 38 / 255, green: 38 / 255, blue: 38 / 255).opacity(0.75))
+                    .padding(.horizontal, 6)
+                    .transition(.opacity)
             }
         }
         .padding(.horizontal, 18)
@@ -201,21 +218,6 @@ struct MakeupPreviewView: View {
         .background(color)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
         .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
-        .overlay(alignment: .bottomLeading) {
-            if expandedStep == index - 1 {
-                Text(
-                    index == 1
-                        ? "• 咱们先保持眼部干燥，拿一把【大号铺色刷】沾取【哑光燕麦浅米色】，在整个上眼皮大面积铺色打底。手法一定要轻，少量多次地【叠加】，把眼皮上的暗沉和油脂都盖住。"
-                        : "• 点击进入卡片式教学后，闪闪会根据当前步骤提供更详细的操作讲解。"
-                )
-                    .font(.system(size: 16, weight: .light))
-                    .lineSpacing(5)
-                    .foregroundStyle(index >= 4 ? .white : Color(red: 38 / 255, green: 38 / 255, blue: 38 / 255).opacity(0.75))
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 28)
-                    .transition(.opacity)
-            }
-        }
     }
 }
 

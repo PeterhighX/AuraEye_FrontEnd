@@ -15,8 +15,8 @@ final class OnboardingService {
         onboardingRepository: OnboardingRepository = OnboardingRepository(),
         eyeStyleRepository: EyeStyleRepository = EyeStyleRepository(),
         cosmeticsRepository: CosmeticsRepository = CosmeticsRepository(),
-        recognitionService: any CosmeticsRecognitionServicing = CosmeticsRecognitionService(),
-        faceAnalysisService: any FaceAnalysisServicing = LocalFaceAnalysisService()
+        recognitionService: any CosmeticsRecognitionServicing = AccountAwareCosmeticsRecognitionService(),
+        faceAnalysisService: any FaceAnalysisServicing = AccountAwareFaceAnalysisService()
     ) {
         self.userRepository = userRepository
         self.onboardingRepository = onboardingRepository
@@ -57,9 +57,14 @@ final class OnboardingService {
             try onboardingRepository.activateNextStep(after: .userProfile, userId: user.userId)
         }
 
-        if faceImagePath?.isEmpty == false,
-           hasCosmetics,
-           let product = try cosmeticsRepository.fetchAll(userId: user.userId).first {
+        let userCosmetics = try cosmeticsRepository.fetchUserOwned(userId: user.userId)
+        let categorySet = Set(userCosmetics.compactMap {
+            CosmeticCategory.from(raw: $0.makeupCategory)
+        })
+        let hasAllRequiredCosmetics = categorySet.isSuperset(of: Set(CosmeticCategory.allCases))
+
+        if hasCosmetics, hasAllRequiredCosmetics,
+           let product = userCosmetics.first {
             try onboardingRepository.updateStep(
                 userId: user.userId,
                 key: .cosmetics,
@@ -67,7 +72,22 @@ final class OnboardingService {
                 subtitle: OnboardingStepKey.cosmetics.completedSubtitle,
                 previewPath: product.previewPath
             )
-            try onboardingRepository.activateNextStep(after: .cosmetics, userId: user.userId)
+            // 化妆品可以先于档案添加；只有脸部也已完成时才开放 Step 3。
+            if faceImagePath?.isEmpty == false {
+                try onboardingRepository.activateNextStep(after: .cosmetics, userId: user.userId)
+            }
+        } else if !hasAllRequiredCosmetics {
+            try onboardingRepository.updateStep(
+                userId: user.userId,
+                key: .cosmetics,
+                status: faceImagePath?.isEmpty == false ? .inProgress : .pending,
+                subtitle: OnboardingStepKey.cosmetics.defaultSubtitle
+            )
+            try onboardingRepository.updateStep(
+                userId: user.userId,
+                key: .makeupGenerate,
+                status: .pending
+            )
         }
 
         return try onboardingRepository.fetchSteps(userId: user.userId)
@@ -98,24 +118,44 @@ final class OnboardingService {
     }
 
     func recognizeCosmetics(image: UIImage) async throws -> CosmeticsRecognitionResult {
-        try await recognitionService.recognize(
+        let result = try await recognitionService.recognize(
             image: image,
             categoryHint: nil
         )
+        guard result.hasRequiredProductInformation else {
+            throw CosmeticsRecognitionError.incompleteProductInformation
+        }
+        return result
     }
 
     func completeCosmeticsScan(result: CosmeticsRecognitionResult) throws -> [OnboardingStep] {
         let user = try userRepository.currentUser()
         try cosmeticsRepository.insertRecognized(userId: user.userId, result: result)
 
+        let categories = Set(
+            try cosmeticsRepository.fetchUserOwned(userId: user.userId)
+                .compactMap { CosmeticCategory.from(raw: $0.makeupCategory) }
+        )
+        let isComplete = categories.isSuperset(of: Set(CosmeticCategory.allCases))
+
         try onboardingRepository.updateStep(
             userId: user.userId,
             key: .cosmetics,
-            status: .completed,
-            subtitle: OnboardingStepKey.cosmetics.completedSubtitle,
+            status: isComplete ? .completed : .inProgress,
+            subtitle: isComplete
+                ? OnboardingStepKey.cosmetics.completedSubtitle
+                : "✨ 已添加 \(categories.count)/3 类化妆品，请继续添加",
             previewPath: result.previewPath
         )
-        try onboardingRepository.activateNextStep(after: .cosmetics, userId: user.userId)
+        if isComplete {
+            try onboardingRepository.activateNextStep(after: .cosmetics, userId: user.userId)
+        } else {
+            try onboardingRepository.updateStep(
+                userId: user.userId,
+                key: .makeupGenerate,
+                status: .pending
+            )
+        }
 
         return try onboardingRepository.fetchSteps(userId: user.userId)
     }

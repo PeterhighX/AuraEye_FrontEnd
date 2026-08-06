@@ -7,19 +7,25 @@ struct StepPreviewThumbnail: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.95, green: 0.95, blue: 0.95).opacity(0.25))
-
             previewContent
         }
         .frame(width: 76, height: 99)
-        .offset(y: -6)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder
     private var previewContent: some View {
-        if let image = resolvedPreviewImage {
+        if step.stepKey != .userProfile,
+           let assetName = step.previewAsset,
+           UIImage(named: assetName) != nil {
+            // Step 2 / Step 3 使用设计稿规定的固定 SVG，
+            // 扫描完成后的商品图片仅写入陈列柜，不替换步骤卡片。
+            Image(assetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 76, height: 99)
+                .clipped()
+        } else if let image = resolvedPreviewImage {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -28,7 +34,7 @@ struct StepPreviewThumbnail: View {
         } else if let assetName = step.previewAsset, UIImage(named: assetName) != nil {
             Image(assetName)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 76, height: 99)
                 .clipped()
         } else {

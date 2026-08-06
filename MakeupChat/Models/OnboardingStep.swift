@@ -17,7 +17,7 @@ enum OnboardingStepKey: String, CaseIterable {
         switch self {
         case .userProfile: return "用户档案"
         case .cosmetics: return "化妆品"
-        case .makeupGenerate: return "妆容生成"
+        case .makeupGenerate: return "选择妆容"
         }
     }
 
@@ -41,7 +41,7 @@ enum OnboardingStepKey: String, CaseIterable {
         switch self {
         case .userProfile: return "扫描脸部"
         case .cosmetics: return "扫描化妆品"
-        case .makeupGenerate: return "开始生成"
+        case .makeupGenerate: return "选择妆容"
         }
     }
 
@@ -57,9 +57,9 @@ enum OnboardingStepKey: String, CaseIterable {
 
     var defaultPreviewAsset: String? {
         switch self {
-        case .userProfile: return "PreviewUserProfile"
-        case .cosmetics: return "PreviewCosmetics"
-        case .makeupGenerate: return "PreviewMakeup"
+        case .userProfile: return "OnboardingUserProfileProvided"
+        case .cosmetics: return "OnboardingCosmeticsProvided"
+        case .makeupGenerate: return "OnboardingChooseLookProvided"
         }
     }
 }

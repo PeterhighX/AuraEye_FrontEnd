@@ -4,6 +4,7 @@ import Foundation
 enum AppRoute: Hashable {
     case aiChat
     case firstTimeUse
+    case onboardingCabinet
     case makeupPreview
     case makeupSteps
     case makeupComplete

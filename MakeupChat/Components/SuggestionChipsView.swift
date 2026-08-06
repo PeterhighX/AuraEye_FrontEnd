@@ -12,7 +12,8 @@ struct SuggestionChipsView: View {
                 onSelect("我想要正式一点")
             }
         }
-        .padding(.leading, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 16)
     }
 
     private func chip(systemName: String, title: String, action: @escaping () -> Void) -> some View {

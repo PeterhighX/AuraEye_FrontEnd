@@ -21,13 +21,16 @@ struct ProfileView: View {
                 MyTasksSheet(tasks: viewModel.tasks) {
                     showMyTasks = false
                 }
-                .frame(height: 463)
+                .frame(height: 500)
+                .offset(y: 34)
+                .ignoresSafeArea(.container, edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(showMyTasks ? .hidden : .visible, for: .tabBar)
         .animation(AppTheme.Motion.stepSpring, value: showMyTasks)
         .onAppear { viewModel.reload() }
     }
@@ -134,8 +137,8 @@ struct ProfileView: View {
 
     private var manageProfileCard: some View {
         Button {
-            if session.hasScannedFace {
-                path.append(AppRoute.userProfile)
+            if let profileRoute = session.routeForUserProfile() {
+                path.append(profileRoute)
             } else {
                 session.requestProfileCapture()
                 selectedTab = AppTab.home.rawValue
@@ -213,7 +216,7 @@ struct ProfileView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(viewModel.historyItems) { item in
+                    ForEach(session.makeupHistory + viewModel.historyItems) { item in
                         MakeupHistoryCard(item: item)
                     }
                 }

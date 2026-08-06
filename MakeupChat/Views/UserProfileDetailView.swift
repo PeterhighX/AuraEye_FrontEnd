@@ -3,19 +3,22 @@ import UIKit
 
 struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Bindable var session: AppSession
+    @Binding var path: NavigationPath
     @State private var user: UserProfile?
     @State private var capturedPortrait: UIImage?
     @State private var showsCamera = false
+    @State private var showsSourcePicker = false
+    @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var isAnalyzing = false
+    @State private var analysisErrorMessage: String?
     @State private var showsProfileMenu = false
 
     private let userRepository = UserRepository()
-    private let faceAnalysisService: any FaceAnalysisServicing = LocalFaceAnalysisService()
+    private let faceAnalysisService: any FaceAnalysisServicing = AccountAwareFaceAnalysisService()
 
     var body: some View {
         ZStack {
-            ProfileDetailBackgroundView()
-
             VStack(spacing: 0) {
                 profileHeader
                     .padding(.top, 8)
@@ -37,19 +40,55 @@ struct UserProfileDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .fullScreenCover(isPresented: $showsCamera) {
-            CameraPickerView { image in
-                generateVirtualAvatar(from: image)
-            }
+            CameraPickerView(
+                onImageCaptured: generateVirtualAvatar,
+                sourceType: imageSource,
+                cameraDevice: .front
+            )
             .ignoresSafeArea()
         }
         .confirmationDialog("档案操作", isPresented: $showsProfileMenu, titleVisibility: .visible) {
             Button("重新上传照片") {
-                showsCamera = true
+                showsSourcePicker = true
             }
             Button("重新分析") {
                 runAnalysis()
             }
             Button("取消", role: .cancel) {}
+        }
+        .alert(
+            "分析未完成",
+            isPresented: Binding(
+                get: { analysisErrorMessage != nil },
+                set: { if !$0 { analysisErrorMessage = nil } }
+            )
+        ) {
+            Button("重新选择") {
+                analysisErrorMessage = nil
+                showsSourcePicker = true
+            }
+            Button("取消", role: .cancel) {
+                analysisErrorMessage = nil
+            }
+        } message: {
+            Text(analysisErrorMessage ?? "面部分析暂时未完成，请重新选择照片。")
+        }
+        .overlay {
+            if showsSourcePicker {
+                MediaSourceDialog(
+                    onCamera: {
+                        imageSource = .camera
+                        showsSourcePicker = false
+                        showsCamera = true
+                    },
+                    onLibrary: {
+                        imageSource = .photoLibrary
+                        showsSourcePicker = false
+                        showsCamera = true
+                    },
+                    onCancel: { showsSourcePicker = false }
+                )
+            }
         }
         .onAppear { loadUser() }
     }
@@ -113,7 +152,7 @@ struct UserProfileDetailView: View {
 
                 HStack(spacing: 8) {
                     profileActionButton(title: "重新上传", color: AppTheme.ColorToken.accentCoral) {
-                        showsCamera = true
+                        showsSourcePicker = true
                     }
 
                     profileActionButton(
@@ -244,7 +283,9 @@ struct UserProfileDetailView: View {
             }
             .disabled(isAnalyzing)
 
-            NavigationLink(value: AppRoute.makeupPreview) {
+            Button {
+                path.append(session.routeForQuickStart())
+            } label: {
                 bottomButtonLabel("继续上妆")
                     .foregroundStyle(.white)
                     .background(AppTheme.ColorToken.buttonPrimary)
@@ -286,16 +327,22 @@ struct UserProfileDetailView: View {
         Task {
             defer { isAnalyzing = false }
             guard var profile = try? userRepository.currentUser() else { return }
-            guard let result = try? await faceAnalysisService.analyze(
-                image: image,
-                userId: profile.userId
-            ) else { return }
+            do {
+                let result = try await faceAnalysisService.analyze(
+                    image: image,
+                    userId: profile.userId
+                )
 
-            profile.userPortraitPath = result.portraitPath
-            profile.userFileJSON = result.profileJSON
-            try? userRepository.update(profile)
-            capturedPortrait = nil
-            user = profile
+                profile.userPortraitPath = result.portraitPath
+                profile.userFileJSON = result.profileJSON
+                try userRepository.update(profile)
+                capturedPortrait = nil
+                user = profile
+            } catch let error as FaceAnalysisError {
+                analysisErrorMessage = error.localizedDescription
+            } catch {
+                analysisErrorMessage = "面部分析暂时未完成，请重新选择照片。"
+            }
         }
     }
 }
@@ -312,6 +359,9 @@ private struct ProfileBulletLabelStyle: LabelStyle {
 
 #Preview {
     NavigationStack {
-        UserProfileDetailView()
+        UserProfileDetailView(
+            session: AppSession(),
+            path: .constant(NavigationPath())
+        )
     }
 }

@@ -22,8 +22,24 @@ final class ChatSessionService {
 
     func loadSession() throws -> (UserProfile, [ChatMessage]) {
         let user = try userRepository.currentUser()
-        let messages = try chatRepository.fetchMessages(userId: user.userId)
+        var messages = try chatRepository.fetchMessages(userId: user.userId)
+        if messages.isEmpty {
+            for message in initialConversation {
+                try chatRepository.insert(message, userId: user.userId)
+            }
+            messages = try chatRepository.fetchMessages(userId: user.userId)
+        }
         return (user, messages)
+    }
+
+    private var initialConversation: [ChatMessage] {
+        [
+            ChatMessage(
+                sender: .ai,
+                text: "Mrs Zhang. 请给我一张图片帮你生成今日的妆容",
+                aiAvatarName: "FirstTimeAssistant"
+            )
+        ]
     }
 
     func sendUserText(_ text: String, user: UserProfile) throws -> (ChatMessage, [ChatMessage]) {
@@ -88,16 +104,29 @@ final class ChatSessionService {
     ) throws -> (ChatMessage, [ChatMessage]) {
         try userRepository.updateUploadedPhoto(userId: user.userId, path: photoPath)
 
-        let userMessage = ChatMessage(
-            sender: .user,
-            text: "铛铛！这是我的图片",
-            imageName: nil,
-            imagePath: photoPath,
-            kind: .photo
+        let didAttach = try chatRepository.attachImageToLatestUserMessage(
+            userId: user.userId,
+            imagePath: photoPath
         )
-        try chatRepository.insert(userMessage, userId: user.userId)
+        let userMessage: ChatMessage
+        if didAttach {
+            userMessage = ChatMessage(
+                sender: .user,
+                text: "这是我的图片，我想看到在公园玩耍的样子",
+                imagePath: photoPath,
+                kind: .photo
+            )
+        } else {
+            userMessage = ChatMessage(
+                sender: .user,
+                text: "这是我的图片，我想看到在公园玩耍的样子",
+                imagePath: photoPath,
+                kind: .photo
+            )
+            try chatRepository.insert(userMessage, userId: user.userId)
+        }
 
-        let replies = try buildAIReplies(for: "__photo_uploaded__", user: user)
+        let replies = try buildAIReplies(for: "__photo_uploaded__", user: user, photoPath: photoPath)
         for reply in replies {
             try chatRepository.insert(reply, userId: user.userId)
         }
@@ -109,12 +138,14 @@ final class ChatSessionService {
         (try? cosmeticsRepository.brushTip()) ?? "毛刷的作用可以柔化边缘，但是要定时清理哦！"
     }
 
-    private func buildAIReplies(for input: String, user: UserProfile) throws -> [ChatMessage] {
+    private func buildAIReplies(
+        for input: String,
+        user: UserProfile,
+        photoPath: String? = nil
+    ) throws -> [ChatMessage] {
         if input == "__photo_uploaded__" {
-            let style = try eyeStyleRepository.fetch(scene: "日常")
-            let styleName = style?.eyeStyleName ?? "1color42"
-            let scene = style?.scene ?? "日常"
-
+            let recommendedLook = MakeupLookCatalog.plans.randomElement()
+                ?? MakeupLookCatalog.plans[0]
             let previewPath = try persistPlaceholderPreview(userId: user.userId)
             let stepsJSON = "[\"step_eye.svg\",\"step_liner.svg\",\"step_blush.svg\"]"
             try userRepository.updateEyePreview(
@@ -126,13 +157,14 @@ final class ChatSessionService {
             return [
                 ChatMessage(
                     sender: .ai,
-                    text: "好的！这就结合您今日的天气给您推荐合适的妆容！！",
-                    aiAvatarName: "AvatarAI2"
+                    text: "看到你的美照啦！公园的阳光和绿树真的特别有朝气呢，今天的天气也非常适合出门走走，这就给你推荐妆容哈",
+                    aiAvatarName: "FirstTimeAssistant"
                 ),
                 ChatMessage(
                     sender: .ai,
-                    text: "已匹配眼型 \(styleName)，适合\(scene)场景。专属妆容效果正在生成中…",
-                    aiAvatarName: "AvatarAI2",
+                    text: "✨灵感生成提示：专属的妆容效果已经快马加鞭在生成中啦。",
+                    imageName: recommendedLook.look.imageAssetName,
+                    aiAvatarName: "FirstTimeAssistant",
                     kind: .generating
                 )
             ]

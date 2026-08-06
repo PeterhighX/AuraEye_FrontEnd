@@ -14,8 +14,6 @@ struct UserProfileSetupView: View {
 
     var body: some View {
         ZStack {
-            GradientBackgroundView()
-
             VStack(spacing: 18) {
                 Image(systemName: "person.crop.rectangle")
                     .font(.system(size: 52, weight: .light))
@@ -48,25 +46,6 @@ struct UserProfileSetupView: View {
             guard !viewModel.isAnalyzing else { return }
             showSourcePicker = true
         }
-        .confirmationDialog(
-            "创建用户档案",
-            isPresented: $showSourcePicker,
-            titleVisibility: .visible
-        ) {
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("拍摄正脸照片") {
-                    imageSource = .camera
-                    showImagePicker = true
-                }
-            }
-
-            Button("从相册选择") {
-                imageSource = .photoLibrary
-                showImagePicker = true
-            }
-
-            Button("取消", role: .cancel) {}
-        }
         .fullScreenCover(isPresented: $showImagePicker) {
             CameraPickerView(
                 onImageCaptured: handleSelectedImage,
@@ -86,6 +65,23 @@ struct UserProfileSetupView: View {
             }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .overlay {
+            if showSourcePicker {
+                MediaSourceDialog(
+                    onCamera: {
+                        imageSource = .camera
+                        showSourcePicker = false
+                        showImagePicker = true
+                    },
+                    onLibrary: {
+                        imageSource = .photoLibrary
+                        showSourcePicker = false
+                        showImagePicker = true
+                    },
+                    onCancel: { showSourcePicker = false }
+                )
+            }
         }
     }
 

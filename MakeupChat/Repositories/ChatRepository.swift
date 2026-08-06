@@ -75,6 +75,43 @@ final class ChatRepository {
         }
     }
 
+    /// 将用户随后选择的图片附加到刚刚发送的固定演示文案中，
+    /// 保持“文字 + 图片”为同一个聊天气泡。
+    @discardableResult
+    func attachImageToLatestUserMessage(
+        userId: String,
+        imagePath: String
+    ) throws -> Bool {
+        try db.perform { db in
+            let sql = """
+            UPDATE chat_messages
+            SET image_path = ?, message_kind = ?
+            WHERE id = (
+                SELECT id FROM chat_messages
+                WHERE user_id = ? AND sender = ? AND text = ? AND image_path IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+            );
+            """
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw DatabaseError.prepareFailed
+            }
+            sqlite3_bind_text(statement, 1, imagePath, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_text(statement, 2, ChatMessageKind.photo.rawValue, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_text(statement, 3, userId, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_text(statement, 4, ChatSender.user.rawValue, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_text(statement, 5, "这是我的图片，我想看到在公园玩耍的样子", -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw DatabaseError.executionFailed
+            }
+            return sqlite3_changes(db) > 0
+        }
+    }
+
     private func mapMessage(_ statement: OpaquePointer?) -> ChatMessage {
         ChatMessage(
             id: columnText(statement, 0) ?? UUID().uuidString,

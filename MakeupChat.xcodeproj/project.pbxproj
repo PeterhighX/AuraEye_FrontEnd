@@ -12,6 +12,7 @@
 		1F6D0886E0FC41ADBAE39918 /* CosmeticImagePlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */; };
 		CACC9235D5DE4CCF90775BD6 /* CosmeticProductCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EAA981411D4150821F0026 /* CosmeticProductCard.swift */; };
 		190FA228BCBD414C81A6EFE7 /* GradientBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */; };
+		E70000000000000000000001 /* SharedFluidBackground.metal in Sources */ = {isa = PBXBuildFile; fileRef = E70000000000000000000002 /* SharedFluidBackground.metal */; };
 		44F8CF83FFB04535A2B8852A /* HomeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65E8B42F5E34163A60327F0 /* HomeComponents.swift */; };
 		421A78BFF89F43C49C2F1CAE /* LocalImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D9292628274DAA81F9707A /* LocalImageView.swift */; };
 		E5BBBA9CB80147FF8423B986 /* MakeupFlowHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */; };
@@ -49,16 +50,26 @@
 		B30000000000000000000001 /* AIAgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000002 /* AIAgentService.swift */; };
 		B30000000000000000000003 /* MakeupExplanationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000004 /* MakeupExplanationService.swift */; };
 		5D84D88B95CB499BAD34CE15 /* CosmeticsRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */; };
+		C40000000000000000000001 /* LiveWeatherProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* LiveWeatherProvider.swift */; };
+		C40000000000000000000003 /* MakeupLookCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000004 /* MakeupLookCatalog.swift */; };
 		68A7A170EFE048FFAB8E9E52 /* FaceScanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */; };
 		B20000000000000000000001 /* FaceAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* FaceAnalysisService.swift */; };
 		9130B1E37EA4446BBB42ADFC /* MakeupPreviewThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */; };
 		4512A532E1624202915935F6 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */; };
 		40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8F842357654825A117FBDB /* SyncService.swift */; };
+		D50000000000000000000001 /* RemoteAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50000000000000000000002 /* RemoteAPIService.swift */; };
+		E60000000000000000000001 /* AuthenticationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000002 /* AuthenticationService.swift */; };
+		F10000000000000000000001 /* SessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* SessionContext.swift */; };
+		F10000000000000000000003 /* VisionInfrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* VisionInfrastructure.swift */; };
+		F10000000000000000000005 /* VisualProfilePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* VisualProfilePipeline.swift */; };
+		F10000000000000000000007 /* ItemRecognitionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* ItemRecognitionPipeline.swift */; };
+		F10000000000000000000009 /* DemoVisionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000A /* DemoVisionRepository.swift */; };
 		A43425BDA5374801BF35A2D6 /* LocalMediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DDE7FDFC6E4AF6B00BE06E /* LocalMediaStore.swift */; };
 		8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */; };
 		AAE7BAC217714EDFAB9EEC6A /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12CF94986254D17BB169BFA /* ChatViewModel.swift */; };
 		F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */; };
 		CC62D26E1BFD4CD0977BE5FE /* FirstTimeUseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */; };
+		E60000000000000000000003 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000004 /* LoginViewModel.swift */; };
 		50E7A3E296254A6E83018653 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */; };
 		B959416B14CC41ADA1F7EC7E /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */; };
 		B20000000000000000000003 /* UserProfileSetupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* UserProfileSetupViewModel.swift */; };
@@ -66,6 +77,7 @@
 		E55D52EE7D7048E9B90D0BA0 /* DisplayCabinetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */; };
 		A6DFD2ACA0B34B22B21D57DB /* FirstTimeUseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */; };
 		EFA36B954A85485D85DB3599 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5CC419665F41C69594A3D8 /* HomeView.swift */; };
+		E60000000000000000000005 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000006 /* LoginView.swift */; };
 		E916CC97DB304069962716CE /* MakeupCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */; };
 		02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */; };
 		8822AE718B7D44629D66BD32 /* MakeupStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */; };
@@ -87,6 +99,7 @@
 		05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticImagePlaceholder.swift"; sourceTree = "<group>"; };
 		51EAA981411D4150821F0026 /* CosmeticProductCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticProductCard.swift"; sourceTree = "<group>"; };
 		66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GradientBackgroundView.swift"; sourceTree = "<group>"; };
+		E70000000000000000000002 /* SharedFluidBackground.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = SharedFluidBackground.metal; sourceTree = "<group>"; };
 		F65E8B42F5E34163A60327F0 /* HomeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeComponents.swift"; sourceTree = "<group>"; };
 		C2D9292628274DAA81F9707A /* LocalImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalImageView.swift"; sourceTree = "<group>"; };
 		4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupFlowHeaderView.swift"; sourceTree = "<group>"; };
@@ -124,16 +137,26 @@
 		B30000000000000000000002 /* AIAgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIAgentService.swift"; sourceTree = "<group>"; };
 		B30000000000000000000004 /* MakeupExplanationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupExplanationService.swift"; sourceTree = "<group>"; };
 		BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CosmeticsRecognitionService.swift"; sourceTree = "<group>"; };
+		C40000000000000000000002 /* LiveWeatherProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveWeatherProvider.swift"; sourceTree = "<group>"; };
+		C40000000000000000000004 /* MakeupLookCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupLookCatalog.swift"; sourceTree = "<group>"; };
 		88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FaceScanService.swift"; sourceTree = "<group>"; };
 		B20000000000000000000002 /* FaceAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FaceAnalysisService.swift"; sourceTree = "<group>"; };
 		76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupPreviewThumbnailRenderer.swift"; sourceTree = "<group>"; };
 		DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingService.swift"; sourceTree = "<group>"; };
 		1F8F842357654825A117FBDB /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SyncService.swift"; sourceTree = "<group>"; };
+		D50000000000000000000002 /* RemoteAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RemoteAPIService.swift"; sourceTree = "<group>"; };
+		E60000000000000000000002 /* AuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AuthenticationService.swift"; sourceTree = "<group>"; };
+		F10000000000000000000002 /* SessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SessionContext.swift"; sourceTree = "<group>"; };
+		F10000000000000000000004 /* VisionInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VisionInfrastructure.swift"; sourceTree = "<group>"; };
+		F10000000000000000000006 /* VisualProfilePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VisualProfilePipeline.swift"; sourceTree = "<group>"; };
+		F10000000000000000000008 /* ItemRecognitionPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ItemRecognitionPipeline.swift"; sourceTree = "<group>"; };
+		F1000000000000000000000A /* DemoVisionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DemoVisionRepository.swift"; sourceTree = "<group>"; };
 		E5DDE7FDFC6E4AF6B00BE06E /* LocalMediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalMediaStore.swift"; sourceTree = "<group>"; };
 		B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaPathMigrator.swift"; sourceTree = "<group>"; };
 		F12CF94986254D17BB169BFA /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatViewModel.swift"; sourceTree = "<group>"; };
 		15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DisplayCabinetViewModel.swift"; sourceTree = "<group>"; };
 		1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FirstTimeUseViewModel.swift"; sourceTree = "<group>"; };
+		E60000000000000000000004 /* LoginViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoginViewModel.swift"; sourceTree = "<group>"; };
 		3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeViewModel.swift"; sourceTree = "<group>"; };
 		AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileViewModel.swift"; sourceTree = "<group>"; };
 		B20000000000000000000004 /* UserProfileSetupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserProfileSetupViewModel.swift"; sourceTree = "<group>"; };
@@ -141,6 +164,7 @@
 		91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DisplayCabinetView.swift"; sourceTree = "<group>"; };
 		8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FirstTimeUseView.swift"; sourceTree = "<group>"; };
 		8D5CC419665F41C69594A3D8 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeView.swift"; sourceTree = "<group>"; };
+		E60000000000000000000006 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoginView.swift"; sourceTree = "<group>"; };
 		AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupCompleteView.swift"; sourceTree = "<group>"; };
 		4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupPreviewView.swift"; sourceTree = "<group>"; };
 		F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MakeupStepsView.swift"; sourceTree = "<group>"; };
@@ -186,6 +210,7 @@
 			children = (
 				05D923C6A2AE4830BA53CFAC /* ContentView.swift */,
 				CA1A31DB3CA5451B80EBD6CE /* MakeupChatApp.swift */,
+				E70000000000000000000002 /* SharedFluidBackground.metal */,
 				0E686291765348C588EA8996 /* Models */,
 				152ECFDCE80644D9B456152D /* Database */,
 				8D57918213B14D418999C31C /* Storage */,
@@ -209,6 +234,7 @@
 				0B905280BC9546369F252175 /* ChatMessage.swift */,
 				7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */,
 				8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */,
+				C40000000000000000000004 /* MakeupLookCatalog.swift */,
 				95AEE21700EF49A8A4A42950 /* OnboardingStep.swift */,
 				AA0683978D3E420C8AA42807 /* ProfileModels.swift */,
 				AD26DA534B784B35BAEA4192 /* TipLibrary.swift */,
@@ -238,6 +264,7 @@
 		A799DC10421B43AE873825D8 /* Repositories */ = {
 			isa = PBXGroup;
 			children = (
+				F1000000000000000000000A /* DemoVisionRepository.swift */,
 				4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */,
 				A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */,
 				36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */,
@@ -251,14 +278,21 @@
 		3E3312AD544E43B79F16AC75 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				E60000000000000000000002 /* AuthenticationService.swift */,
+				F10000000000000000000002 /* SessionContext.swift */,
+				F10000000000000000000004 /* VisionInfrastructure.swift */,
+				F10000000000000000000006 /* VisualProfilePipeline.swift */,
+				F10000000000000000000008 /* ItemRecognitionPipeline.swift */,
 				B30000000000000000000002 /* AIAgentService.swift */,
 				B30000000000000000000004 /* MakeupExplanationService.swift */,
 				EE39EBC169214B0FA1CD0789 /* ChatSessionService.swift */,
 				BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */,
 				88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */,
 				B20000000000000000000002 /* FaceAnalysisService.swift */,
+				C40000000000000000000002 /* LiveWeatherProvider.swift */,
 				76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */,
 				DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */,
+				D50000000000000000000002 /* RemoteAPIService.swift */,
 				1F8F842357654825A117FBDB /* SyncService.swift */,
 			);
 			path = Services;
@@ -271,6 +305,7 @@
 				15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */,
 				1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */,
 				3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */,
+				E60000000000000000000004 /* LoginViewModel.swift */,
 				AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */,
 				B20000000000000000000004 /* UserProfileSetupViewModel.swift */,
 			);
@@ -325,6 +360,7 @@
 				91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */,
 				8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */,
 				8D5CC419665F41C69594A3D8 /* HomeView.swift */,
+				E60000000000000000000006 /* LoginView.swift */,
 				AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */,
 				4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */,
 				F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */,
@@ -378,6 +414,11 @@
 				TargetAttributes = {
 					A10000000000000000000002 = {
 						CreatedOnToolsVersion = 26.0;
+						SystemCapabilities = {
+							com.apple.WeatherKit = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -422,6 +463,7 @@
 				1F6D0886E0FC41ADBAE39918 /* CosmeticImagePlaceholder.swift in Sources */,
 				CACC9235D5DE4CCF90775BD6 /* CosmeticProductCard.swift in Sources */,
 				190FA228BCBD414C81A6EFE7 /* GradientBackgroundView.swift in Sources */,
+				E70000000000000000000001 /* SharedFluidBackground.metal in Sources */,
 				44F8CF83FFB04535A2B8852A /* HomeComponents.swift in Sources */,
 				421A78BFF89F43C49C2F1CAE /* LocalImageView.swift in Sources */,
 				E5BBBA9CB80147FF8423B986 /* MakeupFlowHeaderView.swift in Sources */,
@@ -459,10 +501,19 @@
 				B30000000000000000000001 /* AIAgentService.swift in Sources */,
 				B30000000000000000000003 /* MakeupExplanationService.swift in Sources */,
 				5D84D88B95CB499BAD34CE15 /* CosmeticsRecognitionService.swift in Sources */,
+				C40000000000000000000001 /* LiveWeatherProvider.swift in Sources */,
+				C40000000000000000000003 /* MakeupLookCatalog.swift in Sources */,
 				68A7A170EFE048FFAB8E9E52 /* FaceScanService.swift in Sources */,
 				B20000000000000000000001 /* FaceAnalysisService.swift in Sources */,
 				9130B1E37EA4446BBB42ADFC /* MakeupPreviewThumbnailRenderer.swift in Sources */,
 				4512A532E1624202915935F6 /* OnboardingService.swift in Sources */,
+				D50000000000000000000001 /* RemoteAPIService.swift in Sources */,
+				E60000000000000000000001 /* AuthenticationService.swift in Sources */,
+				F10000000000000000000001 /* SessionContext.swift in Sources */,
+				F10000000000000000000003 /* VisionInfrastructure.swift in Sources */,
+				F10000000000000000000005 /* VisualProfilePipeline.swift in Sources */,
+				F10000000000000000000007 /* ItemRecognitionPipeline.swift in Sources */,
+				F10000000000000000000009 /* DemoVisionRepository.swift in Sources */,
 				40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */,
 				A43425BDA5374801BF35A2D6 /* LocalMediaStore.swift in Sources */,
 				8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */,
@@ -470,12 +521,14 @@
 				F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */,
 				CC62D26E1BFD4CD0977BE5FE /* FirstTimeUseViewModel.swift in Sources */,
 				50E7A3E296254A6E83018653 /* HomeViewModel.swift in Sources */,
+				E60000000000000000000003 /* LoginViewModel.swift in Sources */,
 				B959416B14CC41ADA1F7EC7E /* ProfileViewModel.swift in Sources */,
 				B20000000000000000000003 /* UserProfileSetupViewModel.swift in Sources */,
 				1758DD65105A44E5912808DE /* ChatConversationView.swift in Sources */,
 				E55D52EE7D7048E9B90D0BA0 /* DisplayCabinetView.swift in Sources */,
 				A6DFD2ACA0B34B22B21D57DB /* FirstTimeUseView.swift in Sources */,
 				EFA36B954A85485D85DB3599 /* HomeView.swift in Sources */,
+				E60000000000000000000005 /* LoginView.swift in Sources */,
 				E916CC97DB304069962716CE /* MakeupCompleteView.swift in Sources */,
 				02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */,
 				8822AE718B7D44629D66BD32 /* MakeupStepsView.swift in Sources */,
@@ -532,12 +585,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MakeupChat/MakeupChat.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要使用相机扫描面部，建立您的专属用户档案。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要获取当前位置，以实时更新天气、温度、紫外线指数和所在区域。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取相册中的照片，用于识别并添加化妆品。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -558,12 +613,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MakeupChat/MakeupChat.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要使用相机扫描面部，建立您的专属用户档案。";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要获取当前位置，以实时更新天气、温度、紫外线指数和所在区域。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取相册中的照片，用于识别并添加化妆品。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

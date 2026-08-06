@@ -52,6 +52,21 @@ enum LocalMediaStore {
         return relativePath(bucket: bucket, fileName: name)
     }
 
+    /// 保存带透明通道的人物数字肖像。
+    @discardableResult
+    static func savePNGImage(
+        _ image: UIImage,
+        bucket: MediaBucket,
+        fileName: String
+    ) throws -> String {
+        let url = try fileURL(bucket: bucket, fileName: fileName)
+        guard let data = image.pngData() else {
+            throw LocalMediaError.encodingFailed
+        }
+        try data.write(to: url, options: .atomic)
+        return relativePath(bucket: bucket, fileName: fileName)
+    }
+
     @discardableResult
     static func saveText(_ text: String, bucket: MediaBucket, fileName: String) throws -> String {
         let url = try fileURL(bucket: bucket, fileName: fileName)
