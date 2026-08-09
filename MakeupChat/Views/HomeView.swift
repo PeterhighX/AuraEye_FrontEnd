@@ -58,6 +58,7 @@ struct HomeView: View {
                 }
             }
         }
+        .appDynamicBackground()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(showsAIChat ? .hidden : .automatic, for: .tabBar)

@@ -132,8 +132,12 @@ struct DemoRecognitionAttempt: Sendable {
     let accountID: String
     let assetKey: String
     let requestID: String
+    let idempotencyKey: String
     let jobID: String?
     let status: String
+    let serverRequestID: String?
+    let location: String?
+    let retryAfterSeconds: Int?
     let assetSHA256: String
     let schemaVersion: String
     let modelVersion: String
@@ -148,10 +152,14 @@ struct VisionPendingJob: Sendable {
     let accountID: String
     let capability: String
     let requestID: String
+    let idempotencyKey: String
     let jobID: String?
     let assetID: String?
     let inputSHA256: String
     let status: String
+    let serverRequestID: String?
+    let location: String?
+    let retryAfterSeconds: Int?
 }
 
 enum DemoDataSeeder {
@@ -280,7 +288,8 @@ final class DemoVisionRepository {
     func attempt(accountID: String, capability: String, asset: DemoAssetRecord) throws -> DemoRecognitionAttempt? {
         try db.perform { db in
             let sql = """
-            SELECT id, account_id, demo_asset_key, request_id, job_id, status,
+            SELECT id, account_id, demo_asset_key, request_id, idempotency_key,
+                   job_id, status, server_request_id, location, retry_after,
                    asset_sha256, schema_version, model_version
             FROM demo_recognition_attempts
             WHERE account_id = ? AND capability = ? AND demo_asset_key = ?
@@ -301,11 +310,15 @@ final class DemoVisionRepository {
                 accountID: text(statement, 1) ?? "",
                 assetKey: text(statement, 2) ?? "",
                 requestID: text(statement, 3) ?? "",
-                jobID: text(statement, 4),
-                status: text(statement, 5) ?? "",
-                assetSHA256: text(statement, 6) ?? "",
-                schemaVersion: text(statement, 7) ?? "",
-                modelVersion: text(statement, 8) ?? ""
+                idempotencyKey: text(statement, 4) ?? text(statement, 3) ?? "",
+                jobID: text(statement, 5),
+                status: text(statement, 6) ?? "",
+                serverRequestID: text(statement, 7),
+                location: text(statement, 8),
+                retryAfterSeconds: optionalInt(statement, 9),
+                assetSHA256: text(statement, 10) ?? "",
+                schemaVersion: text(statement, 11) ?? "",
+                modelVersion: text(statement, 12) ?? ""
             )
         }
     }
@@ -314,26 +327,32 @@ final class DemoVisionRepository {
         accountID: String,
         capability: String,
         asset: DemoAssetRecord,
-        requestID: String
+        requestID: String,
+        idempotencyKey: String
     ) throws -> DemoRecognitionAttempt {
         let attempt = DemoRecognitionAttempt(
             id: UUID().uuidString.lowercased(),
             accountID: accountID,
             assetKey: asset.key,
             requestID: requestID,
+            idempotencyKey: idempotencyKey,
             jobID: nil,
             status: "preparing",
+            serverRequestID: nil,
+            location: nil,
+            retryAfterSeconds: nil,
             assetSHA256: asset.sha256,
             schemaVersion: Self.schemaVersion,
             modelVersion: Self.modelVersion
         )
         try execute("""
         INSERT INTO demo_recognition_attempts (
-            id, account_id, demo_asset_key, capability, request_id, job_id, status,
+            id, account_id, demo_asset_key, capability, request_id, idempotency_key,
+            job_id, status, server_request_id, location, retry_after,
             asset_sha256, schema_version, model_version, error_code, started_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, NULL);
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, NULL, ?, ?, ?, NULL, ?, NULL);
         """, [
-            attempt.id, accountID, asset.key, capability, requestID, attempt.status,
+            attempt.id, accountID, asset.key, capability, requestID, idempotencyKey, attempt.status,
             asset.sha256, Self.schemaVersion, Self.modelVersion, now()
         ])
         return attempt
@@ -343,12 +362,15 @@ final class DemoVisionRepository {
         id: String,
         status: String,
         jobID: String? = nil,
-        errorCode: String? = nil
+        errorCode: String? = nil,
+        metadata: APIResponseMetadata? = nil
     ) throws {
         try db.perform { db in
             let sql = """
             UPDATE demo_recognition_attempts
             SET status = ?, job_id = COALESCE(?, job_id), error_code = ?,
+                server_request_id = COALESCE(?, server_request_id),
+                location = COALESCE(?, location), retry_after = COALESCE(?, retry_after),
                 completed_at = CASE WHEN ? IN ('succeeded','failed','timed_out','cancelled')
                                     THEN ? ELSE completed_at END
             WHERE id = ?;
@@ -361,9 +383,12 @@ final class DemoVisionRepository {
             bind(status, to: statement, at: 1)
             bindOptional(jobID, to: statement, at: 2)
             bindOptional(errorCode, to: statement, at: 3)
-            bind(status, to: statement, at: 4)
-            bind(now(), to: statement, at: 5)
-            bind(id, to: statement, at: 6)
+            bindOptional(metadata?.serverRequestID, to: statement, at: 4)
+            bindOptional(metadata?.location, to: statement, at: 5)
+            bindOptionalInt(metadata?.retryAfterSeconds, to: statement, at: 6)
+            bind(status, to: statement, at: 7)
+            bind(now(), to: statement, at: 8)
+            bind(id, to: statement, at: 9)
             guard sqlite3_step(statement) == SQLITE_DONE else { throw DatabaseError.executionFailed }
         }
     }
@@ -431,7 +456,8 @@ final class DemoVisionRepository {
     func pendingJob(accountID: String, capability: String) throws -> VisionPendingJob? {
         try db.perform { db in
             let sql = """
-            SELECT account_id, capability, request_id, job_id, asset_id, input_sha256, status
+            SELECT account_id, capability, request_id, idempotency_key, job_id, asset_id,
+                   input_sha256, status, server_request_id, location, retry_after
             FROM vision_pending_jobs WHERE account_id = ? AND capability = ? LIMIT 1;
             """
             var statement: OpaquePointer?
@@ -446,10 +472,14 @@ final class DemoVisionRepository {
                 accountID: text(statement, 0) ?? "",
                 capability: text(statement, 1) ?? "",
                 requestID: text(statement, 2) ?? "",
-                jobID: text(statement, 3),
-                assetID: text(statement, 4),
-                inputSHA256: text(statement, 5) ?? "",
-                status: text(statement, 6) ?? ""
+                idempotencyKey: text(statement, 3) ?? text(statement, 2) ?? "",
+                jobID: text(statement, 4),
+                assetID: text(statement, 5),
+                inputSHA256: text(statement, 6) ?? "",
+                status: text(statement, 7) ?? "",
+                serverRequestID: text(statement, 8),
+                location: text(statement, 9),
+                retryAfterSeconds: optionalInt(statement, 10)
             )
         }
     }
@@ -458,13 +488,19 @@ final class DemoVisionRepository {
         try db.perform { db in
             let sql = """
             INSERT INTO vision_pending_jobs (
-                account_id, capability, request_id, job_id, asset_id,
-                input_sha256, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                account_id, capability, request_id, idempotency_key, job_id, asset_id,
+                input_sha256, status, server_request_id, location, retry_after,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(account_id, capability) DO UPDATE SET
-                request_id = excluded.request_id, job_id = excluded.job_id,
-                asset_id = excluded.asset_id, input_sha256 = excluded.input_sha256,
-                status = excluded.status, updated_at = excluded.updated_at;
+                request_id = excluded.request_id, idempotency_key = excluded.idempotency_key,
+                job_id = COALESCE(excluded.job_id, job_id),
+                asset_id = COALESCE(excluded.asset_id, asset_id), input_sha256 = excluded.input_sha256,
+                status = excluded.status,
+                server_request_id = COALESCE(excluded.server_request_id, server_request_id),
+                location = COALESCE(excluded.location, location),
+                retry_after = COALESCE(excluded.retry_after, retry_after),
+                updated_at = excluded.updated_at;
             """
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -473,10 +509,14 @@ final class DemoVisionRepository {
             }
             let timestamp = now()
             let values: [String?] = [
-                job.accountID, job.capability, job.requestID, job.jobID, job.assetID,
-                job.inputSHA256, job.status, timestamp, timestamp
+                job.accountID, job.capability, job.requestID, job.idempotencyKey,
+                job.jobID, job.assetID, job.inputSHA256, job.status,
+                job.serverRequestID, job.location
             ]
             values.enumerated().forEach { bindOptional($0.element, to: statement, at: Int32($0.offset + 1)) }
+            bindOptionalInt(job.retryAfterSeconds, to: statement, at: 11)
+            bind(timestamp, to: statement, at: 12)
+            bind(timestamp, to: statement, at: 13)
             guard sqlite3_step(statement) == SQLITE_DONE else { throw DatabaseError.executionFailed }
         }
     }
@@ -514,7 +554,17 @@ private func bindOptional(_ value: String?, to statement: OpaquePointer?, at ind
     else { sqlite3_bind_null(statement, index) }
 }
 
+private func bindOptionalInt(_ value: Int?, to statement: OpaquePointer?, at index: Int32) {
+    if let value { sqlite3_bind_int64(statement, index, sqlite3_int64(value)) }
+    else { sqlite3_bind_null(statement, index) }
+}
+
 private func text(_ statement: OpaquePointer?, _ index: Int32) -> String? {
     guard let value = sqlite3_column_text(statement, index) else { return nil }
     return String(cString: value)
+}
+
+private func optionalInt(_ statement: OpaquePointer?, _ index: Int32) -> Int? {
+    guard sqlite3_column_type(statement, index) != SQLITE_NULL else { return nil }
+    return Int(sqlite3_column_int64(statement, index))
 }

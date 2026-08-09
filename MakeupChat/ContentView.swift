@@ -8,22 +8,17 @@ struct ContentView: View {
     @State private var selectedTab = AppTab.home.rawValue
 
     var body: some View {
-        ZStack {
-            // 唯一背景实例位于认证、Tab 与导航栈之外，永远不参与页面转场。
-            AppDynamicBackgroundView(isActive: dynamicBackgroundIsVisible)
-
-            Group {
-                if session.isAuthenticated {
-                    mainApplication
-                        .transition(.opacity.combined(with: .scale(scale: 1.015)))
-                } else {
-                    LoginView(viewModel: loginViewModel) { account in
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            session.completeLogin(with: account)
-                        }
+        Group {
+            if session.isAuthenticated {
+                mainApplication
+                    .transition(.opacity.combined(with: .scale(scale: 1.015)))
+            } else {
+                LoginView(viewModel: loginViewModel) { account in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        session.completeLogin(with: account)
                     }
-                    .transition(.opacity)
                 }
+                .transition(.opacity)
             }
         }
     }
@@ -118,19 +113,6 @@ struct ContentView: View {
         }
     }
 
-    private var dynamicBackgroundIsVisible: Bool {
-        guard session.isAuthenticated else { return true }
-
-        switch selectedTab {
-        case AppTab.home.rawValue:
-            return true
-        case AppTab.profile.rawValue:
-            // 「我的」首页是白底；进入档案等带背景的子页面后恢复 Shader 更新。
-            return !profilePath.isEmpty
-        default:
-            return false
-        }
-    }
 }
 
 #Preview {

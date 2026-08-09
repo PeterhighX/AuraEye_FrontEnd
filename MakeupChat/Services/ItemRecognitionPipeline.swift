@@ -140,15 +140,20 @@ final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
         }
 
         let requestID = pending?.requestID ?? "req_item_\(UUID().uuidString.lowercased())"
+        let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
         if pending == nil {
             pending = VisionPendingJob(
                 accountID: input.userID,
                 capability: capability,
                 requestID: requestID,
+                idempotencyKey: idempotencyKey,
                 jobID: nil,
                 assetID: nil,
                 inputSHA256: prepared.sha256,
-                status: "preparing"
+                status: "preparing",
+                serverRequestID: nil,
+                location: nil,
+                retryAfterSeconds: nil
             )
             try persistence.savePendingJob(pending!)
         }
@@ -157,28 +162,52 @@ final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
             let dto = try await execute(
                 prepared: prepared,
                 requestID: requestID,
+                idempotencyKey: idempotencyKey,
                 existingAssetID: pending?.assetID,
                 existingJobID: pending?.jobID,
-                onAsset: { [persistence] assetID in
+                onAsset: { [persistence] assetID, metadata in
                     try persistence.savePendingJob(VisionPendingJob(
                         accountID: input.userID,
                         capability: capability,
                         requestID: requestID,
+                        idempotencyKey: idempotencyKey,
                         jobID: nil,
                         assetID: assetID,
                         inputSHA256: prepared.sha256,
-                        status: "uploaded"
+                        status: "uploaded",
+                        serverRequestID: metadata.serverRequestID,
+                        location: metadata.location,
+                        retryAfterSeconds: metadata.retryAfterSeconds
                     ))
                 },
-                onJob: { [persistence] jobID, assetID in
+                onJob: { [persistence] jobID, assetID, metadata in
                     try persistence.savePendingJob(VisionPendingJob(
                         accountID: input.userID,
                         capability: capability,
                         requestID: requestID,
+                        idempotencyKey: idempotencyKey,
                         jobID: jobID,
                         assetID: assetID,
                         inputSHA256: prepared.sha256,
-                        status: "queued"
+                        status: "queued",
+                        serverRequestID: metadata.serverRequestID,
+                        location: metadata.location,
+                        retryAfterSeconds: metadata.retryAfterSeconds
+                    ))
+                },
+                onResponse: { [persistence] metadata, jobID, assetID in
+                    try? persistence.savePendingJob(VisionPendingJob(
+                        accountID: input.userID,
+                        capability: capability,
+                        requestID: requestID,
+                        idempotencyKey: idempotencyKey,
+                        jobID: jobID,
+                        assetID: assetID,
+                        inputSHA256: prepared.sha256,
+                        status: "polling",
+                        serverRequestID: metadata.serverRequestID,
+                        location: metadata.location,
+                        retryAfterSeconds: metadata.retryAfterSeconds
                     ))
                 }
             )
@@ -195,23 +224,29 @@ final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
     func execute(
         prepared: PreparedVisionImage,
         requestID: String,
+        idempotencyKey: String,
         existingAssetID: String?,
         existingJobID: String?,
-        onAsset: @escaping (String) throws -> Void,
-        onJob: @escaping (String, String) throws -> Void
+        onAsset: @escaping (String, APIResponseMetadata) throws -> Void,
+        onJob: @escaping (String, String, APIResponseMetadata) throws -> Void,
+        onResponse: @escaping (APIResponseMetadata, String, String) -> Void
     ) async throws -> ItemRecognitionResultDTO {
         var assetID = existingAssetID
         if assetID == nil {
-            let asset = try await mediaRepository.upload(prepared, requestID: requestID) { _ in }
-            assetID = asset.assetId
-            try onAsset(asset.assetId)
+            let asset = try await mediaRepository.upload(
+                prepared,
+                requestID: requestID,
+                idempotencyKey: idempotencyKey
+            ) { _ in }
+            assetID = asset.asset.assetId
+            try onAsset(asset.asset.assetId, asset.metadata)
         }
         guard let assetID else { throw VisionAPIError.uploadFailed }
 
         var jobID = existingJobID
         if jobID == nil {
-            let ticket: AIJobTicketDTO = try await client.sendFlexible(
-                path: "/v1/vision/item-recognition-jobs",
+            let response: APIResponse<AIJobTicketDTO> = try await client.sendFlexibleResponse(
+                path: APIEndpoint.itemRecognitionJobs,
                 body: CreateItemRecognitionJobRequest(
                     requestId: requestID,
                     assetId: assetID,
@@ -220,15 +255,22 @@ final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
                         maxItems: 3
                     )
                 ),
-                requestID: requestID
+                idempotencyKey: idempotencyKey
+            )
+            let ticket = response.value
+            let responseMetadata = APIResponseMetadata(
+                serverRequestID: response.metadata.serverRequestID ?? ticket.requestId,
+                location: response.metadata.location,
+                retryAfterSeconds: response.metadata.retryAfterSeconds
             )
             jobID = ticket.jobId
-            try onJob(ticket.jobId, assetID)
+            try onJob(ticket.jobId, assetID, responseMetadata)
         }
         guard let jobID else { throw VisionAPIError.jobNotFound }
         return try await poller.poll(
             jobID: jobID,
-            fetch: { [jobs] in try await jobs.job(id: $0) }
+            fetch: { [jobs] in try await jobs.job(id: $0) },
+            onResponse: { onResponse($0, jobID, assetID) }
         )
     }
 
@@ -335,11 +377,13 @@ final class DemoItemRecognitionProvider: ItemRecognitionProviding {
         }
 
         let requestID = "req_demo_item_\(UUID().uuidString.lowercased())"
+        let idempotencyKey = "idem_\(UUID().uuidString.lowercased())"
         let attempt = try persistence.beginAttempt(
             accountID: context.userId,
             capability: "item_recognition",
             asset: asset,
-            requestID: requestID
+            requestID: requestID,
+            idempotencyKey: idempotencyKey
         )
         return try await resumeOrFallback(attempt: attempt, asset: asset, image: image)
     }
@@ -356,15 +400,32 @@ final class DemoItemRecognitionProvider: ItemRecognitionProviding {
             let dto = try await remote.execute(
                 prepared: prepared,
                 requestID: attempt.requestID,
+                idempotencyKey: attempt.idempotencyKey,
                 existingAssetID: asset.remoteAssetID,
                 existingJobID: attempt.jobID,
-                onAsset: { [persistence] assetID in
+                onAsset: { [persistence] assetID, metadata in
                     try persistence.updateRemoteAssetID(assetID, assetKey: asset.key)
-                    try persistence.markAttempt(id: attempt.id, status: "uploaded")
+                    try persistence.markAttempt(
+                        id: attempt.id,
+                        status: "uploaded",
+                        metadata: metadata
+                    )
                 },
-                onJob: { [persistence] jobID, _ in
+                onJob: { [persistence] jobID, _, metadata in
                     // 任务创建后立即落盘；App 中断后只恢复该 job_id。
-                    try persistence.markAttempt(id: attempt.id, status: "queued", jobID: jobID)
+                    try persistence.markAttempt(
+                        id: attempt.id,
+                        status: "queued",
+                        jobID: jobID,
+                        metadata: metadata
+                    )
+                },
+                onResponse: { [persistence] metadata, _, _ in
+                    try? persistence.markAttempt(
+                        id: attempt.id,
+                        status: "running",
+                        metadata: metadata
+                    )
                 }
             )
             var cachedDTO = dto

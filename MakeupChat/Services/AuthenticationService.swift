@@ -135,9 +135,19 @@ enum AuthenticationServiceFactory {
     /// 配置了 API_BASE_URL 时使用后端登录；纯前端演示构建才回退到本地测试账号。
     static func makeDefault(bundle: Bundle = .main) -> any AuthenticationServicing {
         guard let configuration = try? APIConfiguration.fromBundle(bundle) else {
+#if DEBUG
             return LocalInternalAuthenticationService()
+#else
+            return UnavailableAuthenticationService()
+#endif
         }
         return RemoteAuthenticationService(client: APIClient(configuration: configuration))
+    }
+}
+
+private struct UnavailableAuthenticationService: AuthenticationServicing {
+    func login(account: String, password: String) async throws -> AuthenticatedAccount {
+        throw APIClientError.missingBaseURL
     }
 }
 

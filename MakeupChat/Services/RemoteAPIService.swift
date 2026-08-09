@@ -11,6 +11,27 @@ enum HTTPMethod: String {
     case delete = "DELETE"
 }
 
+enum APIEndpoint {
+    static let healthLive = "/health/live"
+    static let login = "/auth/login"
+    static let chatMessages = "/chat/messages"
+    static let legacyCosmeticsRecognition = "/cosmetics/recognize"
+    static let legacyProfileAnalysis = "/profiles/analyze"
+    static let makeupGeneration = "/makeup/generate"
+    static let makeupRecommendations = "/makeup/recommendations"
+    static let mediaUploadIntents = "/media/upload-intents"
+    static let profileJobs = "/vision/profile-jobs"
+    static let itemRecognitionJobs = "/vision/item-recognition-jobs"
+
+    static func completeMediaAsset(_ assetID: String) -> String {
+        "/media/assets/\(assetID)/complete"
+    }
+
+    static func visionJob(_ jobID: String) -> String {
+        "/vision/jobs/\(jobID)"
+    }
+}
+
 struct APIConfiguration: Sendable {
     let baseURL: URL
     let accessToken: String?
@@ -18,13 +39,29 @@ struct APIConfiguration: Sendable {
 
     /// 建议由 xcconfig 写入 Info.plist，而不是把正式地址和密钥硬编码进源码。
     static func fromBundle(_ bundle: Bundle = .main) throws -> APIConfiguration {
-        guard
-            let rawURL = bundle.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
-            let baseURL = URL(string: rawURL),
-            !rawURL.isEmpty
-        else {
+        let configuredURL = (bundle.object(forInfoDictionaryKey: "AURAEYE_API_BASE_URL") as? String)
+            ?? (bundle.object(forInfoDictionaryKey: "API_BASE_URL") as? String)
+        guard let configuredURL else {
             throw APIClientError.missingBaseURL
         }
+        let normalized = configuredURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !normalized.isEmpty,
+              let baseURL = URL(string: normalized),
+              let scheme = baseURL.scheme?.lowercased(),
+              ["https", "http"].contains(scheme),
+              baseURL.host != nil else {
+            throw APIClientError.missingBaseURL
+        }
+#if !DEBUG
+        guard scheme == "https",
+              let host = baseURL.host?.lowercased(),
+              host != "localhost",
+              host != "127.0.0.1",
+              host != "::1" else {
+            throw APIClientError.missingBaseURL
+        }
+#endif
 
         return APIConfiguration(
             baseURL: baseURL,
@@ -45,9 +82,15 @@ struct APIEnvelope<Value: Decodable>: Decodable {
 }
 
 struct APIErrorPayload: Decodable {
+    let requestId: String?
     let code: String?
     let message: String?
     let error: NestedAPIErrorPayload?
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case code, message, error
+    }
 }
 
 struct NestedAPIErrorPayload: Decodable {
@@ -55,11 +98,84 @@ struct NestedAPIErrorPayload: Decodable {
     let message: String?
 }
 
+struct FieldProblem: Decodable, Equatable, Sendable {
+    let field: String?
+    let path: String?
+    let code: String?
+    let message: String?
+}
+
+struct APIProblem: Decodable, Error, Equatable, Sendable {
+    let type: String?
+    let title: String
+    let status: Int
+    let detail: String?
+    let instance: String?
+    let code: String?
+    let requestId: String?
+    let retryable: Bool?
+    let errors: [FieldProblem]?
+
+    enum CodingKeys: String, CodingKey {
+        case type, title, status, detail, instance, code, retryable, errors
+        case requestId = "request_id"
+    }
+}
+
+struct APIResponseMetadata: Equatable, Sendable {
+    let serverRequestID: String?
+    let location: String?
+    let retryAfterSeconds: Int?
+}
+
+struct APIResponse<Value> {
+    let value: Value
+    let metadata: APIResponseMetadata
+}
+
 enum APIClientError: LocalizedError {
     case missingBaseURL
     case invalidResponse
-    case httpStatus(Int, String)
+    case invalidServerResponse(statusCode: Int, requestID: String?)
+    case problem(APIProblem, APIResponseMetadata)
+    case httpStatus(Int, String, APIResponseMetadata)
     case invalidImage
+
+    var statusCode: Int? {
+        switch self {
+        case .invalidServerResponse(let statusCode, _): return statusCode
+        case .problem(let problem, _): return problem.status
+        case .httpStatus(let status, _, _): return status
+        case .missingBaseURL, .invalidResponse, .invalidImage: return nil
+        }
+    }
+
+    var responseMetadata: APIResponseMetadata? {
+        switch self {
+        case .problem(_, let metadata), .httpStatus(_, _, let metadata): return metadata
+        case .invalidServerResponse(_, let requestID):
+            return APIResponseMetadata(serverRequestID: requestID, location: nil, retryAfterSeconds: nil)
+        case .missingBaseURL, .invalidResponse, .invalidImage: return nil
+        }
+    }
+
+    var problemCode: String? {
+        switch self {
+        case .problem(let problem, _): return problem.code
+        default: return nil
+        }
+    }
+
+    var permitsControlledRetry: Bool {
+        switch self {
+        case .problem(let problem, let metadata):
+            return problem.retryable == true || metadata.retryAfterSeconds != nil
+        case .httpStatus(_, _, let metadata):
+            return metadata.retryAfterSeconds != nil
+        default:
+            return false
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -67,11 +183,19 @@ enum APIClientError: LocalizedError {
             return "尚未配置 API_BASE_URL，当前应继续使用本地 Mock 服务。"
         case .invalidResponse:
             return "服务器返回了无法识别的响应。"
-        case let .httpStatus(status, message):
-            return "接口请求失败（\(status)）：\(message)"
+        case let .invalidServerResponse(status, requestID):
+            return "服务器响应格式异常（\(status)）\(requestIDSuffix(requestID))"
+        case let .problem(problem, metadata):
+            return "\(problem.detail ?? problem.title)\(requestIDSuffix(metadata.serverRequestID ?? problem.requestId))"
+        case let .httpStatus(status, message, metadata):
+            return "接口请求失败（\(status)）：\(message)\(requestIDSuffix(metadata.serverRequestID))"
         case .invalidImage:
             return "无法将图片转换为上传数据。"
         }
+    }
+
+    private func requestIDSuffix(_ requestID: String?) -> String {
+        requestID.map { "（请求编号：\($0)）" } ?? ""
     }
 }
 
@@ -97,12 +221,12 @@ actor APIClient {
         path: String,
         method: HTTPMethod = .post,
         body: Body,
-        requestID: String? = nil
+        idempotencyKey: String? = nil
     ) async throws -> Response {
-        var request = try makeRequest(path: path, method: method, requestID: requestID)
+        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
-        return try await perform(request)
+        return try await perform(request).value
     }
 
     /// 视觉任务接口的契约当前为直接 JSON，不使用业务 API 的 `data` 包裹。
@@ -111,9 +235,23 @@ actor APIClient {
         path: String,
         method: HTTPMethod = .post,
         body: Body,
-        requestID: String? = nil
+        idempotencyKey: String? = nil
     ) async throws -> Response {
-        var request = try makeRequest(path: path, method: method, requestID: requestID)
+        try await sendFlexibleResponse(
+            path: path,
+            method: method,
+            body: body,
+            idempotencyKey: idempotencyKey
+        ).value
+    }
+
+    func sendFlexibleResponse<Body: Encodable, Response: Decodable>(
+        path: String,
+        method: HTTPMethod = .post,
+        body: Body,
+        idempotencyKey: String? = nil
+    ) async throws -> APIResponse<Response> {
+        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         return try await performFlexible(request)
@@ -121,18 +259,23 @@ actor APIClient {
 
     func send<Response: Decodable>(
         path: String,
-        method: HTTPMethod = .get,
-        requestID: String? = nil
+        method: HTTPMethod = .get
     ) async throws -> Response {
-        try await perform(makeRequest(path: path, method: method, requestID: requestID))
+        try await perform(makeRequest(path: path, method: method)).value
     }
 
     func sendFlexible<Response: Decodable>(
         path: String,
-        method: HTTPMethod = .get,
-        requestID: String? = nil
+        method: HTTPMethod = .get
     ) async throws -> Response {
-        try await performFlexible(makeRequest(path: path, method: method, requestID: requestID))
+        try await sendFlexibleResponse(path: path, method: method).value
+    }
+
+    func sendFlexibleResponse<Response: Decodable>(
+        path: String,
+        method: HTTPMethod = .get
+    ) async throws -> APIResponse<Response> {
+        try await performFlexible(makeRequest(path: path, method: method))
     }
 
     /// 对象存储直传不携带 AuraEye Bearer Token，只使用上传意图返回的请求头。
@@ -155,7 +298,8 @@ actor APIClient {
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw APIClientError.httpStatus(
                 httpResponse.statusCode,
-                HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode),
+                responseMetadata(from: httpResponse)
             )
         }
     }
@@ -180,64 +324,139 @@ actor APIClient {
             fields: fields,
             imageData: imageData
         )
-        return try await perform(request)
+        return try await perform(request).value
     }
 
     private func makeRequest(
         path: String,
         method: HTTPMethod,
-        requestID: String? = nil
+        idempotencyKey: String? = nil
     ) throws -> URLRequest {
         let normalizedPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        guard normalizedPath != "v1", !normalizedPath.hasPrefix("v1/") else {
+            throw APIClientError.invalidResponse
+        }
         let url = configuration.baseURL.appendingPathComponent(normalizedPath)
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.timeoutInterval = configuration.timeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(requestID ?? UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
+        if let idempotencyKey, !idempotencyKey.isEmpty {
+            request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        }
         if let token = configuration.accessToken, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         return request
     }
 
-    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> APIResponse<Response> {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
-
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let payload = try? decoder.decode(APIErrorPayload.self, from: data)
-            throw APIClientError.httpStatus(
-                httpResponse.statusCode,
-                payload?.message
-                    ?? payload?.error?.message
-                    ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+        try validate(httpResponse, data: data)
+        guard let envelope = try? decoder.decode(APIEnvelope<Response>.self, from: data) else {
+            throw APIClientError.invalidServerResponse(
+                statusCode: httpResponse.statusCode,
+                requestID: responseMetadata(from: httpResponse).serverRequestID
             )
         }
-
-        return try decoder.decode(APIEnvelope<Response>.self, from: data).data
+        let metadata = mergingRequestID(
+            responseMetadata(from: httpResponse),
+            fallback: envelope.requestId
+        )
+        return APIResponse(value: envelope.data, metadata: metadata)
     }
 
-    private func performFlexible<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+    private func performFlexible<Response: Decodable>(_ request: URLRequest) async throws -> APIResponse<Response> {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let payload = try? decoder.decode(APIErrorPayload.self, from: data)
-            throw APIClientError.httpStatus(
-                httpResponse.statusCode,
-                payload?.message
-                    ?? payload?.error?.message
-                    ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+        try validate(httpResponse, data: data)
+        let headerMetadata = responseMetadata(from: httpResponse)
+        if let envelope = try? decoder.decode(APIEnvelope<Response>.self, from: data) {
+            return APIResponse(
+                value: envelope.data,
+                metadata: mergingRequestID(headerMetadata, fallback: envelope.requestId)
             )
         }
-        if let envelope = try? decoder.decode(APIEnvelope<Response>.self, from: data) {
-            return envelope.data
+        do {
+            return APIResponse(value: try decoder.decode(Response.self, from: data), metadata: headerMetadata)
+        } catch {
+            throw APIClientError.invalidServerResponse(
+                statusCode: httpResponse.statusCode,
+                requestID: headerMetadata.serverRequestID
+            )
         }
-        return try decoder.decode(Response.self, from: data)
+    }
+
+    private func validate(_ response: HTTPURLResponse, data: Data) throws {
+        guard !(200..<300).contains(response.statusCode) else { return }
+        let metadata = responseMetadata(from: response)
+        let contentType = response.value(forHTTPHeaderField: "Content-Type")?
+            .lowercased()
+            .split(separator: ";", maxSplits: 1)
+            .first
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        if contentType == "application/problem+json" {
+            guard let problem = try? decoder.decode(APIProblem.self, from: data) else {
+                throw APIClientError.invalidServerResponse(
+                    statusCode: response.statusCode,
+                    requestID: metadata.serverRequestID
+                )
+            }
+            throw APIClientError.problem(problem, metadata)
+        }
+
+        if let payload = try? decoder.decode(APIErrorPayload.self, from: data),
+           payload.code != nil || payload.message != nil || payload.error != nil {
+            throw APIClientError.httpStatus(
+                response.statusCode,
+                payload.message
+                    ?? payload.error?.message
+                    ?? HTTPURLResponse.localizedString(forStatusCode: response.statusCode),
+                mergingRequestID(metadata, fallback: payload.requestId)
+            )
+        }
+        throw APIClientError.invalidServerResponse(
+            statusCode: response.statusCode,
+            requestID: metadata.serverRequestID
+        )
+    }
+
+    private func responseMetadata(from response: HTTPURLResponse) -> APIResponseMetadata {
+        APIResponseMetadata(
+            serverRequestID: response.value(forHTTPHeaderField: "X-Request-Id"),
+            location: response.value(forHTTPHeaderField: "Location"),
+            retryAfterSeconds: retryAfterSeconds(response.value(forHTTPHeaderField: "Retry-After"))
+        )
+    }
+
+    private func mergingRequestID(
+        _ metadata: APIResponseMetadata,
+        fallback: String?
+    ) -> APIResponseMetadata {
+        APIResponseMetadata(
+            serverRequestID: metadata.serverRequestID ?? fallback,
+            location: metadata.location,
+            retryAfterSeconds: metadata.retryAfterSeconds
+        )
+    }
+
+    private func retryAfterSeconds(_ value: String?) -> Int? {
+        guard let value else { return nil }
+        if let seconds = Int(value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return max(seconds, 0)
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+        guard let date = formatter.date(from: value) else { return nil }
+        return max(Int(ceil(date.timeIntervalSinceNow)), 0)
     }
 
     private func multipartBody(
@@ -281,7 +500,7 @@ final class RemoteAuthenticationService: AuthenticationServicing {
 
     func login(account: String, password: String) async throws -> AuthenticatedAccount {
         try await client.send(
-            path: "/v1/auth/login",
+            path: APIEndpoint.login,
             body: LoginRequest(account: account, password: password)
         )
     }
@@ -320,7 +539,7 @@ final class RemoteAIAgentService: AIAgentServicing {
 
     func reply(to request: AIAgentRequest) async throws -> AIAgentResponse {
         let response: RemoteChatResponse = try await client.send(
-            path: "/v1/chat/messages",
+            path: APIEndpoint.chatMessages,
             body: RemoteChatRequest(
                 userId: request.userId,
                 displayName: request.displayName,
@@ -366,7 +585,7 @@ final class RemoteCosmeticsRecognitionService: CosmeticsRecognitionServicing {
         }
 
         let response: RemoteCosmeticResponse = try await client.uploadImage(
-            path: "/v1/cosmetics/recognize",
+            path: APIEndpoint.legacyCosmeticsRecognition,
             image: image,
             fields: fields
         )
@@ -409,7 +628,7 @@ final class RemoteFaceAnalysisService: FaceAnalysisServicing {
 
     func analyze(image: UIImage, userId: String) async throws -> FaceAnalysisResult {
         let response: RemoteFaceAnalysisResponse = try await client.uploadImage(
-            path: "/v1/profiles/analyze",
+            path: APIEndpoint.legacyProfileAnalysis,
             image: image,
             fields: ["user_id": userId]
         )
@@ -495,7 +714,7 @@ final class RemoteMakeupGenerationService: MakeupGenerationServicing {
     }
 
     func generate(context: MakeupGenerationContext) async throws -> GeneratedMakeupPlan {
-        try await client.send(path: "/v1/makeup/generate", body: context)
+        try await client.send(path: APIEndpoint.makeupGeneration, body: context)
     }
 }
 
@@ -507,7 +726,7 @@ final class RemoteMakeupRecommendationService: MakeupRecommendationServicing {
     }
 
     func recommendations(context: MakeupGenerationContext) async throws -> [GeneratedMakeupPlan] {
-        try await client.send(path: "/v1/makeup/recommendations", body: context)
+        try await client.send(path: APIEndpoint.makeupRecommendations, body: context)
     }
 }
 

@@ -1,5 +1,7 @@
 # AuraEye 前端两轮改造与 Node.js 后端执行清单
 
+> 本文为历史合并记录。最终 NestJS 后端交接请以 `前端账号与图片接口改造工作总结_NestJS后端接入版.md` 为准。
+
 > 更新时间：2026-08-06  
 > 客户端：SwiftUI / iOS 17+  
 > 后端：Node.js，推荐 Express 或 NestJS  
@@ -27,13 +29,18 @@
 
 ### 2.1 动态背景
 
-问题根因是 SwiftUI shader 包装视图文件缺失，根视图虽然仍在调用背景，但没有可用的正确实现。
+最终复查确认有两个渲染层面的根因：
+
+1. 旧实现把 2001 年以来的绝对秒数直接转换为 Metal `float`。数值过大后会丢失帧级小数精度，导致连续多帧拿到相同时间，看起来像静态资源。
+2. shader 只放在最外层 `ContentView`，可能被 `NavigationStack`、`TabView` 的 UIKit 默认白色容器背景遮挡。
 
 修复内容：
 
 - 恢复 `AppDynamicBackgroundView`。
 - 保留 `SharedFluidBackground.metal` 内的 `sharedFluidBackground` 算法，不修改颜色或运动逻辑。
 - shader 输入改用不透明白色矩形，保证 shader 返回的 alpha 不为 0。
+- 传入从 App 本轮运行起算的相对时间，避免 Metal `float` 精度丢失。
+- 登录页、首页和导航目标页均在页面自身的渲染层合成 shader。
 - 使用 `TimelineView` 持续传入时间，页面活跃时约 30 FPS。
 - Metal 文件仍属于 App Target 的 Sources Build Phase。
 
@@ -434,4 +441,3 @@ UNIQUE(user_id, job_type, request_id)
 | 物品识别路由 | `MakeupChat/Services/ItemRecognitionPipeline.swift` |
 | 演示图片匹配与 SQLite | `MakeupChat/Repositories/DemoVisionRepository.swift` |
 | SQLite Schema | `MakeupChat/Database/Schema.swift` |
-

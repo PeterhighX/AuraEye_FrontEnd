@@ -53,7 +53,43 @@ final class DatabaseManager {
         ensureColumn("preview_asset", definition: "TEXT", in: "cosmetics", database: db)
         ensureColumn("preview_path", definition: "TEXT", in: "cosmetics", database: db)
         ensureColumn("scanned_at", definition: "REAL", in: "cosmetics", database: db)
+        applyVisionAPIV11Migration(database: db)
         MediaPathMigrator.migrateIfNeeded(in: db)
+    }
+
+    /// API v1.1 的显式、可恢复 migration。旧 `request_id` 保留，并复制为
+    /// `idempotency_key`，避免升级后把未完成任务当成全新付费动作。
+    private func applyVisionAPIV11Migration(database: OpaquePointer) {
+        let currentVersion = scalarInt(database, sql: "PRAGMA user_version;") ?? 0
+        guard currentVersion < 2 else { return }
+
+        guard execute("BEGIN IMMEDIATE;", in: database) else { return }
+        let columns = [
+            ("vision_pending_jobs", "idempotency_key", "TEXT"),
+            ("vision_pending_jobs", "server_request_id", "TEXT"),
+            ("vision_pending_jobs", "location", "TEXT"),
+            ("vision_pending_jobs", "retry_after", "INTEGER"),
+            ("demo_recognition_attempts", "idempotency_key", "TEXT"),
+            ("demo_recognition_attempts", "server_request_id", "TEXT"),
+            ("demo_recognition_attempts", "location", "TEXT"),
+            ("demo_recognition_attempts", "retry_after", "INTEGER")
+        ]
+        for (table, column, definition) in columns {
+            ensureColumn(column, definition: definition, in: table, database: database)
+        }
+
+        let statements = [
+            "UPDATE vision_pending_jobs SET idempotency_key = request_id WHERE idempotency_key IS NULL;",
+            "UPDATE demo_recognition_attempts SET idempotency_key = request_id WHERE idempotency_key IS NULL;",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_vision_pending_idempotency ON vision_pending_jobs(account_id, capability, idempotency_key) WHERE idempotency_key IS NOT NULL;",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_attempt_idempotency ON demo_recognition_attempts(account_id, capability, idempotency_key) WHERE idempotency_key IS NOT NULL;",
+            "PRAGMA user_version = 2;"
+        ]
+        guard statements.allSatisfy({ execute($0, in: database) }) else {
+            _ = execute("ROLLBACK;", in: database)
+            return
+        }
+        _ = execute("COMMIT;", in: database)
     }
 
     /// SQLite 不支持所有版本通用的 `ADD COLUMN IF NOT EXISTS`，先读取表结构再迁移。
@@ -84,6 +120,14 @@ final class DatabaseManager {
             nil,
             nil
         )
+    }
+
+    @discardableResult
+    private func execute(_ sql: String, in database: OpaquePointer) -> Bool {
+        var error: UnsafeMutablePointer<CChar>?
+        let result = sqlite3_exec(database, sql, nil, nil, &error)
+        if let error { sqlite3_free(error) }
+        return result == SQLITE_OK
     }
 
     private func seedIfNeeded() {

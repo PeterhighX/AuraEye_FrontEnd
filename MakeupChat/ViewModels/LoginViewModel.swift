@@ -4,15 +4,21 @@ import Observation
 @Observable
 @MainActor
 final class LoginViewModel {
-    var account = ""
-    var password = ""
+    var account: String
+    var password: String
     private(set) var isLoggingIn = false
     private(set) var errorMessage: String?
 
     private let authenticationService: any AuthenticationServicing
 
-    init(authenticationService: any AuthenticationServicing = AuthenticationServiceFactory.makeDefault()) {
+    init(
+        authenticationService: any AuthenticationServicing = AuthenticationServiceFactory.makeDefault(),
+        initialAccount: String = LocalInternalAuthenticationService.testAccount,
+        initialPassword: String = LocalInternalAuthenticationService.testPassword
+    ) {
         self.authenticationService = authenticationService
+        account = initialAccount
+        password = initialPassword
     }
 
     func login() async -> AuthenticatedAccount? {

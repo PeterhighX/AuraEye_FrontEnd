@@ -38,6 +38,7 @@ struct LoginView: View {
                 }
             }
         }
+        .appDynamicBackground()
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeInOut(duration: 0.32), value: page)
         .alert(

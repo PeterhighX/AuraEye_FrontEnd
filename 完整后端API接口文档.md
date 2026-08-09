@@ -1,5 +1,7 @@
 # AuraAye 前后端分离 API 接口文档（Node.js 后端）
 
+> 本文是全量业务接口规划。当前 NestJS 账号与图片视觉接入的实际契约，请以 `前端账号与图片接口改造工作总结_NestJS后端接入版.md` 为准。
+
 > 版本：v1.0  
 > 对应客户端：当前 `MakeupChat` SwiftUI 工程  
 > API 前缀：`/v1`  

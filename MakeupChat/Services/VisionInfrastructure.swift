@@ -25,11 +25,13 @@ func stableVisionErrorCode(_ error: Error) -> String {
         }
     }
     if let error = error as? APIClientError {
+        if let code = error.problemCode, !code.isEmpty { return code.lowercased() }
+        if let status = error.statusCode { return "http_\(status)" }
         switch error {
         case .missingBaseURL: return "network_unavailable"
-        case .invalidResponse: return "result_invalid"
+        case .invalidResponse, .invalidServerResponse: return "result_invalid"
         case .invalidImage: return "invalid_image"
-        case .httpStatus(let status, _): return "http_\(status)"
+        case .problem, .httpStatus: return "unknown"
         }
     }
     if error is URLError { return "network_unavailable" }
@@ -39,14 +41,14 @@ func stableVisionErrorCode(_ error: Error) -> String {
 func normalizedVisionError(_ error: Error) -> VisionAPIError {
     if let error = error as? VisionAPIError { return error }
     if let error = error as? APIClientError {
+        if error.statusCode == 401 { return .unauthorized }
+        if error.statusCode == 404 { return .jobNotFound }
+        if [413, 415, 422].contains(error.statusCode) { return .invalidImage }
+        if let status = error.statusCode, status >= 500 { return .providerUnavailable }
         switch error {
         case .missingBaseURL: return .networkUnavailable
-        case .invalidResponse: return .resultInvalid
         case .invalidImage: return .invalidImage
-        case .httpStatus(let status, _):
-            if status == 401 { return .unauthorized }
-            if status == 404 { return .jobNotFound }
-            return status >= 500 ? .providerUnavailable : .resultInvalid
+        case .invalidResponse, .invalidServerResponse, .problem, .httpStatus: return .resultInvalid
         }
     }
     if error is URLError { return .networkUnavailable }
@@ -149,6 +151,11 @@ struct MediaAssetDTO: Codable, Sendable {
     }
 }
 
+struct MediaAssetUploadResult {
+    let asset: MediaAssetDTO
+    let metadata: APIResponseMetadata
+}
+
 private struct CreateUploadIntentRequest: Encodable {
     let requestId: String
     let fileName: String
@@ -188,8 +195,9 @@ protocol MediaAssetRepositoryProtocol {
     func upload(
         _ image: PreparedVisionImage,
         requestID: String,
+        idempotencyKey: String,
         onProgress: @escaping (Double) -> Void
-    ) async throws -> MediaAssetDTO
+    ) async throws -> MediaAssetUploadResult
 }
 
 final class MediaAssetRepository: MediaAssetRepositoryProtocol {
@@ -202,12 +210,13 @@ final class MediaAssetRepository: MediaAssetRepositoryProtocol {
     func upload(
         _ image: PreparedVisionImage,
         requestID: String,
+        idempotencyKey: String,
         onProgress: @escaping (Double) -> Void = { _ in }
-    ) async throws -> MediaAssetDTO {
+    ) async throws -> MediaAssetUploadResult {
         onProgress(0.05)
         VisionLog.pipeline.debug("Creating upload intent request=\(requestID, privacy: .public)")
-        let intent: MediaUploadIntentDTO = try await client.sendFlexible(
-            path: "/v1/media/upload-intents",
+        let intentResponse: APIResponse<MediaUploadIntentDTO> = try await client.sendFlexibleResponse(
+            path: APIEndpoint.mediaUploadIntents,
             body: CreateUploadIntentRequest(
                 requestId: requestID,
                 fileName: image.fileName,
@@ -215,8 +224,9 @@ final class MediaAssetRepository: MediaAssetRepositoryProtocol {
                 fileSize: image.data.count,
                 purpose: "vision"
             ),
-            requestID: requestID
+            idempotencyKey: idempotencyKey
         )
+        let intent = intentResponse.value
 
         onProgress(0.2)
         do {
@@ -231,26 +241,56 @@ final class MediaAssetRepository: MediaAssetRepositoryProtocol {
         }
         onProgress(0.9)
 
-        let asset: MediaAssetDTO = try await client.sendFlexible(
-            path: "/v1/media/assets/\(intent.assetId)/complete",
+        let assetResponse: APIResponse<MediaAssetDTO> = try await client.sendFlexibleResponse(
+            path: APIEndpoint.completeMediaAsset(intent.assetId),
             body: EmptyVisionRequest(),
-            requestID: requestID
+            idempotencyKey: idempotencyKey
         )
+        let asset = assetResponse.value
         VisionLog.pipeline.debug("Completed media asset=\(asset.assetId, privacy: .public)")
         onProgress(1)
-        return asset
+        return MediaAssetUploadResult(asset: asset, metadata: assetResponse.metadata)
     }
 }
 
 // MARK: - Async jobs
 
-enum AIJobStatus: String, Codable, Sendable {
+enum AIJobStatus: Codable, Sendable {
     case queued
     case running
     case succeeded
     case failed
-    case timedOut = "timed_out"
+    case timedOut
     case cancelled
+
+    var rawValue: String {
+        switch self {
+        case .queued: return "queued"
+        case .running: return "running"
+        case .succeeded: return "succeeded"
+        case .failed: return "failed"
+        case .timedOut: return "timed_out"
+        case .cancelled: return "cancelled"
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case "queued": self = .queued
+        case "running": self = .running
+        case "succeeded": self = .succeeded
+        case "failed": self = .failed
+        case "timed_out": self = .timedOut
+        case "cancelled", "canceled": self = .cancelled
+        default: throw VisionAPIError.resultInvalid
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     var isTerminal: Bool {
         switch self {
@@ -322,8 +362,8 @@ final class AIJobRepository {
         self.client = client
     }
 
-    func job<Result: Codable & Sendable>(id: String) async throws -> AIJobDTO<Result> {
-        try await client.sendFlexible(path: "/v1/vision/jobs/\(id)")
+    func job<Result: Codable & Sendable>(id: String) async throws -> APIResponse<AIJobDTO<Result>> {
+        try await client.sendFlexibleResponse(path: APIEndpoint.visionJob(id))
     }
 }
 
@@ -338,13 +378,42 @@ struct JobPoller {
 
     func poll<Result: Codable & Sendable>(
         jobID: String,
-        fetch: @escaping (String) async throws -> AIJobDTO<Result>,
+        fetch: @escaping (String) async throws -> APIResponse<AIJobDTO<Result>>,
+        refreshAuthorization: @escaping () async throws -> Bool = { false },
+        onResponse: @escaping (APIResponseMetadata) -> Void = { _ in },
         onProgress: @escaping (AIJobProgressDTO?) -> Void = { _ in }
     ) async throws -> Result {
         let deadline = Date().addingTimeInterval(maximumWait)
+        var didAttemptAuthorizationRefresh = false
+        var transientRetryCount = 0
 
         while !Task.isCancelled {
-            let job = try await fetch(jobID)
+            let response: APIResponse<AIJobDTO<Result>>
+            do {
+                response = try await fetch(jobID)
+                transientRetryCount = 0
+            } catch let error as APIClientError {
+                if error.statusCode == 401, !didAttemptAuthorizationRefresh {
+                    didAttemptAuthorizationRefresh = true
+                    if try await refreshAuthorization() { continue }
+                }
+                if error.statusCode == 409 { throw error }
+                if [429, 503].contains(error.statusCode), error.permitsControlledRetry {
+                    guard Date() < deadline else { throw VisionAPIError.jobTimedOut }
+                    transientRetryCount += 1
+                    let fallback = min(
+                        defaultPollMilliseconds * (1 << min(transientRetryCount - 1, 3)),
+                        5_000
+                    )
+                    let requested = error.responseMetadata?.retryAfterSeconds.map { $0 * 1_000 } ?? fallback
+                    try await sleep(milliseconds: requested, deadline: deadline)
+                    continue
+                }
+                throw error
+            }
+
+            let job = response.value
+            onResponse(response.metadata)
             VisionLog.pipeline.debug(
                 "Polled job=\(jobID, privacy: .public) status=\(job.status.rawValue, privacy: .public)"
             )
@@ -362,12 +431,20 @@ struct JobPoller {
                 throw VisionAPIError.cancelled
             case .queued, .running:
                 guard Date() < deadline else { throw VisionAPIError.jobTimedOut }
-                let requested = job.progress?.pollAfterMilliseconds ?? defaultPollMilliseconds
-                let milliseconds = min(max(requested, 250), 5_000)
-                try await Task.sleep(for: .milliseconds(milliseconds))
+                let requested = response.metadata.retryAfterSeconds.map { $0 * 1_000 }
+                    ?? job.progress?.pollAfterMilliseconds
+                    ?? defaultPollMilliseconds
+                try await sleep(milliseconds: requested, deadline: deadline)
             }
         }
         throw VisionAPIError.cancelled
+    }
+
+    private func sleep(milliseconds: Int, deadline: Date) async throws {
+        let remainingMilliseconds = max(Int(deadline.timeIntervalSinceNow * 1_000), 0)
+        guard remainingMilliseconds > 0 else { throw VisionAPIError.jobTimedOut }
+        let bounded = min(max(milliseconds, 0), remainingMilliseconds)
+        try await Task.sleep(for: .milliseconds(bounded))
     }
 }
 

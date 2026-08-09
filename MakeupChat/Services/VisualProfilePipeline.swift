@@ -98,55 +98,78 @@ final class RemoteVisualProfileProvider: VisualProfileProviding {
         }
 
         let requestID = pending?.requestID ?? "req_profile_\(UUID().uuidString.lowercased())"
+        let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
         if pending == nil {
             pending = VisionPendingJob(
                 accountID: input.userID,
                 capability: capability,
                 requestID: requestID,
+                idempotencyKey: idempotencyKey,
                 jobID: nil,
                 assetID: nil,
                 inputSHA256: prepared.sha256,
-                status: "preparing"
+                status: "preparing",
+                serverRequestID: nil,
+                location: nil,
+                retryAfterSeconds: nil
             )
             try persistence.savePendingJob(pending!)
         }
 
         var assetID = pending?.assetID
         if assetID == nil {
-            let asset = try await mediaRepository.upload(prepared, requestID: requestID) { _ in }
-            assetID = asset.assetId
+            let asset = try await mediaRepository.upload(
+                prepared,
+                requestID: requestID,
+                idempotencyKey: idempotencyKey
+            ) { _ in }
+            assetID = asset.asset.assetId
             try persistence.savePendingJob(VisionPendingJob(
                 accountID: input.userID,
                 capability: capability,
                 requestID: requestID,
+                idempotencyKey: idempotencyKey,
                 jobID: nil,
-                assetID: asset.assetId,
+                assetID: asset.asset.assetId,
                 inputSHA256: prepared.sha256,
-                status: "uploaded"
+                status: "uploaded",
+                serverRequestID: asset.metadata.serverRequestID,
+                location: asset.metadata.location,
+                retryAfterSeconds: asset.metadata.retryAfterSeconds
             ))
         }
 
         guard let assetID else { throw VisionAPIError.uploadFailed }
         var jobID = pending?.jobID
         if jobID == nil {
-            let ticket: AIJobTicketDTO = try await client.sendFlexible(
-                path: "/v1/vision/profile-jobs",
+            let response: APIResponse<AIJobTicketDTO> = try await client.sendFlexibleResponse(
+                path: APIEndpoint.profileJobs,
                 body: CreateVisualProfileJobRequest(
                     requestId: requestID,
                     assetId: assetID,
                     consentVersion: "visual-analysis-v1"
                 ),
-                requestID: requestID
+                idempotencyKey: idempotencyKey
+            )
+            let ticket = response.value
+            let responseMetadata = APIResponseMetadata(
+                serverRequestID: response.metadata.serverRequestID ?? ticket.requestId,
+                location: response.metadata.location,
+                retryAfterSeconds: response.metadata.retryAfterSeconds
             )
             jobID = ticket.jobId
             try persistence.savePendingJob(VisionPendingJob(
                 accountID: input.userID,
                 capability: capability,
                 requestID: requestID,
+                idempotencyKey: idempotencyKey,
                 jobID: ticket.jobId,
                 assetID: assetID,
                 inputSHA256: prepared.sha256,
-                status: ticket.status.rawValue
+                status: ticket.status.rawValue,
+                serverRequestID: responseMetadata.serverRequestID,
+                location: responseMetadata.location,
+                retryAfterSeconds: responseMetadata.retryAfterSeconds
             ))
         }
 
@@ -154,7 +177,22 @@ final class RemoteVisualProfileProvider: VisualProfileProviding {
         do {
             var dto: VisualProfileResultDTO = try await poller.poll(
                 jobID: jobID,
-                fetch: { [jobs] in try await jobs.job(id: $0) }
+                fetch: { [jobs] in try await jobs.job(id: $0) },
+                onResponse: { [persistence] metadata in
+                    try? persistence.savePendingJob(VisionPendingJob(
+                        accountID: input.userID,
+                        capability: capability,
+                        requestID: requestID,
+                        idempotencyKey: idempotencyKey,
+                        jobID: jobID,
+                        assetID: assetID,
+                        inputSHA256: prepared.sha256,
+                        status: "polling",
+                        serverRequestID: metadata.serverRequestID,
+                        location: metadata.location,
+                        retryAfterSeconds: metadata.retryAfterSeconds
+                    ))
+                }
             )
             dto.resultSource = dto.resultSource ?? "remote_provider"
             dto.schemaVersion = dto.schemaVersion ?? DemoVisionRepository.schemaVersion
