@@ -3,7 +3,17 @@ import UIKit
 
 struct PortraitInput {
     let image: UIImage
+    let originalData: Data?
+    let contentType: String?
     let userID: String
+
+    var visionInput: VisionImageInput {
+        if let originalData, let contentType,
+           let input = try? VisionImageInput(photoData: originalData, contentType: contentType) {
+            return input
+        }
+        return VisionImageInput(image: image)
+    }
 }
 
 struct VisualProfileSnapshotDTO: Codable, Equatable, Sendable {
@@ -20,8 +30,8 @@ struct VisualProfileNarrativeDTO: Codable, Equatable, Sendable {
     let styleRecommendation: String?
 
     enum CodingKeys: String, CodingKey {
-        case overall
-        case eyeDetails = "eye_details"
+        case overall = "overall_contour"
+        case eyeDetails = "brow_eye_detail"
         case styleRecommendation = "style_recommendation"
     }
 }
@@ -31,16 +41,12 @@ struct VisualProfileResultDTO: Codable, Equatable, Sendable {
     let narrative: VisualProfileNarrativeDTO?
     let narrativeStatus: String?
     let warnings: [String]
-    var resultSource: String?
-    var schemaVersion: String?
 
     enum CodingKeys: String, CodingKey {
         case profileSnapshot = "profile_snapshot"
         case narrative
         case narrativeStatus = "narrative_status"
         case warnings
-        case resultSource = "result_source"
-        case schemaVersion = "schema_version"
     }
 }
 
@@ -53,129 +59,72 @@ protocol VisualProfileProviding {
     func analyzePortrait(_ input: PortraitInput) async throws -> VisualProfileResult
 }
 
-private struct CreateVisualProfileJobRequest: Encodable {
-    let requestId: String
-    let assetId: String
-    let consentVersion: String
-
-    enum CodingKeys: String, CodingKey {
-        case requestId = "request_id"
-        case assetId = "asset_id"
-        case consentVersion = "consent_version"
-    }
-}
-
-final class RemoteVisualProfileProvider: VisualProfileProviding {
-    private let client: APIClient
-    private let mediaRepository: MediaAssetRepositoryProtocol
+final class UnifiedVisualProfileProvider: VisualProfileProviding {
+    private let service: VisionJobService
     private let jobs: AIJobRepository
     private let poller: JobPoller
-    private let persistence: DemoVisionRepository
+    private let persistence: VisionJobPersistence
 
     init(
         client: APIClient,
-        mediaRepository: MediaAssetRepositoryProtocol? = nil,
         poller: JobPoller = JobPoller(),
-        persistence: DemoVisionRepository = DemoVisionRepository()
+        persistence: VisionJobPersistence = VisionJobPersistence()
     ) {
-        self.client = client
-        self.mediaRepository = mediaRepository ?? MediaAssetRepository(client: client)
-        self.jobs = AIJobRepository(client: client)
+        service = VisionJobService(client: client)
+        jobs = AIJobRepository(client: client)
         self.poller = poller
         self.persistence = persistence
     }
 
     func analyzePortrait(_ input: PortraitInput) async throws -> VisualProfileResult {
-        let prepared = try PreparedVisionImage(image: input.image, fileName: "portrait.jpg")
-        let capability = "visual_profile"
-        var pending = try persistence.pendingJob(accountID: input.userID, capability: capability)
-
-        if let existing = pending,
-           existing.inputSHA256 != prepared.sha256,
-           existing.jobID == nil {
-            try persistence.removePendingJob(accountID: input.userID, capability: capability)
-            pending = nil
-        }
-
+        let capability = VisionCapability.faceAnalysis
+        let pending = try persistence.pendingJob(accountID: input.userID, capability: capability)
         let requestID = pending?.requestID ?? "req_profile_\(UUID().uuidString.lowercased())"
         let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
+
         if pending == nil {
-            pending = VisionPendingJob(
+            try persistence.savePendingJob(VisionPendingJob(
                 accountID: input.userID,
                 capability: capability,
                 requestID: requestID,
                 idempotencyKey: idempotencyKey,
                 jobID: nil,
-                assetID: nil,
-                inputSHA256: prepared.sha256,
-                status: "preparing",
+                status: "submitting",
                 serverRequestID: nil,
                 location: nil,
                 retryAfterSeconds: nil
-            )
-            try persistence.savePendingJob(pending!)
-        }
-
-        var assetID = pending?.assetID
-        if assetID == nil {
-            let asset = try await mediaRepository.upload(
-                prepared,
-                requestID: requestID,
-                idempotencyKey: idempotencyKey
-            ) { _ in }
-            assetID = asset.asset.assetId
-            try persistence.savePendingJob(VisionPendingJob(
-                accountID: input.userID,
-                capability: capability,
-                requestID: requestID,
-                idempotencyKey: idempotencyKey,
-                jobID: nil,
-                assetID: asset.asset.assetId,
-                inputSHA256: prepared.sha256,
-                status: "uploaded",
-                serverRequestID: asset.metadata.serverRequestID,
-                location: asset.metadata.location,
-                retryAfterSeconds: asset.metadata.retryAfterSeconds
             ))
         }
 
-        guard let assetID else { throw VisionAPIError.uploadFailed }
-        var jobID = pending?.jobID
-        if jobID == nil {
-            let response: APIResponse<AIJobTicketDTO> = try await client.sendFlexibleResponse(
-                path: APIEndpoint.profileJobs,
-                body: CreateVisualProfileJobRequest(
-                    requestId: requestID,
-                    assetId: assetID,
-                    consentVersion: "visual-analysis-v1"
-                ),
-                idempotencyKey: idempotencyKey
-            )
-            let ticket = response.value
-            let responseMetadata = APIResponseMetadata(
-                serverRequestID: response.metadata.serverRequestID ?? ticket.requestId,
-                location: response.metadata.location,
-                retryAfterSeconds: response.metadata.retryAfterSeconds
-            )
-            jobID = ticket.jobId
-            try persistence.savePendingJob(VisionPendingJob(
-                accountID: input.userID,
-                capability: capability,
-                requestID: requestID,
-                idempotencyKey: idempotencyKey,
-                jobID: ticket.jobId,
-                assetID: assetID,
-                inputSHA256: prepared.sha256,
-                status: ticket.status.rawValue,
-                serverRequestID: responseMetadata.serverRequestID,
-                location: responseMetadata.location,
-                retryAfterSeconds: responseMetadata.retryAfterSeconds
-            ))
-        }
-
-        guard let jobID else { throw VisionAPIError.jobNotFound }
         do {
-            var dto: VisualProfileResultDTO = try await poller.poll(
+            var jobID = pending?.jobID
+            if jobID == nil {
+                let response = try await service.create(
+                    input: input.visionInput,
+                    capability: capability,
+                    options: .faceAnalysis(.init()),
+                    requestID: requestID,
+                    idempotencyKey: idempotencyKey
+                )
+                guard response.value.capability == capability else {
+                    throw VisionAPIError.resultInvalid
+                }
+                jobID = response.value.jobId
+                try persistence.savePendingJob(VisionPendingJob(
+                    accountID: input.userID,
+                    capability: capability,
+                    requestID: requestID,
+                    idempotencyKey: idempotencyKey,
+                    jobID: response.value.jobId,
+                    status: response.value.status.rawValue,
+                    serverRequestID: response.metadata.serverRequestID,
+                    location: response.metadata.location,
+                    retryAfterSeconds: response.metadata.retryAfterSeconds
+                ))
+            }
+            guard let jobID else { throw VisionAPIError.jobNotFound }
+
+            let dto: VisualProfileResultDTO = try await poller.poll(
                 jobID: jobID,
                 fetch: { [jobs] in try await jobs.job(id: $0) },
                 onResponse: { [persistence] metadata in
@@ -185,8 +134,6 @@ final class RemoteVisualProfileProvider: VisualProfileProviding {
                         requestID: requestID,
                         idempotencyKey: idempotencyKey,
                         jobID: jobID,
-                        assetID: assetID,
-                        inputSHA256: prepared.sha256,
                         status: "polling",
                         serverRequestID: metadata.serverRequestID,
                         location: metadata.location,
@@ -194,10 +141,7 @@ final class RemoteVisualProfileProvider: VisualProfileProviding {
                     ))
                 }
             )
-            dto.resultSource = dto.resultSource ?? "remote_provider"
-            dto.schemaVersion = dto.schemaVersion ?? DemoVisionRepository.schemaVersion
             try persistence.removePendingJob(accountID: input.userID, capability: capability)
-
             let portraitPath = try LocalMediaStore.saveImage(
                 input.image,
                 bucket: .portraits,
@@ -205,7 +149,9 @@ final class RemoteVisualProfileProvider: VisualProfileProviding {
             )
             return VisualProfileResult(dto: dto, portraitPath: portraitPath)
         } catch let error as VisionAPIError {
-            if error == .providerUnavailable || error == .cancelled {
+            if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
+                .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
+                .unsupportedMediaType].contains(error) {
                 try? persistence.removePendingJob(accountID: input.userID, capability: capability)
             }
             throw error
@@ -213,84 +159,20 @@ final class RemoteVisualProfileProvider: VisualProfileProviding {
     }
 }
 
-final class DemoVisualProfileProvider: VisualProfileProviding {
-    private let persistence: DemoVisionRepository
-
-    init(persistence: DemoVisionRepository = DemoVisionRepository()) {
-        self.persistence = persistence
-    }
-
-    func analyzePortrait(_ input: PortraitInput) async throws -> VisualProfileResult {
-        guard let asset = try persistence.asset(key: "demo_portrait_01"),
-              let cachedPortrait = UIImage(named: asset.localResourceName) else {
-            throw VisionAPIError.resultInvalid
-        }
-        guard DemoImageMatcher.isSameImage(input.image, cachedPortrait) else {
-            VisionLog.pipeline.info("Demo portrait cache miss; routing selected image to remote profile job")
-            do {
-                let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
-                return try await RemoteVisualProfileProvider(client: client).analyzePortrait(input)
-            } catch {
-                throw normalizedVisionError(error)
-            }
-        }
-        VisionLog.pipeline.info("Demo portrait cache hit asset=\(asset.key, privacy: .public)")
-        let dto: VisualProfileResultDTO
-        if let stored = try persistence.result(
-            accountID: input.userID,
-            capability: "visual_profile",
-            asset: asset
-        ), let data = stored.json.data(using: .utf8) {
-            dto = try JSONDecoder().decode(VisualProfileResultDTO.self, from: data)
-        } else {
-            guard let seed = NSDataAsset(name: "DemoVisualProfileSeed")?.data else {
-                throw VisionAPIError.resultInvalid
-            }
-            var seeded = try JSONDecoder().decode(VisualProfileResultDTO.self, from: seed)
-            seeded.resultSource = "demo_seed"
-            seeded.schemaVersion = DemoVisionRepository.schemaVersion
-            let json = String(decoding: try JSONEncoder.visionEncoder.encode(seeded), as: UTF8.self)
-            try persistence.saveResult(
-                accountID: input.userID,
-                capability: "visual_profile",
-                asset: asset,
-                source: "demo_seed",
-                json: json
-            )
-            dto = seeded
-        }
-
-        // 仅保留短暂的真实状态过渡，不模拟长网络等待。
-        try await Task.sleep(for: .milliseconds(180))
-        let portraitPath = try LocalMediaStore.savePNGImage(
-            input.image,
-            bucket: .portraits,
-            fileName: "demo_visual_profile_\(input.userID).png"
-        )
-        return VisualProfileResult(dto: dto, portraitPath: portraitPath)
-    }
-}
-
-/// 在调用时读取集中 SessionContext，因此即使 ViewModel 在登录前创建也不会选错实现。
 final class AccountAwareVisualProfileProvider: VisualProfileProviding {
     func analyzePortrait(_ input: PortraitInput) async throws -> VisualProfileResult {
-        let context = await MainActor.run { SessionManager.shared.context }
-        guard let context else { throw VisionAPIError.unauthorized }
-        if context.accountMode == .demo, context.features.useDemoAssets {
-            VisionLog.pipeline.info("Visual profile route=demo")
-            return try await DemoVisualProfileProvider().analyzePortrait(input)
+        guard await MainActor.run(body: { SessionManager.shared.context != nil }) else {
+            throw VisionAPIError.unauthorized
         }
-        VisionLog.pipeline.info("Visual profile route=standard")
         do {
             let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
-            return try await RemoteVisualProfileProvider(client: client).analyzePortrait(input)
+            return try await UnifiedVisualProfileProvider(client: client).analyzePortrait(input)
         } catch {
             throw normalizedVisionError(error)
         }
     }
 }
 
-/// 兼容现有 ViewModel 的适配层；页面继续消费原有 `FaceAnalysisResult`。
 final class AccountAwareFaceAnalysisService: FaceAnalysisServicing {
     private let provider: VisualProfileProviding
 
@@ -298,10 +180,12 @@ final class AccountAwareFaceAnalysisService: FaceAnalysisServicing {
         self.provider = provider
     }
 
-    func analyze(image: UIImage, userId: String) async throws -> FaceAnalysisResult {
+    func analyze(input: VisionImageInput, userId: String) async throws -> FaceAnalysisResult {
         let sessionUserID = await MainActor.run { SessionManager.shared.context?.userId }
         let result = try await provider.analyzePortrait(PortraitInput(
-            image: image,
+            image: input.image,
+            originalData: input.originalData,
+            contentType: input.contentType,
             userID: sessionUserID ?? userId
         ))
         let profileJSON = String(

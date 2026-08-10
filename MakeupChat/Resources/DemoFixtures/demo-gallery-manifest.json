@@ -1,0 +1,9 @@
+{
+  "version": "2026-08-10.2",
+  "items": [
+    {"id":"demo-tool-brush-set-001","resource":"demo_tool_brush_set_001.jpg","title":"化妆刷"},
+    {"id":"demo-cosmetic-eyeliner-001","resource":"demo_cosmetic_eyeliner_001.jpg","title":"眼线笔"},
+    {"id":"demo-face-portrait-001","resource":"demo_face_portrait_001.jpg","title":"面部照片"},
+    {"id":"demo-cosmetic-eyeshadow-palette-001","resource":"demo_cosmetic_eyeshadow_palette_001.jpg","title":"眼影盘"}
+  ]
+}

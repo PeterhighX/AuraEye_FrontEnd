@@ -8,6 +8,7 @@ struct UserProfileSetupView: View {
     @State private var viewModel = UserProfileSetupViewModel()
     @State private var showSourcePicker = false
     @State private var showImagePicker = false
+    @State private var showPhotoLibrary = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var logoRotation = 0.0
     @State private var textPulse = false
@@ -53,6 +54,9 @@ struct UserProfileSetupView: View {
                 cameraDevice: .front
             )
         }
+        .fullScreenCover(isPresented: $showPhotoLibrary) {
+            OfficialGalleryContainer(onSelection: handleSelectedInput)
+        }
         .alert(
             "分析未完成",
             isPresented: Binding(
@@ -75,9 +79,8 @@ struct UserProfileSetupView: View {
                         showImagePicker = true
                     },
                     onLibrary: {
-                        imageSource = .photoLibrary
                         showSourcePicker = false
-                        showImagePicker = true
+                        showPhotoLibrary = true
                     },
                     onCancel: { showSourcePicker = false }
                 )
@@ -137,6 +140,13 @@ struct UserProfileSetupView: View {
             path.removeLast()
             path.append(AppRoute.userProfile)
         }
+    }
+
+    private func handleSelectedInput(_ input: VisionImageInput) async {
+        let succeeded = await viewModel.analyze(input, session: session)
+        guard succeeded else { return }
+        path.removeLast()
+        path.append(AppRoute.userProfile)
     }
 }
 

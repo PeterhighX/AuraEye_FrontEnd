@@ -58,6 +58,13 @@ final class DisplayCabinetViewModel {
     }
 
     func recognizeProduct(image: UIImage, categoryHint: CosmeticCategory?) async {
+        await recognizeProduct(
+            input: VisionImageInput(image: image),
+            categoryHint: categoryHint
+        )
+    }
+
+    func recognizeProduct(input: VisionImageInput, categoryHint: CosmeticCategory?) async {
         isRecognizing = true
         analysisState = .preparingImage
         recognitionErrorMessage = nil
@@ -67,7 +74,7 @@ final class DisplayCabinetViewModel {
             analysisState = .submitting
             analysisState = .processing(stage: "item_recognition")
             let result = try await recognitionService.recognize(
-                image: image,
+                input: input,
                 categoryHint: categoryHint?.rawValue
             )
             guard result.hasRequiredProductInformation else {
@@ -109,5 +116,10 @@ final class DisplayCabinetViewModel {
     func dismissRecognitionError() {
         recognitionErrorMessage = nil
         if case .failed = analysisState { analysisState = .idle }
+    }
+
+    func reportInputError(_ error: VisionAPIError) {
+        analysisState = .failed(error)
+        recognitionErrorMessage = error.localizedDescription
     }
 }

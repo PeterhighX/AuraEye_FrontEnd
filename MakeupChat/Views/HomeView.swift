@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var profileSetupViewModel = UserProfileSetupViewModel()
     @State private var showProfileImageSourcePicker = false
     @State private var showProfileImagePicker = false
+    @State private var showProfilePhotoLibrary = false
     @State private var profileImageSource: UIImagePickerController.SourceType = .camera
     @State private var logoRotation = 0.0
     @State private var analysisTextPulse = false
@@ -78,6 +79,9 @@ struct HomeView: View {
                 cameraDevice: .front
             )
         }
+        .fullScreenCover(isPresented: $showProfilePhotoLibrary) {
+            OfficialGalleryContainer(onSelection: analyzeProfileInput)
+        }
         .alert(
             "分析未完成",
             isPresented: Binding(
@@ -100,9 +104,8 @@ struct HomeView: View {
                         showProfileImagePicker = true
                     },
                     onLibrary: {
-                        profileImageSource = .photoLibrary
                         showProfileImageSourcePicker = false
-                        showProfileImagePicker = true
+                        showProfilePhotoLibrary = true
                     },
                     onCancel: { showProfileImageSourcePicker = false }
                 )
@@ -335,6 +338,12 @@ struct HomeView: View {
             guard succeeded else { return }
             path.append(AppRoute.userProfile)
         }
+    }
+
+    private func analyzeProfileInput(_ input: VisionImageInput) async {
+        let succeeded = await profileSetupViewModel.analyze(input, session: session)
+        guard succeeded else { return }
+        path.append(AppRoute.userProfile)
     }
 
     private func presentRequestedProfileCaptureIfNeeded() {

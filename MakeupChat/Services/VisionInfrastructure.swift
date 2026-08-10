@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import OSLog
 import UIKit
@@ -13,6 +12,8 @@ enum VisionLog {
 func stableVisionErrorCode(_ error: Error) -> String {
     if let error = error as? VisionAPIError {
         switch error {
+        case .configurationMissing: return "configuration_missing"
+        case .configurationInvalid: return "configuration_invalid"
         case .unauthorized: return "unauthorized"
         case .invalidImage: return "invalid_image"
         case .uploadFailed: return "upload_failed"
@@ -21,17 +22,30 @@ func stableVisionErrorCode(_ error: Error) -> String {
         case .jobTimedOut: return "job_timed_out"
         case .resultInvalid: return "result_invalid"
         case .networkUnavailable: return "network_unavailable"
+        case .serverError: return "server_error"
         case .cancelled: return "cancelled"
+        case .demoFixtureNotRecognized: return "demo_fixture_not_recognized"
+        case .demoFixtureMismatch: return "demo_fixture_mismatch"
+        case .demoCacheNotReady: return "demo_cache_not_ready"
+        case .demoVariantNotFound: return "demo_variant_not_found"
+        case .payloadTooLarge: return "payload_too_large"
+        case .unsupportedMediaType: return "unsupported_media_type"
         }
     }
     if let error = error as? APIClientError {
         if let code = error.problemCode, !code.isEmpty { return code.lowercased() }
         if let status = error.statusCode { return "http_\(status)" }
         switch error {
-        case .missingBaseURL: return "network_unavailable"
+        case .networkUnavailable: return "network_unavailable"
         case .invalidResponse, .invalidServerResponse: return "result_invalid"
         case .invalidImage: return "invalid_image"
         case .problem, .httpStatus: return "unknown"
+        }
+    }
+    if let error = error as? APIConfigurationError {
+        switch error {
+        case .configurationMissing: return "configuration_missing"
+        case .configurationInvalid: return "configuration_invalid"
         }
     }
     if error is URLError { return "network_unavailable" }
@@ -39,14 +53,22 @@ func stableVisionErrorCode(_ error: Error) -> String {
 }
 
 func normalizedVisionError(_ error: Error) -> VisionAPIError {
+    if error is CancellationError { return .cancelled }
     if let error = error as? VisionAPIError { return error }
+    if let error = error as? APIConfigurationError {
+        switch error {
+        case .configurationMissing: return .configurationMissing
+        case .configurationInvalid: return .configurationInvalid
+        }
+    }
     if let error = error as? APIClientError {
         if error.statusCode == 401 { return .unauthorized }
         if error.statusCode == 404 { return .jobNotFound }
         if [413, 415, 422].contains(error.statusCode) { return .invalidImage }
-        if let status = error.statusCode, status >= 500 { return .providerUnavailable }
+        if let status = error.statusCode, (200..<300).contains(status) { return .resultInvalid }
+        if error.statusCode != nil { return .serverError }
         switch error {
-        case .missingBaseURL: return .networkUnavailable
+        case .networkUnavailable: return .networkUnavailable
         case .invalidImage: return .invalidImage
         case .invalidResponse, .invalidServerResponse, .problem, .httpStatus: return .resultInvalid
         }
@@ -56,6 +78,8 @@ func normalizedVisionError(_ error: Error) -> VisionAPIError {
 }
 
 enum VisionAPIError: LocalizedError, Equatable, Sendable {
+    case configurationMissing
+    case configurationInvalid
     case unauthorized
     case invalidImage
     case uploadFailed
@@ -64,10 +88,19 @@ enum VisionAPIError: LocalizedError, Equatable, Sendable {
     case jobTimedOut
     case resultInvalid
     case networkUnavailable
+    case serverError
     case cancelled
+    case demoFixtureNotRecognized
+    case demoFixtureMismatch
+    case demoCacheNotReady
+    case demoVariantNotFound
+    case payloadTooLarge
+    case unsupportedMediaType
 
     var errorDescription: String? {
         switch self {
+        case .configurationMissing: return "当前 App 未配置 AuraEye API 地址，请检查构建配置。"
+        case .configurationInvalid: return "当前 App 的 AuraEye API 地址无效，请检查构建配置。"
         case .unauthorized: return "登录状态已失效，请重新登录。"
         case .invalidImage: return "图片无法处理，请重新选择。"
         case .uploadFailed: return "图片上传失败，请检查网络后重试。"
@@ -76,7 +109,183 @@ enum VisionAPIError: LocalizedError, Equatable, Sendable {
         case .jobTimedOut: return "分析时间较长，稍后返回页面会继续查询原任务。"
         case .resultInvalid: return "分析结果格式暂时无法识别。"
         case .networkUnavailable: return "网络不可用，请检查连接后重试。"
+        case .serverError: return "服务器请求失败，请稍后重试。"
         case .cancelled: return "分析已取消。"
+        case .demoFixtureNotRecognized: return "请选择指定的演示图片。"
+        case .demoFixtureMismatch: return "图片与演示能力不匹配。"
+        case .demoCacheNotReady: return "该演示结果尚未准备完成。"
+        case .demoVariantNotFound: return "该试妆组合尚未预置。"
+        case .payloadTooLarge: return "图片大小超过限制，请重新选择。"
+        case .unsupportedMediaType: return "暂不支持该图片格式，请重新选择。"
+        }
+    }
+}
+
+/// 相册来源始终保留原始字节；相机来源仅在没有文件字节时编码一次用于统一任务提交。
+struct VisionImageInput {
+    let image: UIImage
+    let originalData: Data?
+    let contentType: String?
+
+    init(image: UIImage) {
+        self.image = image
+        self.originalData = nil
+        self.contentType = nil
+    }
+
+    init(photoData: Data, contentType: String) throws {
+        guard contentType.lowercased().hasPrefix("image/") else {
+            throw VisionAPIError.unsupportedMediaType
+        }
+        guard let image = UIImage(data: photoData) else {
+            throw VisionAPIError.invalidImage
+        }
+        self.image = image
+        self.originalData = photoData
+        self.contentType = contentType
+    }
+
+    func requestPayload() throws -> (data: Data, mimeType: String) {
+        if let originalData, let contentType {
+            return (originalData, contentType)
+        }
+        guard let encoded = image.jpegData(compressionQuality: 0.95) else {
+            throw VisionAPIError.invalidImage
+        }
+        return (encoded, "image/jpeg")
+    }
+}
+
+enum VisionCapability: String, Codable, Sendable {
+    case faceAnalysis = "face_analysis"
+    case itemRecognition = "item_recognition"
+    case makeupRender = "makeup_render"
+}
+
+struct FaceAnalysisJobOptions: Encodable, Sendable {
+    let consentVersion: String
+
+    init(consentVersion: String = "visual-analysis-test-v1") {
+        self.consentVersion = consentVersion
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case consentVersion = "consent_version"
+    }
+}
+
+struct ItemRecognitionJobOptions: Encodable, Sendable {
+    let recognitionScope: RecognitionScope
+
+    init(
+        allowedCategories: [String] = ["makeup_brush", "eyeliner", "eyeshadow_palette"],
+        maxItems: Int = 3
+    ) {
+        recognitionScope = RecognitionScope(
+            allowedCategories: allowedCategories,
+            maxItems: min(max(maxItems, 1), 3)
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case recognitionScope = "recognition_scope"
+    }
+
+    struct RecognitionScope: Encodable, Sendable {
+        let allowedCategories: [String]
+        let maxItems: Int
+
+        enum CodingKeys: String, CodingKey {
+            case allowedCategories = "allowed_categories"
+            case maxItems = "max_items"
+        }
+    }
+}
+
+struct MakeupRenderJobOptions: Encodable, Sendable {
+    let recipeID: String
+
+    init(recipeID: String = "perfect-live-1785130914911") {
+        self.recipeID = recipeID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case recipeID = "recipe_id"
+    }
+}
+
+enum VisionJobOptions: Sendable {
+    case faceAnalysis(FaceAnalysisJobOptions)
+    case itemRecognition(ItemRecognitionJobOptions)
+    case makeupRender(MakeupRenderJobOptions)
+
+    func jsonString() throws -> String {
+        let data: Data
+        switch self {
+        case .faceAnalysis(let value):
+            data = try JSONEncoder.visionEncoder.encode(value)
+        case .itemRecognition(let value):
+            data = try JSONEncoder.visionEncoder.encode(value)
+        case .makeupRender(let value):
+            data = try JSONEncoder.visionEncoder.encode(value)
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
+struct VisionJobTicketDTO: Codable, Sendable {
+    let jobId: String
+    let capability: VisionCapability
+    let status: AIJobStatus
+
+    enum CodingKeys: String, CodingKey {
+        case jobId = "job_id"
+        case capability = "job_type"
+        case status
+    }
+}
+
+final class VisionJobService {
+    private let client: APIClient
+
+    init(client: APIClient) {
+        self.client = client
+    }
+
+    func create(
+        input: VisionImageInput,
+        capability: VisionCapability,
+        options: VisionJobOptions? = nil,
+        requestID: String,
+        idempotencyKey: String
+    ) async throws -> APIResponse<VisionJobTicketDTO> {
+        let payload = try input.requestPayload()
+        var fields = [
+            "request_id": requestID,
+            "capability": capability.rawValue
+        ]
+        if let options {
+            fields["options"] = try options.jsonString()
+        }
+        do {
+            return try await client.sendMultipartResponse(
+                path: APIEndpoint.visionJobs,
+                fields: fields,
+                imageData: payload.data,
+                imageContentType: payload.mimeType,
+                idempotencyKey: idempotencyKey,
+                expectedStatusCode: 202
+            )
+        } catch let error as APIClientError {
+            switch error.problemCode?.uppercased() {
+            case "DEMO_FIXTURE_NOT_RECOGNIZED": throw VisionAPIError.demoFixtureNotRecognized
+            case "DEMO_FIXTURE_MISMATCH": throw VisionAPIError.demoFixtureMismatch
+            case "DEMO_CACHE_NOT_READY": throw VisionAPIError.demoCacheNotReady
+            case "DEMO_VARIANT_NOT_FOUND": throw VisionAPIError.demoVariantNotFound
+            case "PAYLOAD_TOO_LARGE": throw VisionAPIError.payloadTooLarge
+            case "UNSUPPORTED_MEDIA_TYPE": throw VisionAPIError.unsupportedMediaType
+            default: throw normalizedVisionError(error)
+            }
         }
     }
 }
@@ -120,136 +329,6 @@ enum JSONValue: Codable, Equatable, Sendable {
         case .array(let value): try container.encode(value)
         case .null: try container.encodeNil()
         }
-    }
-}
-
-// MARK: - Media assets
-
-struct MediaUploadIntentDTO: Codable, Sendable {
-    let assetId: String
-    let uploadURL: URL
-    let uploadMethod: String
-    let uploadHeaders: [String: String]
-    let expiresAt: Date?
-
-    enum CodingKeys: String, CodingKey {
-        case assetId = "asset_id"
-        case uploadURL = "upload_url"
-        case uploadMethod = "upload_method"
-        case uploadHeaders = "upload_headers"
-        case expiresAt = "expires_at"
-    }
-}
-
-struct MediaAssetDTO: Codable, Sendable {
-    let assetId: String
-    let status: String?
-
-    enum CodingKeys: String, CodingKey {
-        case assetId = "asset_id"
-        case status
-    }
-}
-
-struct MediaAssetUploadResult {
-    let asset: MediaAssetDTO
-    let metadata: APIResponseMetadata
-}
-
-private struct CreateUploadIntentRequest: Encodable {
-    let requestId: String
-    let fileName: String
-    let contentType: String
-    let fileSize: Int
-    let purpose: String
-
-    enum CodingKeys: String, CodingKey {
-        case requestId = "request_id"
-        case fileName = "file_name"
-        case contentType = "content_type"
-        case fileSize = "file_size"
-        case purpose
-    }
-}
-
-private struct EmptyVisionRequest: Encodable {}
-
-struct PreparedVisionImage: Sendable {
-    let data: Data
-    let fileName: String
-    let contentType: String
-    let sha256: String
-
-    init(image: UIImage, fileName: String = "vision-input.jpg") throws {
-        guard let data = image.jpegData(compressionQuality: 0.9) else {
-            throw VisionAPIError.invalidImage
-        }
-        self.data = data
-        self.fileName = fileName
-        self.contentType = "image/jpeg"
-        self.sha256 = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
-}
-
-protocol MediaAssetRepositoryProtocol {
-    func upload(
-        _ image: PreparedVisionImage,
-        requestID: String,
-        idempotencyKey: String,
-        onProgress: @escaping (Double) -> Void
-    ) async throws -> MediaAssetUploadResult
-}
-
-final class MediaAssetRepository: MediaAssetRepositoryProtocol {
-    private let client: APIClient
-
-    init(client: APIClient) {
-        self.client = client
-    }
-
-    func upload(
-        _ image: PreparedVisionImage,
-        requestID: String,
-        idempotencyKey: String,
-        onProgress: @escaping (Double) -> Void = { _ in }
-    ) async throws -> MediaAssetUploadResult {
-        onProgress(0.05)
-        VisionLog.pipeline.debug("Creating upload intent request=\(requestID, privacy: .public)")
-        let intentResponse: APIResponse<MediaUploadIntentDTO> = try await client.sendFlexibleResponse(
-            path: APIEndpoint.mediaUploadIntents,
-            body: CreateUploadIntentRequest(
-                requestId: requestID,
-                fileName: image.fileName,
-                contentType: image.contentType,
-                fileSize: image.data.count,
-                purpose: "vision"
-            ),
-            idempotencyKey: idempotencyKey
-        )
-        let intent = intentResponse.value
-
-        onProgress(0.2)
-        do {
-            try await client.uploadBinary(
-                to: intent.uploadURL,
-                method: intent.uploadMethod,
-                headers: intent.uploadHeaders,
-                data: image.data
-            )
-        } catch {
-            throw VisionAPIError.uploadFailed
-        }
-        onProgress(0.9)
-
-        let assetResponse: APIResponse<MediaAssetDTO> = try await client.sendFlexibleResponse(
-            path: APIEndpoint.completeMediaAsset(intent.assetId),
-            body: EmptyVisionRequest(),
-            idempotencyKey: idempotencyKey
-        )
-        let asset = assetResponse.value
-        VisionLog.pipeline.debug("Completed media asset=\(asset.assetId, privacy: .public)")
-        onProgress(1)
-        return MediaAssetUploadResult(asset: asset, metadata: assetResponse.metadata)
     }
 }
 
@@ -310,47 +389,22 @@ struct AIJobProgressDTO: Codable, Sendable {
     }
 }
 
-struct AIJobTicketDTO: Codable, Sendable {
-    let contractVersion: String?
-    let jobId: String
-    let requestId: String
-    let jobType: String
-    let assetId: String
-    let status: AIJobStatus
-    let progress: AIJobProgressDTO?
-
-    enum CodingKeys: String, CodingKey {
-        case contractVersion = "contract_version"
-        case jobId = "job_id"
-        case requestId = "request_id"
-        case jobType = "job_type"
-        case assetId = "asset_id"
-        case status, progress
-    }
-}
-
 struct AIJobErrorDTO: Codable, Sendable {
     let code: String?
     let message: String?
 }
 
 struct AIJobDTO<Result: Codable & Sendable>: Codable, Sendable {
-    let contractVersion: String?
     let jobId: String
     let requestId: String?
-    let jobType: String?
-    let assetId: String?
     let status: AIJobStatus
     let progress: AIJobProgressDTO?
     let result: Result?
     let error: AIJobErrorDTO?
 
     enum CodingKeys: String, CodingKey {
-        case contractVersion = "contract_version"
         case jobId = "job_id"
         case requestId = "request_id"
-        case jobType = "job_type"
-        case assetId = "asset_id"
         case status, progress, result, error
     }
 }
@@ -363,7 +417,25 @@ final class AIJobRepository {
     }
 
     func job<Result: Codable & Sendable>(id: String) async throws -> APIResponse<AIJobDTO<Result>> {
-        try await client.sendFlexibleResponse(path: APIEndpoint.visionJob(id))
+        try await client.sendResponse(
+            path: APIEndpoint.visionJob(id),
+            expectedStatusCode: 200
+        )
+    }
+}
+
+final class VisionResultImageService {
+    private let client: APIClient
+
+    init(client: APIClient) {
+        self.client = client
+    }
+
+    func downloadPNG(jobID: String) async throws -> APIBinaryResponse {
+        try await client.downloadResponse(
+            path: APIEndpoint.visionJobResultImage(jobID),
+            expectedContentType: "image/png"
+        )
     }
 }
 
@@ -454,11 +526,6 @@ enum VisionClientFactory {
         guard let context = SessionManager.shared.context else {
             throw VisionAPIError.unauthorized
         }
-        let base = try APIConfiguration.fromBundle()
-        return APIClient(configuration: APIConfiguration(
-            baseURL: base.baseURL,
-            accessToken: context.accessToken,
-            timeout: base.timeout
-        ))
+        return try APIEnvironment.shared.authenticatedClient(accessToken: context.accessToken)
     }
 }

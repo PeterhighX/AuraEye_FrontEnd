@@ -14,6 +14,7 @@ struct DisplayCabinetView: View {
     @State private var showCamera = false
     @State private var pendingCategory: CosmeticCategory?
     @State private var showImageSourcePicker = false
+    @State private var showPhotoLibrary = false
     @State private var showTopAddPrompt = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var successMessage: String?
@@ -76,6 +77,14 @@ struct DisplayCabinetView: View {
                 cameraDevice: .rear
             )
         }
+        .fullScreenCover(isPresented: $showPhotoLibrary) {
+            OfficialGalleryContainer { input in
+                await viewModel.recognizeProduct(
+                    input: input,
+                    categoryHint: pendingCategory
+                )
+            }
+        }
         .alert("前往添加化妆品", isPresented: $showTopAddPrompt) {
             Button("知道了", role: .cancel) {}
         } message: {
@@ -107,9 +116,8 @@ struct DisplayCabinetView: View {
                         showCamera = true
                     },
                     onLibrary: {
-                        imageSource = .photoLibrary
                         showImageSourcePicker = false
-                        showCamera = true
+                        showPhotoLibrary = true
                     },
                     onCancel: { showImageSourcePicker = false }
                 )

@@ -49,7 +49,13 @@ struct CosmeticsRecognitionResult {
 
 protocol CosmeticsRecognitionServicing {
     /// `categoryHint` 仅作为识别上下文，不能覆盖模型返回的真实品类。
-    func recognize(image: UIImage, categoryHint: String?) async throws -> CosmeticsRecognitionResult
+    func recognize(input: VisionImageInput, categoryHint: String?) async throws -> CosmeticsRecognitionResult
+}
+
+extension CosmeticsRecognitionServicing {
+    func recognize(image: UIImage, categoryHint: String?) async throws -> CosmeticsRecognitionResult {
+        try await recognize(input: VisionImageInput(image: image), categoryHint: categoryHint)
+    }
 }
 
 enum CosmeticsRecognitionError: LocalizedError {
@@ -67,7 +73,8 @@ enum CosmeticsRecognitionError: LocalizedError {
 }
 
 final class CosmeticsRecognitionService: CosmeticsRecognitionServicing {
-    func recognize(image: UIImage, categoryHint: String?) async throws -> CosmeticsRecognitionResult {
+    func recognize(input: VisionImageInput, categoryHint: String?) async throws -> CosmeticsRecognitionResult {
+        let image = input.image
         // TODO(Qwen): 上传原图 → 千问识别真实品类、名称、材质、色系与色值。
         // 当前先使用 Apple Vision 本地识别；点击入口绝不能覆盖识别品类。
         try await Task.sleep(for: .milliseconds(600))

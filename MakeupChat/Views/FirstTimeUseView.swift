@@ -9,6 +9,7 @@ struct FirstTimeUseView: View {
     @State private var viewModel: FirstTimeUseViewModel
     @State private var showCamera = false
     @State private var showImageSourcePicker = false
+    @State private var showPhotoLibrary = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var loadingIconRotation = 0.0
     @State private var loadingTextPulse = false
@@ -90,6 +91,9 @@ struct FirstTimeUseView: View {
                 cameraDevice: viewModel.cameraTarget == .face ? .front : .rear
             )
         }
+        .fullScreenCover(isPresented: $showPhotoLibrary) {
+            OfficialGalleryContainer(onSelection: viewModel.handleSelectedInput)
+        }
         .alert(
             viewModel.recognitionErrorTitle,
             isPresented: Binding(
@@ -123,9 +127,8 @@ struct FirstTimeUseView: View {
                         showCamera = true
                     },
                     onLibrary: {
-                        imageSource = .photoLibrary
                         showImageSourcePicker = false
-                        showCamera = true
+                        showPhotoLibrary = true
                     },
                     onCancel: { showImageSourcePicker = false }
                 )

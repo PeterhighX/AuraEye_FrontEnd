@@ -12,11 +12,11 @@ final class LoginViewModel {
     private let authenticationService: any AuthenticationServicing
 
     init(
-        authenticationService: any AuthenticationServicing = AuthenticationServiceFactory.makeDefault(),
+        authenticationService: (any AuthenticationServicing)? = nil,
         initialAccount: String = LocalInternalAuthenticationService.testAccount,
         initialPassword: String = LocalInternalAuthenticationService.testPassword
     ) {
-        self.authenticationService = authenticationService
+        self.authenticationService = authenticationService ?? AuthenticationServiceFactory.makeDefault()
         account = initialAccount
         password = initialPassword
     }

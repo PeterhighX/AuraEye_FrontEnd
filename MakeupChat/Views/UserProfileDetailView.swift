@@ -8,6 +8,7 @@ struct UserProfileDetailView: View {
     @State private var user: UserProfile?
     @State private var capturedPortrait: UIImage?
     @State private var showsCamera = false
+    @State private var showsPhotoLibrary = false
     @State private var showsSourcePicker = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var isAnalyzing = false
@@ -47,6 +48,9 @@ struct UserProfileDetailView: View {
             )
             .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: $showsPhotoLibrary) {
+            OfficialGalleryContainer(onSelection: generateVirtualAvatar)
+        }
         .confirmationDialog("档案操作", isPresented: $showsProfileMenu, titleVisibility: .visible) {
             Button("重新上传照片") {
                 showsSourcePicker = true
@@ -82,9 +86,8 @@ struct UserProfileDetailView: View {
                         showsCamera = true
                     },
                     onLibrary: {
-                        imageSource = .photoLibrary
                         showsSourcePicker = false
-                        showsCamera = true
+                        showsPhotoLibrary = true
                     },
                     onCancel: { showsSourcePicker = false }
                 )
@@ -343,6 +346,26 @@ struct UserProfileDetailView: View {
             } catch {
                 analysisErrorMessage = "面部分析暂时未完成，请重新选择照片。"
             }
+        }
+    }
+
+    private func generateVirtualAvatar(from input: VisionImageInput) async {
+        guard !isAnalyzing else { return }
+        isAnalyzing = true
+        defer { isAnalyzing = false }
+        guard var profile = try? userRepository.currentUser() else { return }
+        do {
+            let result = try await faceAnalysisService.analyze(
+                input: input,
+                userId: profile.userId
+            )
+            profile.userPortraitPath = result.portraitPath
+            profile.userFileJSON = result.profileJSON
+            try userRepository.update(profile)
+            capturedPortrait = nil
+            user = profile
+        } catch {
+            analysisErrorMessage = error.localizedDescription
         }
     }
 }

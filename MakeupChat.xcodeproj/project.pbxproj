@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB0000000000000000000001 /* PhotoSourceRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */; };
+		FB0000000000000000000003 /* VisionJobServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000004 /* VisionJobServiceTests.swift */; };
+		FB0000000000000000000005 /* DemoProviderFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000006 /* DemoProviderFallbackTests.swift */; };
+		FB0000000000000000000007 /* DemoBundlePhotoSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */; };
+		FB0000000000000000000009 /* AuthenticationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB000000000000000000000A /* AuthenticationServiceTests.swift */; };
 		00AA29009FFF48569B711095 /* ProfileHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */; };
 		02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */; };
 		0C51702F98FE4BD5A9116621 /* CosmeticItemDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */; };
@@ -83,7 +88,11 @@
 		F10000000000000000000003 /* VisionInfrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* VisionInfrastructure.swift */; };
 		F10000000000000000000005 /* VisualProfilePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* VisualProfilePipeline.swift */; };
 		F10000000000000000000007 /* ItemRecognitionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* ItemRecognitionPipeline.swift */; };
-		F10000000000000000000009 /* DemoVisionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000A /* DemoVisionRepository.swift */; };
+		FA0000000000000000000001 /* PhotoSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000002 /* PhotoSource.swift */; };
+		FA0000000000000000000003 /* OfficialGalleryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000004 /* OfficialGalleryViewModel.swift */; };
+		FA0000000000000000000005 /* OfficialGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000006 /* OfficialGalleryView.swift */; };
+		FA0000000000000000000007 /* VisionJobPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000008 /* VisionJobPersistence.swift */; };
+		FA0000000000000000000009 /* DemoFixtures in Resources */ = {isa = PBXBuildFile; fileRef = FA000000000000000000000A /* DemoFixtures */; };
 		F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D27055640E4E4BAF83ADD9 /* AppSession.swift */; };
 		F24644F0D7BA42009F39002F /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0683978D3E420C8AA42807 /* ProfileModels.swift */; };
 		F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */; };
@@ -92,7 +101,23 @@
 		FEE4B7004550451DA62A2B1A /* OnboardingStepRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		F8000000000000000000000C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000002;
+			remoteInfo = MakeupChat;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSourceRoutingTests.swift; sourceTree = "<group>"; };
+		FB0000000000000000000004 /* VisionJobServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionJobServiceTests.swift; sourceTree = "<group>"; };
+		FB0000000000000000000006 /* DemoProviderFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoProviderFallbackTests.swift; sourceTree = "<group>"; };
+		FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoBundlePhotoSourceTests.swift; sourceTree = "<group>"; };
+		FB000000000000000000000A /* AuthenticationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationServiceTests.swift; sourceTree = "<group>"; };
+		F80000000000000000000003 /* MakeupChatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MakeupChatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CosmeticImagePlaceholder.swift; sourceTree = "<group>"; };
 		05D923C6A2AE4830BA53CFAC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0687403EBC444042B8C17AE1 /* CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPickerView.swift; sourceTree = "<group>"; };
@@ -171,13 +196,28 @@
 		F10000000000000000000004 /* VisionInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionInfrastructure.swift; sourceTree = "<group>"; };
 		F10000000000000000000006 /* VisualProfilePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualProfilePipeline.swift; sourceTree = "<group>"; };
 		F10000000000000000000008 /* ItemRecognitionPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemRecognitionPipeline.swift; sourceTree = "<group>"; };
-		F1000000000000000000000A /* DemoVisionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoVisionRepository.swift; sourceTree = "<group>"; };
+		FA0000000000000000000002 /* PhotoSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSource.swift; sourceTree = "<group>"; };
+		FA0000000000000000000004 /* OfficialGalleryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialGalleryViewModel.swift; sourceTree = "<group>"; };
+		FA0000000000000000000006 /* OfficialGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialGalleryView.swift; sourceTree = "<group>"; };
+		FA0000000000000000000008 /* VisionJobPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionJobPersistence.swift; sourceTree = "<group>"; };
+		FA000000000000000000000A /* DemoFixtures */ = {isa = PBXFileReference; explicitFileType = folder; path = DemoFixtures; sourceTree = "<group>"; };
+		FC0000000000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F12CF94986254D17BB169BFA /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepRow.swift; sourceTree = "<group>"; };
 		F65E8B42F5E34163A60327F0 /* HomeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeComponents.swift; sourceTree = "<group>"; };
 		F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderView.swift; sourceTree = "<group>"; };
 		F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupStepsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F80000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0E686291765348C588EA8996 /* Models */ = {
@@ -255,6 +295,7 @@
 			isa = PBXGroup;
 			children = (
 				6C944130539C44F3B528B2F8 /* Assets.xcassets */,
+				FA000000000000000000000A /* DemoFixtures */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -280,6 +321,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000000D /* MakeupChat */,
+				F80000000000000000000004 /* MakeupChatTests */,
 				A1000000000000000000000C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -288,8 +330,21 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000000E /* MakeupChat.app */,
+				F80000000000000000000003 /* MakeupChatTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		F80000000000000000000004 /* MakeupChatTests */ = {
+			isa = PBXGroup;
+			children = (
+				FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */,
+				FB0000000000000000000004 /* VisionJobServiceTests.swift */,
+				FB0000000000000000000006 /* DemoProviderFallbackTests.swift */,
+				FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */,
+				FB000000000000000000000A /* AuthenticationServiceTests.swift */,
+			);
+			path = MakeupChatTests;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000000D /* MakeupChat */ = {
@@ -298,10 +353,12 @@
 				05D923C6A2AE4830BA53CFAC /* ContentView.swift */,
 				CA1A31DB3CA5451B80EBD6CE /* MakeupChatApp.swift */,
 				E70000000000000000000002 /* SharedFluidBackground.metal */,
+				FC0000000000000000000002 /* Supporting */,
 				0E686291765348C588EA8996 /* Models */,
 				152ECFDCE80644D9B456152D /* Database */,
 				8D57918213B14D418999C31C /* Storage */,
 				A799DC10421B43AE873825D8 /* Repositories */,
+				FA000000000000000000000B /* Features */,
 				3E3312AD544E43B79F16AC75 /* Services */,
 				6B1004A038314259A790B2E3 /* ViewModels */,
 				8DFE9946230640C79F2053E5 /* Navigation */,
@@ -313,10 +370,18 @@
 			path = MakeupChat;
 			sourceTree = "<group>";
 		};
+		FC0000000000000000000002 /* Supporting */ = {
+			isa = PBXGroup;
+			children = (
+				FC0000000000000000000001 /* Info.plist */,
+			);
+			path = Supporting;
+			sourceTree = "<group>";
+		};
 		A799DC10421B43AE873825D8 /* Repositories */ = {
 			isa = PBXGroup;
 			children = (
-				F1000000000000000000000A /* DemoVisionRepository.swift */,
+				FA0000000000000000000008 /* VisionJobPersistence.swift */,
 				4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */,
 				A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */,
 				36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */,
@@ -325,6 +390,24 @@
 				B97E76971D064523B4D89FAC /* UserRepository.swift */,
 			);
 			path = Repositories;
+			sourceTree = "<group>";
+		};
+		FA000000000000000000000B /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				FA000000000000000000000C /* PhotoGallery */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		FA000000000000000000000C /* PhotoGallery */ = {
+			isa = PBXGroup;
+			children = (
+				FA0000000000000000000002 /* PhotoSource.swift */,
+				FA0000000000000000000004 /* OfficialGalleryViewModel.swift */,
+				FA0000000000000000000006 /* OfficialGalleryView.swift */,
+			);
+			path = PhotoGallery;
 			sourceTree = "<group>";
 		};
 		AD42CBA390FE425895EE44D9 /* Views */ = {
@@ -393,6 +476,23 @@
 			productReference = A1000000000000000000000E /* MakeupChat.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F80000000000000000000007 /* MakeupChatTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F80000000000000000000008 /* Build configuration list for PBXNativeTarget "MakeupChatTests" */;
+			buildPhases = (
+				F80000000000000000000006 /* Sources */,
+				F80000000000000000000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F8000000000000000000000B /* PBXTargetDependency */,
+			);
+			name = MakeupChatTests;
+			productName = MakeupChatTests;
+			productReference = F80000000000000000000003 /* MakeupChatTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -411,6 +511,10 @@
 							};
 						};
 					};
+					F80000000000000000000007 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = A10000000000000000000002;
+					};
 				};
 			};
 			buildConfigurationList = A10000000000000000000005 /* Build configuration list for PBXProject "MakeupChat" */;
@@ -428,6 +532,7 @@
 			projectRoot = "";
 			targets = (
 				A10000000000000000000002 /* MakeupChat */,
+				F80000000000000000000007 /* MakeupChatTests */,
 			);
 		};
 /* End PBXProject section */
@@ -438,6 +543,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				568459DCBE274424864294B1 /* Assets.xcassets in Resources */,
+				FA0000000000000000000009 /* DemoFixtures in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -504,7 +610,10 @@
 				F10000000000000000000003 /* VisionInfrastructure.swift in Sources */,
 				F10000000000000000000005 /* VisualProfilePipeline.swift in Sources */,
 				F10000000000000000000007 /* ItemRecognitionPipeline.swift in Sources */,
-				F10000000000000000000009 /* DemoVisionRepository.swift in Sources */,
+				FA0000000000000000000001 /* PhotoSource.swift in Sources */,
+				FA0000000000000000000003 /* OfficialGalleryViewModel.swift in Sources */,
+				FA0000000000000000000005 /* OfficialGalleryView.swift in Sources */,
+				FA0000000000000000000007 /* VisionJobPersistence.swift in Sources */,
 				40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */,
 				A43425BDA5374801BF35A2D6 /* LocalMediaStore.swift in Sources */,
 				8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */,
@@ -533,9 +642,59 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F80000000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB0000000000000000000001 /* PhotoSourceRoutingTests.swift in Sources */,
+				FB0000000000000000000003 /* VisionJobServiceTests.swift in Sources */,
+				FB0000000000000000000005 /* DemoProviderFallbackTests.swift in Sources */,
+				FB0000000000000000000007 /* DemoBundlePhotoSourceTests.swift in Sources */,
+				FB0000000000000000000009 /* AuthenticationServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		F8000000000000000000000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000002 /* MakeupChat */;
+			targetProxy = F8000000000000000000000C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		F80000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MakeupChat.app/MakeupChat";
+			};
+			name = Debug;
+		};
+		F8000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MakeupChat.app/MakeupChat";
+			};
+			name = Release;
+		};
 		A10000000000000000000007 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -644,10 +803,11 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
+				INFOPLIST_FILE = MakeupChat/Supporting/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要使用相机扫描面部，建立您的专属用户档案。";
-				INFOPLIST_KEY_AURAEYE_API_BASE_URL = "$(AURAEYE_API_BASE_URL)";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要获取当前位置，以实时更新天气、温度、紫外线指数和所在区域。";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取相册中的照片，用于识别并添加化妆品。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取您授权的照片，用于人像分析、商品识别与试妆。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -673,10 +833,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = DemoFixtures;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
+				INFOPLIST_FILE = MakeupChat/Supporting/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要使用相机扫描面部，建立您的专属用户档案。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要获取当前位置，以实时更新天气、温度、紫外线指数和所在区域。";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取相册中的照片，用于识别并添加化妆品。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要读取您授权的照片，用于人像分析、商品识别与试妆。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -695,6 +858,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		F80000000000000000000008 /* Build configuration list for PBXNativeTarget "MakeupChatTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F80000000000000000000009 /* Debug */,
+				F8000000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A10000000000000000000005 /* Build configuration list for PBXProject "MakeupChat" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

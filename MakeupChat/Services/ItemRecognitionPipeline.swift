@@ -3,8 +3,18 @@ import UIKit
 
 struct RecognitionInput {
     let image: UIImage
+    let originalData: Data?
+    let contentType: String?
     let userID: String
     let categoryHint: CosmeticCategory?
+
+    var visionInput: VisionImageInput {
+        if let originalData, let contentType,
+           let input = try? VisionImageInput(photoData: originalData, contentType: contentType) {
+            return input
+        }
+        return VisionImageInput(image: image)
+    }
 }
 
 struct RecognitionColorDTO: Codable, Equatable, Sendable {
@@ -12,15 +22,14 @@ struct RecognitionColorDTO: Codable, Equatable, Sendable {
     let proportion: Double?
 
     private enum CodingKeys: String, CodingKey {
-        case hex
-        case proportion
+        case hex, proportion
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let hex = try? container.decode(String.self) {
             self.hex = hex
-            self.proportion = nil
+            proportion = nil
             return
         }
         let object = try decoder.container(keyedBy: CodingKeys.self)
@@ -68,17 +77,13 @@ struct RecognizedItemDTO: Codable, Equatable, Sendable {
 struct ItemRecognitionResultDTO: Codable, Equatable, Sendable {
     let recognitionLevel: String
     let items: [RecognizedItemDTO]
-    var warnings: [String]
+    let warnings: [String]
     let knowledgeKeys: [String]
-    var resultSource: String?
-    var schemaVersion: String?
 
     enum CodingKeys: String, CodingKey {
         case recognitionLevel = "recognition_level"
         case items, warnings
         case knowledgeKeys = "knowledge_keys"
-        case resultSource = "result_source"
-        case schemaVersion = "schema_version"
     }
 }
 
@@ -86,124 +91,85 @@ protocol ItemRecognitionProviding {
     func recognizeItem(_ input: RecognitionInput) async throws -> CosmeticsRecognitionResult
 }
 
-private struct RecognitionScopeDTO: Encodable {
-    let allowedCategories: [String]
-    let maxItems: Int
-
-    enum CodingKeys: String, CodingKey {
-        case allowedCategories = "allowed_categories"
-        case maxItems = "max_items"
-    }
-}
-
-private struct CreateItemRecognitionJobRequest: Encodable {
-    let requestId: String
-    let assetId: String
-    let recognitionScope: RecognitionScopeDTO
-
-    enum CodingKeys: String, CodingKey {
-        case requestId = "request_id"
-        case assetId = "asset_id"
-        case recognitionScope = "recognition_scope"
-    }
-}
-
-final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
-    private let client: APIClient
-    private let mediaRepository: MediaAssetRepositoryProtocol
+final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
+    private let service: VisionJobService
     private let jobs: AIJobRepository
     private let poller: JobPoller
-    private let persistence: DemoVisionRepository
+    private let persistence: VisionJobPersistence
 
     init(
         client: APIClient,
-        mediaRepository: MediaAssetRepositoryProtocol? = nil,
         poller: JobPoller = JobPoller(),
-        persistence: DemoVisionRepository = DemoVisionRepository()
+        persistence: VisionJobPersistence = VisionJobPersistence()
     ) {
-        self.client = client
-        self.mediaRepository = mediaRepository ?? MediaAssetRepository(client: client)
-        self.jobs = AIJobRepository(client: client)
+        service = VisionJobService(client: client)
+        jobs = AIJobRepository(client: client)
         self.poller = poller
         self.persistence = persistence
     }
 
     func recognizeItem(_ input: RecognitionInput) async throws -> CosmeticsRecognitionResult {
-        let prepared = try PreparedVisionImage(image: input.image, fileName: "item.jpg")
-        let capability = "item_recognition"
-        var pending = try persistence.pendingJob(accountID: input.userID, capability: capability)
-        if let existing = pending,
-           existing.inputSHA256 != prepared.sha256,
-           existing.jobID == nil {
-            try persistence.removePendingJob(accountID: input.userID, capability: capability)
-            pending = nil
-        }
-
+        let capability = VisionCapability.itemRecognition
+        let pending = try persistence.pendingJob(accountID: input.userID, capability: capability)
         let requestID = pending?.requestID ?? "req_item_\(UUID().uuidString.lowercased())"
         let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
+
         if pending == nil {
-            pending = VisionPendingJob(
+            try persistence.savePendingJob(VisionPendingJob(
                 accountID: input.userID,
                 capability: capability,
                 requestID: requestID,
                 idempotencyKey: idempotencyKey,
                 jobID: nil,
-                assetID: nil,
-                inputSHA256: prepared.sha256,
-                status: "preparing",
+                status: "submitting",
                 serverRequestID: nil,
                 location: nil,
                 retryAfterSeconds: nil
-            )
-            try persistence.savePendingJob(pending!)
+            ))
         }
 
         do {
-            let dto = try await execute(
-                prepared: prepared,
-                requestID: requestID,
-                idempotencyKey: idempotencyKey,
-                existingAssetID: pending?.assetID,
-                existingJobID: pending?.jobID,
-                onAsset: { [persistence] assetID, metadata in
-                    try persistence.savePendingJob(VisionPendingJob(
-                        accountID: input.userID,
-                        capability: capability,
-                        requestID: requestID,
-                        idempotencyKey: idempotencyKey,
-                        jobID: nil,
-                        assetID: assetID,
-                        inputSHA256: prepared.sha256,
-                        status: "uploaded",
-                        serverRequestID: metadata.serverRequestID,
-                        location: metadata.location,
-                        retryAfterSeconds: metadata.retryAfterSeconds
-                    ))
-                },
-                onJob: { [persistence] jobID, assetID, metadata in
-                    try persistence.savePendingJob(VisionPendingJob(
-                        accountID: input.userID,
-                        capability: capability,
-                        requestID: requestID,
-                        idempotencyKey: idempotencyKey,
-                        jobID: jobID,
-                        assetID: assetID,
-                        inputSHA256: prepared.sha256,
-                        status: "queued",
-                        serverRequestID: metadata.serverRequestID,
-                        location: metadata.location,
-                        retryAfterSeconds: metadata.retryAfterSeconds
-                    ))
-                },
-                onResponse: { [persistence] metadata, jobID, assetID in
+            var jobID = pending?.jobID
+            if jobID == nil {
+                let options = VisionJobOptions.itemRecognition(ItemRecognitionJobOptions(
+                    allowedCategories: ["makeup_brush", "eyeliner", "eyeshadow_palette"],
+                    maxItems: 3
+                ))
+                let response = try await service.create(
+                    input: input.visionInput,
+                    capability: capability,
+                    options: options,
+                    requestID: requestID,
+                    idempotencyKey: idempotencyKey
+                )
+                guard response.value.capability == capability else {
+                    throw VisionAPIError.resultInvalid
+                }
+                jobID = response.value.jobId
+                try persistence.savePendingJob(VisionPendingJob(
+                    accountID: input.userID,
+                    capability: capability,
+                    requestID: requestID,
+                    idempotencyKey: idempotencyKey,
+                    jobID: response.value.jobId,
+                    status: response.value.status.rawValue,
+                    serverRequestID: response.metadata.serverRequestID,
+                    location: response.metadata.location,
+                    retryAfterSeconds: response.metadata.retryAfterSeconds
+                ))
+            }
+            guard let jobID else { throw VisionAPIError.jobNotFound }
+
+            let dto: ItemRecognitionResultDTO = try await poller.poll(
+                jobID: jobID,
+                fetch: { [jobs] in try await jobs.job(id: $0) },
+                onResponse: { [persistence] metadata in
                     try? persistence.savePendingJob(VisionPendingJob(
                         accountID: input.userID,
                         capability: capability,
                         requestID: requestID,
                         idempotencyKey: idempotencyKey,
                         jobID: jobID,
-                        assetID: assetID,
-                        inputSHA256: prepared.sha256,
                         status: "polling",
                         serverRequestID: metadata.serverRequestID,
                         location: metadata.location,
@@ -212,72 +178,20 @@ final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
                 }
             )
             try persistence.removePendingJob(accountID: input.userID, capability: capability)
-            return try Self.map(dto: dto, previewImage: input.image, source: "remote_provider")
+            return try Self.map(dto: dto, previewImage: input.image)
         } catch let error as VisionAPIError {
-            if error == .providerUnavailable || error == .cancelled {
+            if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
+                .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
+                .unsupportedMediaType].contains(error) {
                 try? persistence.removePendingJob(accountID: input.userID, capability: capability)
             }
             throw error
         }
     }
 
-    func execute(
-        prepared: PreparedVisionImage,
-        requestID: String,
-        idempotencyKey: String,
-        existingAssetID: String?,
-        existingJobID: String?,
-        onAsset: @escaping (String, APIResponseMetadata) throws -> Void,
-        onJob: @escaping (String, String, APIResponseMetadata) throws -> Void,
-        onResponse: @escaping (APIResponseMetadata, String, String) -> Void
-    ) async throws -> ItemRecognitionResultDTO {
-        var assetID = existingAssetID
-        if assetID == nil {
-            let asset = try await mediaRepository.upload(
-                prepared,
-                requestID: requestID,
-                idempotencyKey: idempotencyKey
-            ) { _ in }
-            assetID = asset.asset.assetId
-            try onAsset(asset.asset.assetId, asset.metadata)
-        }
-        guard let assetID else { throw VisionAPIError.uploadFailed }
-
-        var jobID = existingJobID
-        if jobID == nil {
-            let response: APIResponse<AIJobTicketDTO> = try await client.sendFlexibleResponse(
-                path: APIEndpoint.itemRecognitionJobs,
-                body: CreateItemRecognitionJobRequest(
-                    requestId: requestID,
-                    assetId: assetID,
-                    recognitionScope: RecognitionScopeDTO(
-                        allowedCategories: ["eyeshadow_palette", "eyeliner", "makeup_brush"],
-                        maxItems: 3
-                    )
-                ),
-                idempotencyKey: idempotencyKey
-            )
-            let ticket = response.value
-            let responseMetadata = APIResponseMetadata(
-                serverRequestID: response.metadata.serverRequestID ?? ticket.requestId,
-                location: response.metadata.location,
-                retryAfterSeconds: response.metadata.retryAfterSeconds
-            )
-            jobID = ticket.jobId
-            try onJob(ticket.jobId, assetID, responseMetadata)
-        }
-        guard let jobID else { throw VisionAPIError.jobNotFound }
-        return try await poller.poll(
-            jobID: jobID,
-            fetch: { [jobs] in try await jobs.job(id: $0) },
-            onResponse: { onResponse($0, jobID, assetID) }
-        )
-    }
-
     static func map(
         dto: ItemRecognitionResultDTO,
-        previewImage: UIImage,
-        source: String
+        previewImage: UIImage
     ) throws -> CosmeticsRecognitionResult {
         guard let item = dto.items.first,
               let category = CosmeticCategory.from(raw: item.category) else {
@@ -307,207 +221,19 @@ final class RemoteItemRecognitionProvider: ItemRecognitionProviding {
             previewPath: storedPath,
             recognitionID: nil,
             needsConfirmation: item.needsConfirmation,
-            resultSource: source
+            resultSource: "vision_job"
         )
     }
-}
-
-final class DemoItemRecognitionProvider: ItemRecognitionProviding {
-    private let context: SessionContext
-    private let persistence: DemoVisionRepository
-
-    init(context: SessionContext, persistence: DemoVisionRepository = DemoVisionRepository()) {
-        self.context = context
-        self.persistence = persistence
-    }
-
-    func recognizeItem(_ input: RecognitionInput) async throws -> CosmeticsRecognitionResult {
-        let candidateKeys = [
-            "demo_eyeshadow_palette_01",
-            "demo_eyeliner_01",
-            "demo_makeup_brush_01"
-        ]
-        var matchedAsset: DemoAssetRecord?
-        for key in candidateKeys {
-            guard let asset = try persistence.asset(key: key),
-                  let cachedImage = UIImage(named: asset.localResourceName) else { continue }
-            if DemoImageMatcher.isSameImage(input.image, cachedImage) {
-                matchedAsset = asset
-                break
-            }
-        }
-
-        guard let asset = matchedAsset else {
-            VisionLog.pipeline.info("Demo item cache miss; routing selected image to remote recognition job")
-            do {
-                let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
-                return try await RemoteItemRecognitionProvider(client: client).recognizeItem(input)
-            } catch {
-                throw normalizedVisionError(error)
-            }
-        }
-        let image = input.image
-        VisionLog.pipeline.info("Demo item image matched asset=\(asset.key, privacy: .public)")
-
-        if let cached = try persistence.result(
-            accountID: context.userId,
-            capability: "item_recognition",
-            asset: asset
-        ) {
-            VisionLog.pipeline.info(
-                "Demo recognition cache hit asset=\(asset.key, privacy: .public) source=\(cached.source, privacy: .public)"
-            )
-            let dto = try decode(cached.json)
-            return try RemoteItemRecognitionProvider.map(dto: dto, previewImage: image, source: cached.source)
-        }
-
-        if let attempt = try persistence.attempt(
-            accountID: context.userId,
-            capability: "item_recognition",
-            asset: asset
-        ) {
-            if ["failed", "timed_out", "cancelled"].contains(attempt.status) {
-                return try fallback(asset: asset, image: image)
-            }
-            return try await resumeOrFallback(attempt: attempt, asset: asset, image: image)
-        }
-
-        guard context.features.allowLiveRecognitionSeed else {
-            return try fallback(asset: asset, image: image)
-        }
-
-        let requestID = "req_demo_item_\(UUID().uuidString.lowercased())"
-        let idempotencyKey = "idem_\(UUID().uuidString.lowercased())"
-        let attempt = try persistence.beginAttempt(
-            accountID: context.userId,
-            capability: "item_recognition",
-            asset: asset,
-            requestID: requestID,
-            idempotencyKey: idempotencyKey
-        )
-        return try await resumeOrFallback(attempt: attempt, asset: asset, image: image)
-    }
-
-    private func resumeOrFallback(
-        attempt: DemoRecognitionAttempt,
-        asset: DemoAssetRecord,
-        image: UIImage
-    ) async throws -> CosmeticsRecognitionResult {
-        do {
-            let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
-            let remote = RemoteItemRecognitionProvider(client: client, persistence: persistence)
-            let prepared = try PreparedVisionImage(image: image, fileName: "\(asset.key).jpg")
-            let dto = try await remote.execute(
-                prepared: prepared,
-                requestID: attempt.requestID,
-                idempotencyKey: attempt.idempotencyKey,
-                existingAssetID: asset.remoteAssetID,
-                existingJobID: attempt.jobID,
-                onAsset: { [persistence] assetID, metadata in
-                    try persistence.updateRemoteAssetID(assetID, assetKey: asset.key)
-                    try persistence.markAttempt(
-                        id: attempt.id,
-                        status: "uploaded",
-                        metadata: metadata
-                    )
-                },
-                onJob: { [persistence] jobID, _, metadata in
-                    // 任务创建后立即落盘；App 中断后只恢复该 job_id。
-                    try persistence.markAttempt(
-                        id: attempt.id,
-                        status: "queued",
-                        jobID: jobID,
-                        metadata: metadata
-                    )
-                },
-                onResponse: { [persistence] metadata, _, _ in
-                    try? persistence.markAttempt(
-                        id: attempt.id,
-                        status: "running",
-                        metadata: metadata
-                    )
-                }
-            )
-            var cachedDTO = dto
-            cachedDTO.resultSource = "demo_qwen_cache"
-            cachedDTO.schemaVersion = DemoVisionRepository.schemaVersion
-            let json = String(decoding: try JSONEncoder.visionEncoder.encode(cachedDTO), as: UTF8.self)
-            try persistence.saveResult(
-                accountID: context.userId,
-                capability: "item_recognition",
-                asset: asset,
-                source: "demo_qwen_cache",
-                json: json,
-                providerName: "qwen",
-                modelID: DemoVisionRepository.modelVersion
-            )
-            try persistence.markAttempt(id: attempt.id, status: "succeeded")
-            return try RemoteItemRecognitionProvider.map(
-                dto: cachedDTO,
-                previewImage: image,
-                source: "demo_qwen_cache"
-            )
-        } catch {
-            let status = (error as? VisionAPIError) == .jobTimedOut ? "timed_out" : "failed"
-            let errorCode = stableVisionErrorCode(error)
-            try? persistence.markAttempt(
-                id: attempt.id,
-                status: status,
-                errorCode: errorCode
-            )
-            VisionLog.pipeline.error(
-                "Demo recognition fallback asset=\(asset.key, privacy: .public) code=\(errorCode, privacy: .public)"
-            )
-            return try fallback(asset: asset, image: image)
-        }
-    }
-
-    private func fallback(asset: DemoAssetRecord, image: UIImage) throws -> CosmeticsRecognitionResult {
-        let dataAssetName: String
-        switch asset.key {
-        case "demo_eyeliner_01": dataAssetName = "DemoEyelinerSeed"
-        case "demo_makeup_brush_01": dataAssetName = "DemoMakeupBrushSeed"
-        default: dataAssetName = "DemoEyeshadowSeed"
-        }
-        guard let data = NSDataAsset(name: dataAssetName)?.data else {
-            throw VisionAPIError.resultInvalid
-        }
-        var dto = try JSONDecoder().decode(ItemRecognitionResultDTO.self, from: data)
-        dto.resultSource = "demo_fallback"
-        dto.schemaVersion = DemoVisionRepository.schemaVersion
-        if !dto.warnings.contains("当前展示预置演示结果") {
-            dto.warnings.append("当前展示预置演示结果")
-        }
-        let json = String(decoding: try JSONEncoder.visionEncoder.encode(dto), as: UTF8.self)
-        try persistence.saveResult(
-            accountID: context.userId,
-            capability: "item_recognition",
-            asset: asset,
-            source: "demo_fallback",
-            json: json
-        )
-        return try RemoteItemRecognitionProvider.map(dto: dto, previewImage: image, source: "demo_fallback")
-    }
-
-    private func decode(_ json: String) throws -> ItemRecognitionResultDTO {
-        guard let data = json.data(using: .utf8) else { throw VisionAPIError.resultInvalid }
-        return try JSONDecoder().decode(ItemRecognitionResultDTO.self, from: data)
-    }
-
 }
 
 final class AccountAwareItemRecognitionProvider: ItemRecognitionProviding {
     func recognizeItem(_ input: RecognitionInput) async throws -> CosmeticsRecognitionResult {
-        let context = await MainActor.run { SessionManager.shared.context }
-        guard let context else { throw VisionAPIError.unauthorized }
-        if context.accountMode == .demo, context.features.useDemoAssets {
-            VisionLog.pipeline.info("Item recognition route=demo")
-            return try await DemoItemRecognitionProvider(context: context).recognizeItem(input)
+        guard await MainActor.run(body: { SessionManager.shared.context != nil }) else {
+            throw VisionAPIError.unauthorized
         }
-        VisionLog.pipeline.info("Item recognition route=standard")
         do {
             let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
-            return try await RemoteItemRecognitionProvider(client: client).recognizeItem(input)
+            return try await UnifiedItemRecognitionProvider(client: client).recognizeItem(input)
         } catch {
             throw normalizedVisionError(error)
         }
@@ -521,11 +247,13 @@ final class AccountAwareCosmeticsRecognitionService: CosmeticsRecognitionServici
         self.provider = provider
     }
 
-    func recognize(image: UIImage, categoryHint: String?) async throws -> CosmeticsRecognitionResult {
+    func recognize(input: VisionImageInput, categoryHint: String?) async throws -> CosmeticsRecognitionResult {
         let userID = await MainActor.run { SessionManager.shared.context?.userId }
         guard let userID else { throw VisionAPIError.unauthorized }
         return try await provider.recognizeItem(RecognitionInput(
-            image: image,
+            image: input.image,
+            originalData: input.originalData,
+            contentType: input.contentType,
             userID: userID,
             categoryHint: categoryHint.flatMap(CosmeticCategory.from(raw:))
         ))

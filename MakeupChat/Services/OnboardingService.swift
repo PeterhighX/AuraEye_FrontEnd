@@ -94,9 +94,13 @@ final class OnboardingService {
     }
 
     func completeFaceScan(image: UIImage) async throws -> [OnboardingStep] {
+        try await completeFaceScan(input: VisionImageInput(image: image))
+    }
+
+    func completeFaceScan(input: VisionImageInput) async throws -> [OnboardingStep] {
         let user = try userRepository.currentUser()
         let analysis = try await faceAnalysisService.analyze(
-            image: image,
+            input: input,
             userId: user.userId
         )
 
@@ -118,8 +122,12 @@ final class OnboardingService {
     }
 
     func recognizeCosmetics(image: UIImage) async throws -> CosmeticsRecognitionResult {
+        try await recognizeCosmetics(input: VisionImageInput(image: image))
+    }
+
+    func recognizeCosmetics(input: VisionImageInput) async throws -> CosmeticsRecognitionResult {
         let result = try await recognitionService.recognize(
-            image: image,
+            input: input,
             categoryHint: nil
         )
         guard result.hasRequiredProductInformation else {

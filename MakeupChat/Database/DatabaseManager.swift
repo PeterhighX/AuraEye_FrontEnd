@@ -54,6 +54,7 @@ final class DatabaseManager {
         ensureColumn("preview_path", definition: "TEXT", in: "cosmetics", database: db)
         ensureColumn("scanned_at", definition: "REAL", in: "cosmetics", database: db)
         applyVisionAPIV11Migration(database: db)
+        applyUnifiedVisionJobMigration(database: db)
         MediaPathMigrator.migrateIfNeeded(in: db)
     }
 
@@ -68,11 +69,7 @@ final class DatabaseManager {
             ("vision_pending_jobs", "idempotency_key", "TEXT"),
             ("vision_pending_jobs", "server_request_id", "TEXT"),
             ("vision_pending_jobs", "location", "TEXT"),
-            ("vision_pending_jobs", "retry_after", "INTEGER"),
-            ("demo_recognition_attempts", "idempotency_key", "TEXT"),
-            ("demo_recognition_attempts", "server_request_id", "TEXT"),
-            ("demo_recognition_attempts", "location", "TEXT"),
-            ("demo_recognition_attempts", "retry_after", "INTEGER")
+            ("vision_pending_jobs", "retry_after", "INTEGER")
         ]
         for (table, column, definition) in columns {
             ensureColumn(column, definition: definition, in: table, database: database)
@@ -80,9 +77,7 @@ final class DatabaseManager {
 
         let statements = [
             "UPDATE vision_pending_jobs SET idempotency_key = request_id WHERE idempotency_key IS NULL;",
-            "UPDATE demo_recognition_attempts SET idempotency_key = request_id WHERE idempotency_key IS NULL;",
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_vision_pending_idempotency ON vision_pending_jobs(account_id, capability, idempotency_key) WHERE idempotency_key IS NOT NULL;",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_attempt_idempotency ON demo_recognition_attempts(account_id, capability, idempotency_key) WHERE idempotency_key IS NOT NULL;",
             "PRAGMA user_version = 2;"
         ]
         guard statements.allSatisfy({ execute($0, in: database) }) else {
@@ -90,6 +85,53 @@ final class DatabaseManager {
             return
         }
         _ = execute("COMMIT;", in: database)
+    }
+
+    /// v1.2 统一视觉任务只持久化恢复 Job 所需字段，同时移除旧 demo 结果缓存表。
+    private func applyUnifiedVisionJobMigration(database: OpaquePointer) {
+        let currentVersion = scalarInt(database, sql: "PRAGMA user_version;") ?? 0
+        guard currentVersion < 3 else { return }
+        let statements = [
+            "BEGIN IMMEDIATE;",
+            """
+            CREATE TABLE vision_pending_jobs_v3 (
+                account_id TEXT NOT NULL,
+                capability TEXT NOT NULL,
+                request_id TEXT NOT NULL,
+                idempotency_key TEXT,
+                job_id TEXT,
+                status TEXT NOT NULL,
+                server_request_id TEXT,
+                location TEXT,
+                retry_after INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(account_id, capability)
+            );
+            """,
+            """
+            INSERT INTO vision_pending_jobs_v3 (
+                account_id, capability, request_id, idempotency_key, job_id, status,
+                server_request_id, location, retry_after, created_at, updated_at
+            ) SELECT account_id, capability, request_id, idempotency_key, job_id, status,
+                     server_request_id, location, retry_after, created_at, updated_at
+              FROM vision_pending_jobs;
+            """,
+            "DROP TABLE vision_pending_jobs;",
+            "ALTER TABLE vision_pending_jobs_v3 RENAME TO vision_pending_jobs;",
+            "CREATE UNIQUE INDEX idx_vision_pending_idempotency ON vision_pending_jobs(account_id, capability, idempotency_key) WHERE idempotency_key IS NOT NULL;",
+            "DROP TABLE IF EXISTS demo_recognition_attempts;",
+            "DROP TABLE IF EXISTS demo_results;",
+            "DROP TABLE IF EXISTS demo_assets;",
+            "PRAGMA user_version = 3;",
+            "COMMIT;"
+        ]
+        for statement in statements {
+            guard execute(statement, in: database) else {
+                _ = execute("ROLLBACK;", in: database)
+                return
+            }
+        }
     }
 
     /// SQLite 不支持所有版本通用的 `ADD COLUMN IF NOT EXISTS`，先读取表结构再迁移。
@@ -132,7 +174,6 @@ final class DatabaseManager {
 
     private func seedIfNeeded() {
         guard let db else { return }
-        DemoDataSeeder.seedIfNeeded(into: db)
         let count = scalarInt(db, sql: "SELECT COUNT(*) FROM users;") ?? 0
         guard count == 0 else { return }
 

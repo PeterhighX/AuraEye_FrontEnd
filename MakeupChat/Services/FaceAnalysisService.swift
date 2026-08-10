@@ -6,7 +6,13 @@ import CoreImage
 /// 面部分析接口边界。
 /// 后续接入面部分析大模型时，实现此协议并注入 ViewModel 即可。
 protocol FaceAnalysisServicing {
-    func analyze(image: UIImage, userId: String) async throws -> FaceAnalysisResult
+    func analyze(input: VisionImageInput, userId: String) async throws -> FaceAnalysisResult
+}
+
+extension FaceAnalysisServicing {
+    func analyze(image: UIImage, userId: String) async throws -> FaceAnalysisResult {
+        try await analyze(input: VisionImageInput(image: image), userId: userId)
+    }
 }
 
 struct FaceAnalysisResult {
@@ -68,7 +74,8 @@ final class LocalFaceAnalysisService: FaceAnalysisServicing {
         self.avatarService = avatarService
     }
 
-    func analyze(image: UIImage, userId: String) async throws -> FaceAnalysisResult {
+    func analyze(input: VisionImageInput, userId: String) async throws -> FaceAnalysisResult {
+        let image = input.image
         // 上传内容按人物肖像直接处理，不做人脸存在性判断，也不拦截建档。
         let portrait = Self.personCutout(from: image)
         try await Task.sleep(for: .seconds(2.4))

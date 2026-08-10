@@ -21,6 +21,10 @@ final class UserProfileSetupViewModel {
     }
 
     func analyze(_ image: UIImage, session: AppSession) async -> Bool {
+        await analyze(VisionImageInput(image: image), session: session)
+    }
+
+    func analyze(_ input: VisionImageInput, session: AppSession) async -> Bool {
         guard !isAnalyzing else { return false }
         isAnalyzing = true
         analysisState = .preparingImage
@@ -32,7 +36,7 @@ final class UserProfileSetupViewModel {
             var user = try userRepository.currentUser()
             analysisState = .processing(stage: "visual_profile")
             let result = try await analysisService.analyze(
-                image: image,
+                input: input,
                 userId: user.userId
             )
 
@@ -60,5 +64,10 @@ final class UserProfileSetupViewModel {
     func clearError() {
         errorMessage = nil
         if case .failed = analysisState { analysisState = .idle }
+    }
+
+    func reportInputError(_ error: VisionAPIError) {
+        analysisState = .failed(error)
+        errorMessage = error.localizedDescription
     }
 }

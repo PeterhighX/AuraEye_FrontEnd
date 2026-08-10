@@ -1,8 +1,66 @@
 import Foundation
 
 struct LoginRequest: Encodable, Sendable {
-    let account: String
+    let username: String
     let password: String
+    let requestId: String
+
+    init(
+        username: String,
+        password: String,
+        requestID: String = Self.makeRequestID()
+    ) {
+        self.username = username
+        self.password = password
+        self.requestId = requestID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case username, password
+        case requestId = "request_id"
+    }
+
+    static func makeRequestID() -> String {
+        "req_login_\(UUID().uuidString.lowercased())"
+    }
+}
+
+struct RefreshTokenRequest: Encodable, Sendable {
+    let refreshToken: String
+    let requestId: String
+
+    init(refreshToken: String, requestID: String = LoginRequest.makeRequestID()) {
+        self.refreshToken = refreshToken
+        self.requestId = requestID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case refreshToken = "refresh_token"
+        case requestId = "request_id"
+    }
+}
+
+struct LogoutRequest: Encodable, Sendable {
+    let refreshToken: String?
+    let requestId: String
+
+    init(refreshToken: String?, requestID: String = LoginRequest.makeRequestID()) {
+        self.refreshToken = refreshToken
+        self.requestId = requestID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case refreshToken = "refresh_token"
+        case requestId = "request_id"
+    }
+}
+
+struct LogoutResponseDTO: Decodable, Sendable {
+    let loggedOut: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case loggedOut = "logged_out"
+    }
 }
 
 enum AccountMode: String, Codable, Sendable {
@@ -10,23 +68,32 @@ enum AccountMode: String, Codable, Sendable {
     case demo
 }
 
+enum GalleryMode: String, Codable, Sendable {
+    case fixedDemo = "fixed_demo"
+    case authorizedLibrary = "authorized_library"
+}
+
 struct AccountFeatures: Codable, Equatable, Sendable {
+    let galleryMode: GalleryMode
     let useDemoAssets: Bool
     let allowLiveRecognitionSeed: Bool
 
     enum CodingKeys: String, CodingKey {
+        case galleryMode = "gallery_mode"
         case useDemoAssets = "use_demo_assets"
         case allowLiveRecognitionSeed = "allow_live_recognition_seed"
     }
 
     static let standard = AccountFeatures(
+        galleryMode: .authorizedLibrary,
         useDemoAssets: false,
         allowLiveRecognitionSeed: false
     )
 
     static let demo = AccountFeatures(
+        galleryMode: .fixedDemo,
         useDemoAssets: true,
-        allowLiveRecognitionSeed: true
+        allowLiveRecognitionSeed: false
     )
 }
 
@@ -94,16 +161,14 @@ struct AuthenticatedAccount: Codable, Equatable, Sendable {
             userId = try user.decode(String.self, forKey: .id)
             username = try user.decode(String.self, forKey: .username)
             displayName = try user.decodeIfPresent(String.self, forKey: .displayName) ?? username
-            accountMode = try user.decodeIfPresent(AccountMode.self, forKey: .accountMode)
-                ?? Self.temporaryMode(username: username)
+            accountMode = try user.decodeIfPresent(AccountMode.self, forKey: .accountMode) ?? .standard
         } else {
             userId = try container.decode(String.self, forKey: .userId)
             username = try container.decodeIfPresent(String.self, forKey: .username)
                 ?? container.decodeIfPresent(String.self, forKey: .displayName)
                 ?? userId
             displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? username
-            accountMode = try container.decodeIfPresent(AccountMode.self, forKey: .accountMode)
-                ?? Self.temporaryMode(username: username)
+            accountMode = try container.decodeIfPresent(AccountMode.self, forKey: .accountMode) ?? .standard
         }
         features = decodedFeatures ?? (accountMode == .demo ? .demo : .standard)
     }
@@ -120,34 +185,53 @@ struct AuthenticatedAccount: Codable, Equatable, Sendable {
         try container.encode(features, forKey: .features)
     }
 
-    private static func temporaryMode(username: String) -> AccountMode {
-        username.caseInsensitiveCompare(LocalInternalAuthenticationService.testAccount) == .orderedSame
-            ? .demo
-            : .standard
+    func applyingServerFeatures(_ features: AccountFeatures) -> AuthenticatedAccount {
+        AuthenticatedAccount(
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresAt: expiresAt,
+            accountMode: accountMode,
+            features: features
+        )
     }
+
+}
+
+struct AuthMeFeatureDTO: Decodable, Sendable {
+    let features: AccountFeatures
 }
 
 protocol AuthenticationServicing {
     func login(account: String, password: String) async throws -> AuthenticatedAccount
 }
 
+@MainActor
 enum AuthenticationServiceFactory {
-    /// 配置了 API_BASE_URL 时使用后端登录；纯前端演示构建才回退到本地测试账号。
+    /// 普通 Debug、联调和 Release 都只使用显式配置的远端认证。
     static func makeDefault(bundle: Bundle = .main) -> any AuthenticationServicing {
-        guard let configuration = try? APIConfiguration.fromBundle(bundle) else {
-#if DEBUG
-            return LocalInternalAuthenticationService()
+#if AURAEYE_ENABLE_LOCAL_AUTH_STUB
+        return LocalInternalAuthenticationService()
 #else
-            return UnavailableAuthenticationService()
-#endif
+        do {
+            let configuration = try APIEnvironment.shared.load(bundle: bundle)
+            return RemoteAuthenticationService(client: APIClient(configuration: configuration))
+        } catch let error as APIConfigurationError {
+            return UnavailableAuthenticationService(error: error)
+        } catch {
+            return UnavailableAuthenticationService(error: .configurationInvalid("unknown"))
         }
-        return RemoteAuthenticationService(client: APIClient(configuration: configuration))
+#endif
     }
 }
 
 private struct UnavailableAuthenticationService: AuthenticationServicing {
+    let error: APIConfigurationError
+
     func login(account: String, password: String) async throws -> AuthenticatedAccount {
-        throw APIClientError.missingBaseURL
+        throw error
     }
 }
 
@@ -165,11 +249,10 @@ enum AuthenticationError: LocalizedError {
     }
 }
 
-/// 后端登录接口启用前的本地账号验证服务。
-/// 正式构建应注入 `RemoteAuthenticationService`。
+/// 仅供显式启用 `AURAEYE_ENABLE_LOCAL_AUTH_STUB` 的独立本地 Scheme 使用。
 struct LocalInternalAuthenticationService: AuthenticationServicing {
     static let testAccount = "aurayetest"
-    static let testPassword = "AuraAye2026"
+    static let testPassword = "AuraEye2026"
 
     func login(account: String, password: String) async throws -> AuthenticatedAccount {
         let normalizedAccount = account.trimmingCharacters(in: .whitespacesAndNewlines)

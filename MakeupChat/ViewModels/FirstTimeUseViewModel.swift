@@ -110,25 +110,30 @@ final class FirstTimeUseViewModel {
     }
 
     func handleCameraCapture(_ image: UIImage) {
+        Task {
+            await handleSelectedInput(VisionImageInput(image: image))
+        }
+    }
+
+    func handleSelectedInput(_ input: VisionImageInput) async {
         recognitionErrorMessage = nil
         recognitionErrorTitle = "未识别到化妆品"
         isProcessing = true
         hasStartedProgress = true
         preparationProgress = max(preparationProgress, 0.08)
         processingStage = cameraTarget == .face ? .profile : .cosmetics
-        Task {
-            defer {
-                isProcessing = false
-                processingStage = .none
-            }
-            do {
+        defer {
+            isProcessing = false
+            processingStage = .none
+        }
+        do {
                 switch cameraTarget {
                 case .face:
                     statusText = "建立用户档案中……"
                     profileAnalysisProgress = 0
                     await animateProfileProgress(to: 0.78, duration: 0.65)
                     try await Task.sleep(for: .milliseconds(650))
-                    steps = completeThreeStepSet(from: try await service.completeFaceScan(image: image))
+                    steps = completeThreeStepSet(from: try await service.completeFaceScan(input: input))
                     session.markFaceScanned(imagePath: steps.first(where: { $0.stepKey == .userProfile })?.previewPath ?? "")
                     await animateProfileProgress(to: 1, duration: 0.42)
                     statusText = "用户档案已创建完成"
@@ -145,17 +150,24 @@ final class FirstTimeUseViewModel {
                 case .cosmetics:
                     statusText = "扫描化妆品，建立化妆品库中……"
                     await animateProgress(to: 0.72, duration: 0.55)
-                    pendingProduct = try await service.recognizeCosmetics(image: image)
+                    pendingProduct = try await service.recognizeCosmetics(input: input)
                     preparationProgress = max(preparationProgress, 0.72)
                     statusText = "已识别化妆品，请确认添加"
                 }
                 updateStatusText()
-            } catch {
+        } catch {
                 preparationProgress = session.hasCompletedOnboardingCosmeticsStep
                     ? 1
                     : (session.hasScannedFace ? 0.5 : 0)
 
-                if cameraTarget == .cosmetics,
+                if let visionError = error as? VisionAPIError {
+                    recognitionErrorTitle = cameraTarget == .face
+                        ? "用户档案创建失败"
+                        : "未识别到化妆品"
+                    recognitionErrorMessage = visionError.localizedDescription
+                    statusText = visionError.localizedDescription
+                    if cameraTarget == .face { profileAnalysisProgress = 0 }
+                } else if cameraTarget == .cosmetics,
                    error is CosmeticsRecognitionError {
                     recognitionErrorTitle = "未识别到化妆品"
                     recognitionErrorMessage = error.localizedDescription
@@ -176,8 +188,14 @@ final class FirstTimeUseViewModel {
                         statusText = "用户档案创建失败，请重试"
                     }
                 }
-            }
         }
+    }
+
+    func reportInputError(_ error: VisionAPIError) {
+        recognitionErrorTitle = cameraTarget == .face ? "用户档案创建失败" : "未识别到化妆品"
+        recognitionErrorMessage = error.localizedDescription
+        processingStage = .none
+        isProcessing = false
     }
 
     func clearRecognitionError() {
