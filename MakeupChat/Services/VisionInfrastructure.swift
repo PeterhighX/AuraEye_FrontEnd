@@ -160,6 +160,21 @@ enum VisionCapability: String, Codable, Sendable {
     case faceAnalysis = "face_analysis"
     case itemRecognition = "item_recognition"
     case makeupRender = "makeup_render"
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case Self.faceAnalysis.rawValue, "visual_profile": self = .faceAnalysis
+        case Self.itemRecognition.rawValue: self = .itemRecognition
+        case Self.makeupRender.rawValue: self = .makeupRender
+        default: throw VisionAPIError.resultInvalid
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 struct FaceAnalysisJobOptions: Encodable, Sendable {

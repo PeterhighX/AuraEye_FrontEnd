@@ -22,7 +22,9 @@ struct RecognitionColorDTO: Codable, Equatable, Sendable {
     let proportion: Double?
 
     private enum CodingKeys: String, CodingKey {
-        case hex, proportion
+        case hex
+        case hexEstimate = "hex_estimate"
+        case proportion
     }
 
     init(from decoder: Decoder) throws {
@@ -33,7 +35,8 @@ struct RecognitionColorDTO: Codable, Equatable, Sendable {
             return
         }
         let object = try decoder.container(keyedBy: CodingKeys.self)
-        hex = try object.decode(String.self, forKey: .hex)
+        hex = try object.decodeIfPresent(String.self, forKey: .hex)
+            ?? object.decode(String.self, forKey: .hexEstimate)
         proportion = try object.decodeIfPresent(Double.self, forKey: .proportion)
     }
 
@@ -44,11 +47,17 @@ struct RecognitionColorDTO: Codable, Equatable, Sendable {
     }
 }
 
+private struct RecognitionColorsDTO: Decodable {
+    let primary: RecognitionColorDTO?
+    let secondary: [RecognitionColorDTO]
+}
+
 struct RecognizedItemDTO: Codable, Equatable, Sendable {
     let itemIndex: Int
     let category: String
     let categoryLabelZH: String
     let categoryConfidence: Double?
+    let categoryConfidenceLevel: String?
     let boundingBox: [Int]?
     let brandText: String?
     let productNameText: String?
@@ -71,6 +80,52 @@ struct RecognizedItemDTO: Codable, Equatable, Sendable {
         case colors
         case needsConfirmation = "needs_confirmation"
         case knowledgeKeys = "knowledge_keys"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        itemIndex = try container.decode(Int.self, forKey: .itemIndex)
+        category = try container.decode(String.self, forKey: .category)
+        categoryLabelZH = try container.decode(String.self, forKey: .categoryLabelZH)
+        // API v1.2 currently returns qualitative values such as "high" here,
+        // while older responses used a numeric score. Preserve either form.
+        categoryConfidence = try? container.decode(Double.self, forKey: .categoryConfidence)
+        categoryConfidenceLevel = categoryConfidence == nil
+            ? try container.decodeIfPresent(String.self, forKey: .categoryConfidence)
+            : nil
+        boundingBox = try container.decodeIfPresent([Int].self, forKey: .boundingBox)
+        brandText = try container.decodeIfPresent(String.self, forKey: .brandText)
+        productNameText = try container.decodeIfPresent(String.self, forKey: .productNameText)
+        shadeText = try container.decodeIfPresent(String.self, forKey: .shadeText)
+        visibleTexts = try container.decode([String].self, forKey: .visibleTexts)
+        if let legacyColors = try? container.decode([RecognitionColorDTO].self, forKey: .colors) {
+            colors = legacyColors
+        } else {
+            let value = try container.decode(RecognitionColorsDTO.self, forKey: .colors)
+            colors = [value.primary].compactMap { $0 } + value.secondary
+        }
+        needsConfirmation = try container.decode(Bool.self, forKey: .needsConfirmation)
+        knowledgeKeys = try container.decode([String].self, forKey: .knowledgeKeys)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(itemIndex, forKey: .itemIndex)
+        try container.encode(category, forKey: .category)
+        try container.encode(categoryLabelZH, forKey: .categoryLabelZH)
+        if let categoryConfidence {
+            try container.encode(categoryConfidence, forKey: .categoryConfidence)
+        } else {
+            try container.encodeIfPresent(categoryConfidenceLevel, forKey: .categoryConfidence)
+        }
+        try container.encodeIfPresent(boundingBox, forKey: .boundingBox)
+        try container.encodeIfPresent(brandText, forKey: .brandText)
+        try container.encodeIfPresent(productNameText, forKey: .productNameText)
+        try container.encodeIfPresent(shadeText, forKey: .shadeText)
+        try container.encode(visibleTexts, forKey: .visibleTexts)
+        try container.encode(colors, forKey: .colors)
+        try container.encode(needsConfirmation, forKey: .needsConfirmation)
+        try container.encode(knowledgeKeys, forKey: .knowledgeKeys)
     }
 }
 

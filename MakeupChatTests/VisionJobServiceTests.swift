@@ -221,6 +221,40 @@ final class VisionJobServiceTests: XCTestCase {
         XCTAssertEqual(response.value.result?.narrative?.styleRecommendation, "style")
     }
 
+    func testVisualProfileJobTypeMapsToFaceAnalysisCapability() throws {
+        let ticket = try JSONDecoder().decode(
+            VisionJobTicketDTO.self,
+            from: Data(#"{"job_id":"job-face","job_type":"visual_profile","status":"queued"}"#.utf8)
+        )
+
+        XCTAssertEqual(ticket.capability, .faceAnalysis)
+    }
+
+    func testItemRecognitionDecodesFrozenColorShapeForAllDemoCategories() throws {
+        let result = try JSONDecoder().decode(
+            ItemRecognitionResultDTO.self,
+            from: Data(#"""
+            {
+                "recognition_level":"L2",
+                "items":[
+                    {"item_index":0,"category":"makeup_brush","category_label_zh":"化妆刷","category_confidence":"high","bbox_0_999":[0,0,999,999],"brand_text":null,"product_name_text":"Brush","shade_text":null,"visible_texts":[],"colors":{"applicable":false,"primary":null,"secondary":[],"note":"not applicable","source":null},"needs_confirmation":true,"knowledge_keys":[]},
+                    {"item_index":1,"category":"eyeliner","category_label_zh":"眼线","category_confidence":"high","bbox_0_999":[0,0,999,999],"brand_text":"Brand","product_name_text":"Liner","shade_text":"Black","visible_texts":[],"colors":{"applicable":true,"primary":{"family":"black","name_zh":"黑色","hex_estimate":"#111111","confidence_level":"high"},"secondary":[],"note":"","source":"model"},"needs_confirmation":true,"knowledge_keys":[]},
+                    {"item_index":2,"category":"eyeshadow_palette","category_label_zh":"眼影盘","category_confidence":"high","bbox_0_999":[0,0,999,999],"brand_text":"Brand","product_name_text":"Palette","shade_text":"Brown","visible_texts":[],"colors":{"applicable":true,"primary":{"family":"brown","name_zh":"棕色","hex_estimate":"#8A5A4A","confidence_level":"high"},"secondary":[{"family":"beige","name_zh":"米色","hex_estimate":"#C89A86","confidence_level":"medium"}],"note":"","source":"model"},"needs_confirmation":true,"knowledge_keys":[]}
+                ],
+                "warnings":[],
+                "knowledge_keys":[]
+            }
+            """#.utf8)
+        )
+
+        XCTAssertEqual(result.items.map(\.category), ["makeup_brush", "eyeliner", "eyeshadow_palette"])
+        XCTAssertEqual(result.items[0].colors, [])
+        XCTAssertEqual(result.items[1].colors.map(\.hex), ["#111111"])
+        XCTAssertEqual(result.items[2].colors.map(\.hex), ["#8A5A4A", "#C89A86"])
+        XCTAssertNil(result.items[0].categoryConfidence)
+        XCTAssertEqual(result.items[0].categoryConfidenceLevel, "high")
+    }
+
     func testResultImageDownloadsThroughAuthenticatedAPIClient() async throws {
         let png = Data([0x89, 0x50, 0x4E, 0x47])
         VisionURLProtocolStub.handler = { request in
@@ -288,6 +322,58 @@ final class VisionJobServiceTests: XCTestCase {
         )
         XCTAssertNotNil(result.narrative?.overall)
         XCTAssertNotNil(result.narrative?.eyeDetails)
+    }
+
+    func testLiveItemRecognitionContractsWhenExplicitlyEnabled() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["AURAEYE_RUN_LIVE_CONTRACT"] == "1" else {
+            throw XCTSkip("Live API contract test is opt-in.")
+        }
+        let password = try XCTUnwrap(environment["AURAEYE_LIVE_PASSWORD"])
+        let baseURL = try XCTUnwrap(URL(string: "https://api-dev.peterhigh.xyz/v1"))
+        let anonymousClient = APIClient(configuration: APIConfiguration(
+            baseURL: baseURL,
+            accessToken: nil,
+            timeout: 45
+        ))
+        let account = try await RemoteAuthenticationService(client: anonymousClient).login(
+            account: "aurayetest",
+            password: password
+        )
+        let client = await anonymousClient.authenticated(with: account.accessToken)
+        let fixtures = [
+            ("demo_tool_brush_set_001", "makeup_brush"),
+            ("demo_cosmetic_eyeliner_001", "eyeliner"),
+            ("demo_cosmetic_eyeshadow_palette_001", "eyeshadow_palette")
+        ]
+
+        for (resource, expectedCategory) in fixtures {
+            let fixtureURL = try XCTUnwrap(Bundle.main.url(
+                forResource: resource,
+                withExtension: "jpg",
+                subdirectory: "DemoFixtures"
+            ))
+            let input = try VisionImageInput(
+                photoData: Data(contentsOf: fixtureURL, options: [.mappedIfSafe]),
+                contentType: "image/jpeg"
+            )
+            let response = try await VisionJobService(client: client).create(
+                input: input,
+                capability: .itemRecognition,
+                options: .itemRecognition(.init()),
+                requestID: "req_live_item_\(UUID().uuidString.lowercased())",
+                idempotencyKey: "idem_live_item_\(UUID().uuidString.lowercased())"
+            )
+            XCTAssertEqual(response.value.capability, .itemRecognition)
+
+            let result: ItemRecognitionResultDTO = try await JobPoller().poll(
+                jobID: response.value.jobId,
+                fetch: { jobID in
+                    try await AIJobRepository(client: client).job(id: jobID)
+                }
+            )
+            XCTAssertEqual(result.items.first?.category, expectedCategory)
+        }
     }
 
     private func makeClient() -> APIClient {
