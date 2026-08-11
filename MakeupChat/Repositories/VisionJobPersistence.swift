@@ -11,9 +11,63 @@ struct VisionPendingJob: Sendable {
     let serverRequestID: String?
     let location: String?
     let retryAfterSeconds: Int?
+    let updatedAt: Date?
+
+    init(
+        accountID: String,
+        capability: VisionCapability,
+        requestID: String,
+        idempotencyKey: String,
+        jobID: String?,
+        status: String,
+        serverRequestID: String?,
+        location: String?,
+        retryAfterSeconds: Int?,
+        updatedAt: Date? = Date()
+    ) {
+        self.accountID = accountID
+        self.capability = capability
+        self.requestID = requestID
+        self.idempotencyKey = idempotencyKey
+        self.jobID = jobID
+        self.status = status
+        self.serverRequestID = serverRequestID
+        self.location = location
+        self.retryAfterSeconds = retryAfterSeconds
+        self.updatedAt = updatedAt
+    }
 }
 
-final class VisionJobPersistence {
+protocol VisionJobPersisting {
+    func pendingJob(accountID: String, capability: VisionCapability) throws -> VisionPendingJob?
+    func savePendingJob(_ job: VisionPendingJob) throws
+    func removePendingJob(accountID: String, capability: VisionCapability) throws
+}
+
+extension VisionJobPersisting {
+    func resumableJob(
+        accountID: String,
+        capability: VisionCapability,
+        now: Date = Date()
+    ) throws -> VisionPendingJob? {
+        guard let job = try pendingJob(accountID: accountID, capability: capability) else {
+            return nil
+        }
+
+        let resumableStatuses = ["submitting", "queued", "running", "polling"]
+        let age = job.updatedAt.map { now.timeIntervalSince($0) }
+        guard resumableStatuses.contains(job.status.lowercased()),
+              let age,
+              age >= 0,
+              age <= 10 * 60 else {
+            try removePendingJob(accountID: accountID, capability: capability)
+            return nil
+        }
+        return job
+    }
+}
+
+final class VisionJobPersistence: VisionJobPersisting {
     private let db: DatabaseManager
 
     init(db: DatabaseManager = .shared) {
@@ -24,7 +78,7 @@ final class VisionJobPersistence {
         try db.perform { database in
             let sql = """
             SELECT account_id, capability, request_id, idempotency_key, job_id, status,
-                   server_request_id, location, retry_after
+                   server_request_id, location, retry_after, updated_at
             FROM vision_pending_jobs WHERE account_id = ? AND capability = ? LIMIT 1;
             """
             var statement: OpaquePointer?
@@ -47,7 +101,10 @@ final class VisionJobPersistence {
                 status: text(statement, 5) ?? "",
                 serverRequestID: text(statement, 6),
                 location: text(statement, 7),
-                retryAfterSeconds: optionalInt(statement, 8)
+                retryAfterSeconds: optionalInt(statement, 8),
+                updatedAt: text(statement, 9).flatMap {
+                    ISO8601DateFormatter().date(from: $0)
+                }
             )
         }
     }
@@ -74,7 +131,7 @@ final class VisionJobPersistence {
             guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
                 throw DatabaseError.prepareFailed
             }
-            let timestamp = ISO8601DateFormatter().string(from: Date())
+            let timestamp = ISO8601DateFormatter().string(from: job.updatedAt ?? Date())
             let values: [String?] = [
                 job.accountID,
                 job.capability.rawValue,

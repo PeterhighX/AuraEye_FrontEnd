@@ -43,10 +43,18 @@ final class FirstTimeUseViewModel {
 
     private let service: OnboardingService
     private let session: AppSession
+    private let completeFaceScan: @MainActor (VisionImageInput) async throws -> [OnboardingStep]
 
-    init(service: OnboardingService = OnboardingService(), session: AppSession) {
+    init(
+        service: OnboardingService = OnboardingService(),
+        session: AppSession,
+        completeFaceScan: (@MainActor (VisionImageInput) async throws -> [OnboardingStep])? = nil
+    ) {
         self.service = service
         self.session = session
+        self.completeFaceScan = completeFaceScan ?? { input in
+            try await service.completeFaceScan(input: input)
+        }
     }
 
     func reload() {
@@ -116,6 +124,7 @@ final class FirstTimeUseViewModel {
     }
 
     func handleSelectedInput(_ input: VisionImageInput) async {
+        guard !isProcessing else { return }
         recognitionErrorMessage = nil
         recognitionErrorTitle = "未识别到化妆品"
         isProcessing = true
@@ -133,7 +142,7 @@ final class FirstTimeUseViewModel {
                     profileAnalysisProgress = 0
                     await animateProfileProgress(to: 0.78, duration: 0.65)
                     try await Task.sleep(for: .milliseconds(650))
-                    steps = completeThreeStepSet(from: try await service.completeFaceScan(input: input))
+                    steps = completeThreeStepSet(from: try await completeFaceScan(input))
                     session.markFaceScanned(imagePath: steps.first(where: { $0.stepKey == .userProfile })?.previewPath ?? "")
                     await animateProfileProgress(to: 1, duration: 0.42)
                     statusText = "用户档案已创建完成"
@@ -155,6 +164,18 @@ final class FirstTimeUseViewModel {
                     statusText = "已识别化妆品，请确认添加"
                 }
                 updateStatusText()
+        } catch is CancellationError {
+                isProcessing = false
+                processingStage = .none
+                profileAnalysisProgress = 0
+                recognitionErrorMessage = nil
+                return
+        } catch where isExplicitVisionCancellation(error) {
+                isProcessing = false
+                processingStage = .none
+                profileAnalysisProgress = 0
+                recognitionErrorMessage = nil
+                return
         } catch {
                 preparationProgress = session.hasCompletedOnboardingCosmeticsStep
                     ? 1

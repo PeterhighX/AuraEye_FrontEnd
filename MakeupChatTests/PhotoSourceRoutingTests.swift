@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import MakeupChat
 
@@ -38,5 +39,43 @@ final class PhotoSourceRoutingTests: XCTestCase {
 
         XCTAssertTrue(PhotoSourceFactory.make(features: fixed) is DemoBundlePhotoSource)
         XCTAssertTrue(PhotoSourceFactory.make(features: authorized) is AuthorizedPhotoKitSource)
+    }
+
+    @MainActor
+    func testConfirmedGallerySelectionSurvivesDismissOnDisappearCancellation() async throws {
+        let image = try XCTUnwrap(UIImage(systemName: "person.crop.circle"))
+        let input = VisionImageInput(image: image)
+        var selectionTask: Task<Void, Never>?
+        var selectionCallCount = 0
+        var wasCancelledDuringSelection = false
+        var selectionCompleted = false
+
+        let task = Task {
+            await completeConfirmedGallerySelection(
+                input: input,
+                releaseSelectionTask: { selectionTask = nil },
+                dismiss: {
+                    // 模拟 dismiss 后 SwiftUI 立即触发 onDisappear。
+                    selectionTask?.cancel()
+                },
+                onSelection: { _ in
+                    selectionCallCount += 1
+                    wasCancelledDuringSelection = Task.isCancelled
+                    do {
+                        try await Task.sleep(for: .milliseconds(20))
+                        selectionCompleted = true
+                    } catch {
+                        wasCancelledDuringSelection = true
+                    }
+                }
+            )
+        }
+        selectionTask = task
+        await task.value
+
+        XCTAssertEqual(selectionCallCount, 1)
+        XCTAssertTrue(selectionCompleted)
+        XCTAssertFalse(wasCancelledDuringSelection)
+        XCTAssertNil(selectionTask)
     }
 }

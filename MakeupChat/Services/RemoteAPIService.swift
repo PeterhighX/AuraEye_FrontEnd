@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 // MARK: - Shared HTTP client
 
@@ -272,17 +273,26 @@ enum APIClientError: LocalizedError {
 
 actor APIClient {
     private static let authorizationRefreshCoordinator = AuthorizationRefreshCoordinator()
+    private static let transportLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.makeup.chat",
+        category: "APITransport"
+    )
     private let configuration: APIConfiguration
     private let session: URLSession
+    private let dataLoader: @Sendable (URLRequest) async throws -> (Data, URLResponse)
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     init(
         configuration: APIConfiguration,
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        dataLoader: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil
     ) {
         self.configuration = configuration
         self.session = session
+        self.dataLoader = dataLoader ?? { request in
+            try await session.data(for: request)
+        }
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -300,7 +310,8 @@ actor APIClient {
                 accessToken: accessToken,
                 timeout: configuration.timeout
             ),
-            session: session
+            session: session,
+            dataLoader: dataLoader
         )
     }
 
@@ -389,7 +400,9 @@ actor APIClient {
     ) async throws -> APIBinaryResponse {
         do {
             return try await downloadResponseOnce(request: request, expectedContentType: expectedContentType)
-        } catch let error as APIClientError where permitsAuthorizationRefresh && error.statusCode == 401 {
+        } catch let error as APIClientError where permitsAuthorizationRefresh
+            && error.statusCode == 401
+            && request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true {
             let retry = try await requestWithRefreshedAuthorization(from: request)
             return try await downloadResponse(
                 request: retry,
@@ -405,13 +418,7 @@ actor APIClient {
     ) async throws -> APIBinaryResponse {
         var request = initialRequest
         request.setValue(expectedContentType, forHTTPHeaderField: "Accept")
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch is URLError {
-            throw APIClientError.networkUnavailable
-        }
+        let (data, response) = try await loadData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
@@ -471,7 +478,9 @@ actor APIClient {
     ) async throws -> APIResponse<Response> {
         do {
             return try await performOnce(request, expectedStatusCode: expectedStatusCode)
-        } catch let error as APIClientError where permitsAuthorizationRefresh && error.statusCode == 401 {
+        } catch let error as APIClientError where permitsAuthorizationRefresh
+            && error.statusCode == 401
+            && request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true {
             let retry = try await requestWithRefreshedAuthorization(from: request)
             return try await perform(
                 retry,
@@ -485,13 +494,7 @@ actor APIClient {
         _ request: URLRequest,
         expectedStatusCode: Int?
     ) async throws -> APIResponse<Response> {
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch is URLError {
-            throw APIClientError.networkUnavailable
-        }
+        let (data, response) = try await loadData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
@@ -561,13 +564,7 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(RefreshTokenRequest(refreshToken: refreshToken))
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch is URLError {
-            throw APIClientError.networkUnavailable
-        }
+        let (data, response) = try await loadData(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
@@ -579,6 +576,28 @@ actor APIClient {
             )
         }
         return envelope.data
+    }
+
+    private func loadData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let endpoint = request.url?.path ?? "unknown"
+        do {
+            return try await dataLoader(request)
+        } catch is CancellationError {
+            Self.transportLogger.debug(
+                "API transport cancelled stage=load endpoint=\(endpoint, privacy: .public) code=swift_cancellation task_cancelled=\(Task.isCancelled, privacy: .public)"
+            )
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            Self.transportLogger.debug(
+                "API transport cancelled stage=load endpoint=\(endpoint, privacy: .public) code=\(error.code.rawValue, privacy: .public) task_cancelled=\(Task.isCancelled, privacy: .public)"
+            )
+            throw CancellationError()
+        } catch let error as URLError {
+            Self.transportLogger.error(
+                "API transport failed stage=load endpoint=\(endpoint, privacy: .public) code=\(error.code.rawValue, privacy: .public) task_cancelled=\(Task.isCancelled, privacy: .public)"
+            )
+            throw APIClientError.networkUnavailable
+        }
     }
 
     private func validate(

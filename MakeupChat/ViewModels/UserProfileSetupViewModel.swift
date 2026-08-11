@@ -48,6 +48,14 @@ final class UserProfileSetupViewModel {
             session.markFaceScanned(imagePath: result.portraitPath)
             analysisState = .succeeded(result)
             return true
+        } catch is CancellationError {
+            analysisState = .idle
+            errorMessage = nil
+            return false
+        } catch where isExplicitVisionCancellation(error) {
+            analysisState = .idle
+            errorMessage = nil
+            return false
         } catch let failure as VisionRequestFailure {
             analysisState = .failed(failure.visionError)
             errorMessage = visionFailureMessage(failure, fallbackStage: fallbackFailureStage)

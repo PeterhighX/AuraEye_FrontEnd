@@ -63,12 +63,12 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
     private let service: VisionJobService
     private let jobs: AIJobRepository
     private let poller: JobPoller
-    private let persistence: VisionJobPersistence
+    private let persistence: any VisionJobPersisting
 
     init(
         client: APIClient,
         poller: JobPoller = JobPoller(),
-        persistence: VisionJobPersistence = VisionJobPersistence()
+        persistence: any VisionJobPersisting = VisionJobPersistence()
     ) {
         service = VisionJobService(client: client)
         jobs = AIJobRepository(client: client)
@@ -78,7 +78,7 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
 
     func analyzePortrait(_ input: PortraitInput) async throws -> VisualProfileResult {
         let capability = VisionCapability.faceAnalysis
-        let pending = try persistence.pendingJob(accountID: input.userID, capability: capability)
+        let pending = try persistence.resumableJob(accountID: input.userID, capability: capability)
         let requestID = pending?.requestID ?? "req_profile_\(UUID().uuidString.lowercased())"
         let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
 
@@ -158,20 +158,33 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
             }
             return VisualProfileResult(dto: dto, portraitPath: portraitPath)
         } catch let failure as VisionRequestFailure {
-            if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
-                .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
-                .unsupportedMediaType].contains(failure.visionError) {
+            if Self.shouldClearPendingJob(after: failure.visionError) {
                 try? persistence.removePendingJob(accountID: input.userID, capability: capability)
             }
             throw failure
         } catch let error as VisionAPIError {
-            if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
-                .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
-                .unsupportedMediaType].contains(error) {
+            if Self.shouldClearPendingJob(after: error) {
                 try? persistence.removePendingJob(accountID: input.userID, capability: capability)
             }
             throw error
         }
+    }
+
+    static func shouldClearPendingJob(after error: VisionAPIError) -> Bool {
+        [
+            .jobNotFound,
+            .providerUnavailable,
+            .cancelled,
+            .jobTimedOut,
+            .resultInvalid,
+            .invalidImage,
+            .unauthorized,
+            .demoFixtureNotRecognized,
+            .demoFixtureMismatch,
+            .demoCacheNotReady,
+            .payloadTooLarge,
+            .unsupportedMediaType
+        ].contains(error)
     }
 
     private static func fileExtension(for contentType: String) -> String {
@@ -191,6 +204,8 @@ final class AccountAwareVisualProfileProvider: VisualProfileProviding {
         do {
             let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
             return try await UnifiedVisualProfileProvider(client: client).analyzePortrait(input)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             let failure = VisionRequestFailure.capturing(error, stage: .processingResult)
             _ = visionFailureMessage(failure, fallbackStage: .processingResult)

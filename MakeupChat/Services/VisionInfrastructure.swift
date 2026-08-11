@@ -162,6 +162,7 @@ func stableVisionErrorCode(_ error: Error) -> String {
         case .configurationInvalid: return "configuration_invalid"
         }
     }
+    if let error = error as? URLError, error.code == .cancelled { return "cancelled" }
     if error is URLError { return "network_unavailable" }
     return "unknown"
 }
@@ -179,8 +180,17 @@ func normalizedVisionError(_ error: Error) -> VisionAPIError {
     if let error = error as? APIClientError {
         return mappedVisionError(error)
     }
+    if let error = error as? URLError, error.code == .cancelled { return .cancelled }
     if error is URLError { return .networkUnavailable }
     return .providerUnavailable
+}
+
+func isExplicitVisionCancellation(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    if let error = error as? URLError, error.code == .cancelled { return true }
+    if let failure = error as? VisionRequestFailure { return failure.visionError == .cancelled }
+    if let error = error as? VisionAPIError { return error == .cancelled }
+    return false
 }
 
 enum VisionAPIError: LocalizedError, Equatable, Sendable {

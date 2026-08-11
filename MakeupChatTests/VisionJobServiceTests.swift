@@ -321,6 +321,251 @@ final class VisionJobServiceTests: XCTestCase {
         XCTAssertFalse(message.contains("请求编号："))
     }
 
+    func testResumableJobDeletesStaleMissingTimestampAndTerminalRecords() throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let invalidJobs = [
+            Self.makePendingJob(status: "polling", updatedAt: now.addingTimeInterval(-11 * 60)),
+            Self.makePendingJob(status: "polling", updatedAt: nil),
+            Self.makePendingJob(status: "succeeded", updatedAt: now),
+            Self.makePendingJob(status: "failed", updatedAt: now),
+            Self.makePendingJob(status: "timed_out", updatedAt: now),
+            Self.makePendingJob(status: "cancelled", updatedAt: now)
+        ]
+
+        for invalidJob in invalidJobs {
+            let persistence = InMemoryVisionJobPersistence(job: invalidJob)
+            XCTAssertNil(try persistence.resumableJob(
+                accountID: invalidJob.accountID,
+                capability: invalidJob.capability,
+                now: now
+            ))
+            XCTAssertEqual(persistence.removeCount, 1)
+            XCTAssertNil(persistence.job)
+        }
+    }
+
+    func testRecentInProgressJobRemainsResumableAfterTemporaryNetworkFailure() throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        for status in ["submitting", "queued", "running", "polling"] {
+            let job = Self.makePendingJob(status: status, updatedAt: now.addingTimeInterval(-9 * 60))
+            let persistence = InMemoryVisionJobPersistence(job: job)
+
+            let resumed = try persistence.resumableJob(
+                accountID: job.accountID,
+                capability: job.capability,
+                now: now
+            )
+
+            XCTAssertEqual(resumed?.requestID, job.requestID)
+            XCTAssertEqual(persistence.removeCount, 0)
+        }
+    }
+
+    func testStaleAndTerminalRecordsCreateFreshPosts() async throws {
+        let now = Date()
+        let invalidJobs = [
+            Self.makePendingJob(status: "polling", updatedAt: now.addingTimeInterval(-11 * 60)),
+            Self.makePendingJob(status: "failed", updatedAt: now),
+            Self.makePendingJob(status: "timed_out", updatedAt: now),
+            Self.makePendingJob(status: "cancelled", updatedAt: now)
+        ]
+
+        for invalidJob in invalidJobs {
+            VisionURLProtocolStub.requests = []
+            let persistence = InMemoryVisionJobPersistence(job: invalidJob)
+            VisionURLProtocolStub.handler = { request in
+                let response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: request.httpMethod == "POST" ? 202 : 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                if request.httpMethod == "POST" {
+                    return (response, Data(#"{"request_id":"server-new","data":{"job_id":"new-job","job_type":"face_analysis","status":"queued"}}"#.utf8))
+                }
+                return (response, Self.successfulProfileJobData(jobID: "new-job"))
+            }
+
+            _ = try await makeVisualProfileProvider(persistence: persistence).analyzePortrait(
+                try makePortraitInput(userID: invalidJob.accountID)
+            )
+
+            let posts = VisionURLProtocolStub.requests.filter { $0.httpMethod == "POST" }
+            XCTAssertEqual(posts.count, 1, "status=\(invalidJob.status)")
+            XCTAssertNotEqual(
+                Self.multipartValue(named: "request_id", request: try XCTUnwrap(posts.first)),
+                invalidJob.requestID
+            )
+            XCTAssertNil(persistence.job)
+        }
+    }
+
+    func testFaceAnalysisPendingJobCleanupPolicyKeepsOnlyNetworkFailure() {
+        let errorsThatMustClear: [VisionAPIError] = [
+            .jobNotFound, .providerUnavailable, .cancelled, .jobTimedOut,
+            .resultInvalid, .invalidImage, .unauthorized,
+            .demoFixtureNotRecognized, .demoFixtureMismatch, .demoCacheNotReady,
+            .payloadTooLarge, .unsupportedMediaType
+        ]
+        for error in errorsThatMustClear {
+            XCTAssertTrue(UnifiedVisualProfileProvider.shouldClearPendingJob(after: error))
+        }
+        XCTAssertFalse(UnifiedVisualProfileProvider.shouldClearPendingJob(after: .networkUnavailable))
+    }
+
+    func testPolling404ClearsRecordAndNextScanCreatesNewJob() async throws {
+        let originalJob = Self.makePendingJob(status: "polling", updatedAt: Date())
+        let persistence = InMemoryVisionJobPersistence(job: originalJob)
+        let input = try makePortraitInput(userID: originalJob.accountID)
+
+        VisionURLProtocolStub.handler = { request in
+            let response: HTTPURLResponse
+            if request.url?.path == "/v1/vision/jobs/old-job" {
+                response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 404,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/problem+json"]
+                )!
+                return (response, Data(#"{"title":"Not Found","status":404,"code":"JOB_NOT_FOUND","request_id":"server-old"}"#.utf8))
+            }
+            throw URLError(.badURL)
+        }
+
+        do {
+            _ = try await makeVisualProfileProvider(persistence: persistence).analyzePortrait(input)
+            XCTFail("A missing persisted job must fail the current attempt.")
+        } catch let failure as VisionRequestFailure {
+            XCTAssertEqual(failure.visionError, .jobNotFound)
+        }
+        XCTAssertNil(persistence.job)
+        XCTAssertEqual(persistence.removeCount, 1)
+
+        VisionURLProtocolStub.handler = { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: request.httpMethod == "POST" ? 202 : 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            if request.httpMethod == "POST" {
+                return (response, Data(#"{"request_id":"server-new","data":{"job_id":"new-job","job_type":"face_analysis","status":"queued"}}"#.utf8))
+            }
+            return (response, Self.successfulProfileJobData(jobID: "new-job"))
+        }
+
+        _ = try await makeVisualProfileProvider(persistence: persistence).analyzePortrait(input)
+        let requests = VisionURLProtocolStub.requests
+        XCTAssertEqual(requests.filter { $0.httpMethod == "POST" }.count, 1)
+        let post = try XCTUnwrap(requests.first { $0.httpMethod == "POST" })
+        XCTAssertNotEqual(Self.multipartValue(named: "request_id", request: post), originalJob.requestID)
+        XCTAssertNil(persistence.job)
+    }
+
+    func testRecentJobIsRetainedWhenPollingHasTemporaryNetworkFailure() async throws {
+        let job = Self.makePendingJob(status: "polling", updatedAt: Date())
+        let persistence = InMemoryVisionJobPersistence(job: job)
+        VisionURLProtocolStub.handler = { _ in throw URLError(.notConnectedToInternet) }
+
+        do {
+            _ = try await makeVisualProfileProvider(persistence: persistence).analyzePortrait(
+                try makePortraitInput(userID: job.accountID)
+            )
+            XCTFail("Network failure must be surfaced.")
+        } catch let failure as VisionRequestFailure {
+            XCTAssertEqual(failure.visionError, .networkUnavailable)
+        }
+
+        XCTAssertEqual(persistence.job?.jobID, "old-job")
+        XCTAssertEqual(persistence.removeCount, 0)
+        XCTAssertEqual(VisionURLProtocolStub.requests.filter { $0.httpMethod == "POST" }.count, 0)
+    }
+
+    @MainActor
+    func testQuickStartIgnoresConcurrentImageCallbacksAndAllowsLaterRetry() async throws {
+        let spy = FirstTimeFaceScanSpy(delay: .milliseconds(80))
+        let viewModel = FirstTimeUseViewModel(
+            session: AppSession(),
+            completeFaceScan: spy.complete
+        )
+        let input = try makeVisionImageInput()
+
+        let first = Task { await viewModel.handleSelectedInput(input) }
+        while !viewModel.isProcessing { await Task.yield() }
+        await viewModel.handleSelectedInput(input)
+        await first.value
+
+        XCTAssertEqual(spy.callCount, 1)
+        XCTAssertFalse(viewModel.isProcessing)
+
+        await viewModel.handleSelectedInput(input)
+        XCTAssertEqual(spy.callCount, 2)
+        XCTAssertFalse(viewModel.isProcessing)
+    }
+
+    @MainActor
+    func testQuickStartRestoresProcessingStateAfterFailure() async throws {
+        let spy = FirstTimeFaceScanSpy(failuresRemaining: 1)
+        let viewModel = FirstTimeUseViewModel(
+            session: AppSession(),
+            completeFaceScan: spy.complete
+        )
+        let input = try makeVisionImageInput()
+
+        await viewModel.handleSelectedInput(input)
+        XCTAssertEqual(spy.callCount, 1)
+        XCTAssertFalse(viewModel.isProcessing)
+
+        await viewModel.handleSelectedInput(input)
+        XCTAssertEqual(spy.callCount, 2)
+        XCTAssertFalse(viewModel.isProcessing)
+    }
+
+    @MainActor
+    func testProfileSetupCancellationReturnsToIdleWithoutPopup() async throws {
+        let viewModel = UserProfileSetupViewModel(
+            analysisService: CancellingFaceAnalysisService()
+        )
+
+        let succeeded = await viewModel.analyze(
+            try makeVisionImageInput(),
+            session: AppSession()
+        )
+
+        XCTAssertFalse(succeeded)
+        XCTAssertFalse(viewModel.isAnalyzing)
+        XCTAssertNil(viewModel.errorMessage)
+        guard case .idle = viewModel.analysisState else {
+            return XCTFail("Cancellation must restore the idle analysis state.")
+        }
+    }
+
+    @MainActor
+    func testQuickStartCancellationRestoresStateWithoutPopup() async throws {
+        let viewModel = FirstTimeUseViewModel(
+            session: AppSession(),
+            completeFaceScan: { _ in throw CancellationError() }
+        )
+
+        await viewModel.handleSelectedInput(try makeVisionImageInput())
+
+        XCTAssertFalse(viewModel.isProcessing)
+        XCTAssertEqual(viewModel.processingStage, .none)
+        XCTAssertEqual(viewModel.profileAnalysisProgress, 0)
+        XCTAssertNil(viewModel.recognitionErrorMessage)
+    }
+
+    func testExplicitCancellationClassifierCoversRawAndWrappedCancellation() {
+        XCTAssertTrue(isExplicitVisionCancellation(CancellationError()))
+        XCTAssertTrue(isExplicitVisionCancellation(URLError(.cancelled)))
+        XCTAssertTrue(isExplicitVisionCancellation(VisionAPIError.cancelled))
+        XCTAssertTrue(isExplicitVisionCancellation(VisionRequestFailure(
+            visionError: .cancelled,
+            stage: .pollingJob
+        )))
+        XCTAssertFalse(isExplicitVisionCancellation(VisionAPIError.networkUnavailable))
+    }
+
     func testLiveFaceAnalysisContractWhenExplicitlyEnabled() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard environment["AURAEYE_RUN_LIVE_CONTRACT"] == "1" else {
@@ -434,6 +679,50 @@ final class VisionJobServiceTests: XCTestCase {
         )
     }
 
+    private func makeVisualProfileProvider(
+        persistence: InMemoryVisionJobPersistence
+    ) -> UnifiedVisualProfileProvider {
+        UnifiedVisualProfileProvider(
+            client: makeClient(),
+            poller: JobPoller(maximumWait: 2, defaultPollMilliseconds: 1),
+            persistence: persistence
+        )
+    }
+
+    private func makePortraitInput(userID: String) throws -> PortraitInput {
+        let input = try makeVisionImageInput()
+        return PortraitInput(
+            image: input.image,
+            originalData: input.originalData,
+            contentType: input.contentType,
+            userID: userID
+        )
+    }
+
+    private func makeVisionImageInput() throws -> VisionImageInput {
+        let data = try XCTUnwrap(UIImage(systemName: "person.crop.circle")?.jpegData(compressionQuality: 1))
+        return try VisionImageInput(photoData: data, contentType: "image/jpeg")
+    }
+
+    private static func makePendingJob(status: String, updatedAt: Date?) -> VisionPendingJob {
+        VisionPendingJob(
+            accountID: "user-pending",
+            capability: .faceAnalysis,
+            requestID: "old-request",
+            idempotencyKey: "old-idempotency",
+            jobID: status == "submitting" ? nil : "old-job",
+            status: status,
+            serverRequestID: "server-old",
+            location: nil,
+            retryAfterSeconds: nil,
+            updatedAt: updatedAt
+        )
+    }
+
+    private static func successfulProfileJobData(jobID: String) -> Data {
+        Data(#"{"request_id":"server-success","data":{"job_id":"\#(jobID)","request_id":"client-success","status":"succeeded","progress":null,"result":{"profile_snapshot":{"face":{},"eyes":{},"brows":{},"skin":{},"provenance":[]},"narrative":null,"narrative_status":null,"warnings":[]},"error":null}}"#.utf8)
+    }
+
     static func multipartValue(named name: String, request: URLRequest) -> String? {
         guard let body = request.httpBody,
               let text = String(data: body, encoding: .isoLatin1),
@@ -441,5 +730,59 @@ final class VisionJobServiceTests: XCTestCase {
         let valueStart = fieldRange.upperBound
         guard let valueEnd = text[valueStart...].range(of: "\r\n")?.lowerBound else { return nil }
         return String(text[valueStart..<valueEnd])
+    }
+}
+
+private final class InMemoryVisionJobPersistence: VisionJobPersisting {
+    var job: VisionPendingJob?
+    private(set) var removeCount = 0
+
+    init(job: VisionPendingJob?) {
+        self.job = job
+    }
+
+    func pendingJob(accountID: String, capability: VisionCapability) throws -> VisionPendingJob? {
+        guard job?.accountID == accountID, job?.capability == capability else { return nil }
+        return job
+    }
+
+    func savePendingJob(_ job: VisionPendingJob) throws {
+        self.job = job
+    }
+
+    func removePendingJob(accountID: String, capability: VisionCapability) throws {
+        removeCount += 1
+        job = nil
+    }
+}
+
+private struct CancellingFaceAnalysisService: FaceAnalysisServicing {
+    func analyze(input: VisionImageInput, userId: String) async throws -> FaceAnalysisResult {
+        _ = input
+        _ = userId
+        throw CancellationError()
+    }
+}
+
+@MainActor
+private final class FirstTimeFaceScanSpy {
+    private(set) var callCount = 0
+    private var failuresRemaining: Int
+    private let delay: Duration
+
+    init(failuresRemaining: Int = 0, delay: Duration = .zero) {
+        self.failuresRemaining = failuresRemaining
+        self.delay = delay
+    }
+
+    func complete(_ input: VisionImageInput) async throws -> [OnboardingStep] {
+        _ = input
+        callCount += 1
+        if delay > .zero { try await Task.sleep(for: delay) }
+        if failuresRemaining > 0 {
+            failuresRemaining -= 1
+            throw VisionAPIError.providerUnavailable
+        }
+        return []
     }
 }

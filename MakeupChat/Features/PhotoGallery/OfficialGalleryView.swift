@@ -129,10 +129,28 @@ struct OfficialGalleryView: View {
         selectionTask?.cancel()
         selectionTask = Task {
             guard let input = await viewModel.loadSelectedPhoto(), !Task.isCancelled else { return }
-            dismiss()
-            await onSelection(input)
+            await completeConfirmedGallerySelection(
+                input: input,
+                releaseSelectionTask: { selectionTask = nil },
+                dismiss: { dismiss() },
+                onSelection: onSelection
+            )
         }
     }
+}
+
+/// 确认选图后先解除相册页面对任务的所有权，避免 dismiss 触发的
+/// onDisappear 取消已经进入业务提交阶段的同一个 Task。
+@MainActor
+func completeConfirmedGallerySelection(
+    input: VisionImageInput,
+    releaseSelectionTask: () -> Void,
+    dismiss: () -> Void,
+    onSelection: (VisionImageInput) async -> Void
+) async {
+    releaseSelectionTask()
+    dismiss()
+    await onSelection(input)
 }
 
 private struct GalleryPhotoCell: View {

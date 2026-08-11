@@ -367,6 +367,14 @@ struct UserProfileDetailView: View {
                 try userRepository.update(profile)
                 capturedPortrait = nil
                 user = profile
+            } catch is CancellationError {
+                isAnalyzing = false
+                analysisErrorMessage = nil
+                return
+            } catch where isExplicitVisionCancellation(error) {
+                isAnalyzing = false
+                analysisErrorMessage = nil
+                return
             } catch {
                 analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
             }
@@ -390,6 +398,14 @@ struct UserProfileDetailView: View {
             try userRepository.update(profile)
             capturedPortrait = nil
             user = profile
+        } catch is CancellationError {
+            isAnalyzing = false
+            analysisErrorMessage = nil
+            return
+        } catch where isExplicitVisionCancellation(error) {
+            isAnalyzing = false
+            analysisErrorMessage = nil
+            return
         } catch {
             analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
         }

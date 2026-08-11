@@ -249,6 +249,78 @@ final class AuthenticationServiceTests: XCTestCase {
         )
     }
 
+    func testTransportMapsURLCancellationToCancellationError() async throws {
+        let client = makeClient(dataLoader: { _ in throw URLError(.cancelled) })
+        do {
+            let _: APIResponse<JSONValue> = try await client.sendResponse(
+                path: APIEndpoint.healthLive,
+                expectedStatusCode: 200
+            )
+            XCTFail("URLError.cancelled must not become networkUnavailable.")
+        } catch is CancellationError {
+            // Expected.
+        }
+    }
+
+    func testTransportPreservesSwiftCancellationError() async throws {
+        let client = makeClient(dataLoader: { _ in throw CancellationError() })
+        do {
+            let _: APIResponse<JSONValue> = try await client.sendResponse(
+                path: APIEndpoint.healthLive,
+                expectedStatusCode: 200
+            )
+            XCTFail("CancellationError must pass through unchanged.")
+        } catch is CancellationError {
+            // Expected.
+        }
+    }
+
+    func testTransportMapsRealNetworkFailureToNetworkUnavailable() async throws {
+        let client = makeClient(dataLoader: { _ in throw URLError(.notConnectedToInternet) })
+        do {
+            let _: APIResponse<JSONValue> = try await client.sendResponse(
+                path: APIEndpoint.healthLive,
+                expectedStatusCode: 200
+            )
+            XCTFail("A real connection failure must become networkUnavailable.")
+        } catch let error as APIClientError {
+            guard case .networkUnavailable = error else {
+                return XCTFail("Unexpected APIClientError: \(error)")
+            }
+            XCTAssertNil(error.statusCode)
+            XCTAssertNil(error.diagnosticRequestID)
+        }
+    }
+
+    func testTransportRefactorPreservesHTTPStatusAndBackendCode() async throws {
+        for (status, code) in [(401, "UNAUTHORIZED"), (422, "INVALID_OPTIONS"), (404, "JOB_NOT_FOUND")] {
+            let client = makeClient(dataLoader: { request in
+                let response = HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: status,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/problem+json"]
+                )!
+                return (
+                    Data(#"{"title":"Request failed","status":\#(status),"code":"\#(code)","request_id":"safe-request"}"#.utf8),
+                    response
+                )
+            })
+
+            do {
+                let _: APIResponse<JSONValue> = try await client.sendResponse(
+                    path: APIEndpoint.healthLive,
+                    expectedStatusCode: 200
+                )
+                XCTFail("HTTP \(status) must fail.")
+            } catch let error as APIClientError {
+                XCTAssertEqual(error.statusCode, status)
+                XCTAssertEqual(error.problemCode, code)
+                XCTAssertEqual(error.diagnosticRequestID, "safe-request")
+            }
+        }
+    }
+
     @MainActor
     func testAuthenticatedRequestRefreshesOnceAfterUnauthorizedAndRetries() async throws {
         SessionManager.shared.establish(account: AuthenticatedAccount(
@@ -336,7 +408,9 @@ final class AuthenticationServiceTests: XCTestCase {
         XCTAssertEqual(visionBaseURL, configuration.baseURL)
     }
 
-    private func makeClient() -> APIClient {
+    private func makeClient(
+        dataLoader: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil
+    ) -> APIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [VisionURLProtocolStub.self]
         return APIClient(
@@ -345,7 +419,8 @@ final class AuthenticationServiceTests: XCTestCase {
                 accessToken: nil,
                 timeout: 5
             ),
-            session: URLSession(configuration: configuration)
+            session: URLSession(configuration: configuration),
+            dataLoader: dataLoader
         )
     }
 }
