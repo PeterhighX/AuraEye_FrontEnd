@@ -9,7 +9,121 @@ enum VisionLog {
     )
 }
 
+enum VisionRequestStage: String, Sendable {
+    case preparingImage = "准备图片"
+    case submittingJob = "提交分析任务"
+    case pollingJob = "查询分析任务"
+    case processingResult = "处理分析结果"
+    case savingProfile = "保存用户档案"
+}
+
+struct VisionRequestFailure: LocalizedError, Sendable {
+    let visionError: VisionAPIError
+    let stage: VisionRequestStage
+    let userMessage: String
+    let httpStatus: Int?
+    let serverCode: String?
+    let serverRequestID: String?
+
+    init(
+        visionError: VisionAPIError,
+        stage: VisionRequestStage,
+        userMessage: String? = nil,
+        httpStatus: Int? = nil,
+        serverCode: String? = nil,
+        serverRequestID: String? = nil
+    ) {
+        self.visionError = visionError
+        self.stage = stage
+        self.userMessage = userMessage ?? visionError.localizedDescription
+        self.httpStatus = httpStatus
+        self.serverCode = serverCode
+        self.serverRequestID = serverRequestID
+    }
+
+    static func capturing(_ error: Error, stage: VisionRequestStage) -> VisionRequestFailure {
+        if let failure = error as? VisionRequestFailure { return failure }
+        if let apiError = error as? APIClientError {
+            let mapped = mappedVisionError(apiError)
+            let message: String
+            switch apiError {
+            case .problem(let problem, _):
+                message = problem.detail ?? problem.title
+            case .httpStatus(_, let value, _, _):
+                message = value
+            default:
+                message = mapped.localizedDescription
+            }
+            return VisionRequestFailure(
+                visionError: mapped,
+                stage: stage,
+                userMessage: message,
+                httpStatus: apiError.statusCode,
+                serverCode: apiError.problemCode,
+                serverRequestID: apiError.diagnosticRequestID
+            )
+        }
+        let mapped = normalizedVisionError(error)
+        return VisionRequestFailure(
+            visionError: mapped,
+            stage: stage,
+            userMessage: error.localizedDescription
+        )
+    }
+
+    var diagnosticCode: String {
+        serverCode ?? stableVisionErrorCode(visionError)
+    }
+
+    var errorDescription: String? {
+        var lines = [userMessage, "阶段：\(stage.rawValue)"]
+        if let httpStatus { lines.append("HTTP 状态：\(httpStatus)") }
+        lines.append("错误码：\(diagnosticCode)")
+        if let serverRequestID, !serverRequestID.isEmpty {
+            lines.append("请求编号：\(serverRequestID)")
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
+@discardableResult
+func visionFailureMessage(
+    _ error: Error,
+    fallbackStage: VisionRequestStage
+) -> String {
+    let failure = VisionRequestFailure.capturing(error, stage: fallbackStage)
+    let status = failure.httpStatus.map(String.init) ?? "none"
+    let requestID = failure.serverRequestID ?? "none"
+    VisionLog.pipeline.error(
+        "Vision request failed stage=\(failure.stage.rawValue, privacy: .public) code=\(failure.diagnosticCode, privacy: .public) http=\(status, privacy: .public) request_id=\(requestID, privacy: .public)"
+    )
+    return failure.localizedDescription
+}
+
+func mappedVisionError(_ error: APIClientError) -> VisionAPIError {
+    switch error.problemCode?.uppercased() {
+    case "DEMO_FIXTURE_NOT_RECOGNIZED": return .demoFixtureNotRecognized
+    case "DEMO_FIXTURE_MISMATCH": return .demoFixtureMismatch
+    case "DEMO_CACHE_NOT_READY": return .demoCacheNotReady
+    case "DEMO_VARIANT_NOT_FOUND": return .demoVariantNotFound
+    case "PAYLOAD_TOO_LARGE": return .payloadTooLarge
+    case "UNSUPPORTED_MEDIA_TYPE": return .unsupportedMediaType
+    default: break
+    }
+    if error.statusCode == 401 { return .unauthorized }
+    if error.statusCode == 404 { return .jobNotFound }
+    if [413, 415, 422].contains(error.statusCode) { return .invalidImage }
+    if let status = error.statusCode, (200..<300).contains(status) { return .resultInvalid }
+    if error.statusCode != nil { return .serverError }
+    switch error {
+    case .networkUnavailable: return .networkUnavailable
+    case .invalidImage: return .invalidImage
+    case .invalidResponse, .invalidServerResponse, .problem, .httpStatus: return .resultInvalid
+    }
+}
+
 func stableVisionErrorCode(_ error: Error) -> String {
+    if let failure = error as? VisionRequestFailure { return failure.diagnosticCode }
     if let error = error as? VisionAPIError {
         switch error {
         case .configurationMissing: return "configuration_missing"
@@ -54,6 +168,7 @@ func stableVisionErrorCode(_ error: Error) -> String {
 
 func normalizedVisionError(_ error: Error) -> VisionAPIError {
     if error is CancellationError { return .cancelled }
+    if let failure = error as? VisionRequestFailure { return failure.visionError }
     if let error = error as? VisionAPIError { return error }
     if let error = error as? APIConfigurationError {
         switch error {
@@ -62,16 +177,7 @@ func normalizedVisionError(_ error: Error) -> VisionAPIError {
         }
     }
     if let error = error as? APIClientError {
-        if error.statusCode == 401 { return .unauthorized }
-        if error.statusCode == 404 { return .jobNotFound }
-        if [413, 415, 422].contains(error.statusCode) { return .invalidImage }
-        if let status = error.statusCode, (200..<300).contains(status) { return .resultInvalid }
-        if error.statusCode != nil { return .serverError }
-        switch error {
-        case .networkUnavailable: return .networkUnavailable
-        case .invalidImage: return .invalidImage
-        case .invalidResponse, .invalidServerResponse, .problem, .httpStatus: return .resultInvalid
-        }
+        return mappedVisionError(error)
     }
     if error is URLError { return .networkUnavailable }
     return .providerUnavailable
@@ -274,7 +380,12 @@ final class VisionJobService {
         requestID: String,
         idempotencyKey: String
     ) async throws -> APIResponse<VisionJobTicketDTO> {
-        let payload = try input.requestPayload()
+        let payload: (data: Data, mimeType: String)
+        do {
+            payload = try input.requestPayload()
+        } catch {
+            throw VisionRequestFailure.capturing(error, stage: .preparingImage)
+        }
         var fields = [
             "request_id": requestID,
             "capability": capability.rawValue
@@ -292,15 +403,7 @@ final class VisionJobService {
                 expectedStatusCode: 202
             )
         } catch let error as APIClientError {
-            switch error.problemCode?.uppercased() {
-            case "DEMO_FIXTURE_NOT_RECOGNIZED": throw VisionAPIError.demoFixtureNotRecognized
-            case "DEMO_FIXTURE_MISMATCH": throw VisionAPIError.demoFixtureMismatch
-            case "DEMO_CACHE_NOT_READY": throw VisionAPIError.demoCacheNotReady
-            case "DEMO_VARIANT_NOT_FOUND": throw VisionAPIError.demoVariantNotFound
-            case "PAYLOAD_TOO_LARGE": throw VisionAPIError.payloadTooLarge
-            case "UNSUPPORTED_MEDIA_TYPE": throw VisionAPIError.unsupportedMediaType
-            default: throw normalizedVisionError(error)
-            }
+            throw VisionRequestFailure.capturing(error, stage: .submittingJob)
         }
     }
 }
@@ -534,7 +637,9 @@ final class AccountAwareMakeupRenderProvider: MakeupRenderProviding {
             let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
             return try await UnifiedMakeupRenderProvider(client: client).render(input: input, accountID: accountID)
         } catch {
-            throw normalizedVisionError(error)
+            let failure = VisionRequestFailure.capturing(error, stage: .processingResult)
+            _ = visionFailureMessage(failure, fallbackStage: .processingResult)
+            throw failure
         }
     }
 }
@@ -569,7 +674,9 @@ struct JobPoller {
                     didAttemptAuthorizationRefresh = true
                     if try await refreshAuthorization() { continue }
                 }
-                if error.statusCode == 409 { throw error }
+                if error.statusCode == 409 {
+                    throw VisionRequestFailure.capturing(error, stage: .pollingJob)
+                }
                 if [429, 503].contains(error.statusCode), error.permitsControlledRetry {
                     guard Date() < deadline else { throw VisionAPIError.jobTimedOut }
                     transientRetryCount += 1
@@ -581,7 +688,7 @@ struct JobPoller {
                     try await sleep(milliseconds: requested, deadline: deadline)
                     continue
                 }
-                throw error
+                throw VisionRequestFailure.capturing(error, stage: .pollingJob)
             }
 
             let job = response.value
@@ -593,10 +700,24 @@ struct JobPoller {
 
             switch job.status {
             case .succeeded:
-                guard let result = job.result else { throw VisionAPIError.resultInvalid }
+                guard let result = job.result else {
+                    throw VisionRequestFailure(
+                        visionError: .resultInvalid,
+                        stage: .processingResult,
+                        httpStatus: 200,
+                        serverRequestID: response.metadata.serverRequestID ?? job.requestId
+                    )
+                }
                 return result
             case .failed:
-                throw VisionAPIError.providerUnavailable
+                throw VisionRequestFailure(
+                    visionError: .providerUnavailable,
+                    stage: .processingResult,
+                    userMessage: job.error?.message,
+                    httpStatus: 200,
+                    serverCode: job.error?.code,
+                    serverRequestID: response.metadata.serverRequestID ?? job.requestId
+                )
             case .timedOut:
                 throw VisionAPIError.jobTimedOut
             case .cancelled:

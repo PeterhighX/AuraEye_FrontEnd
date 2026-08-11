@@ -160,11 +160,24 @@ final class FirstTimeUseViewModel {
                     ? 1
                     : (session.hasScannedFace ? 0.5 : 0)
 
-                if let visionError = error as? VisionAPIError {
+                if let failure = error as? VisionRequestFailure {
                     recognitionErrorTitle = cameraTarget == .face
                         ? "用户档案创建失败"
                         : "未识别到化妆品"
-                    recognitionErrorMessage = visionError.localizedDescription
+                    recognitionErrorMessage = visionFailureMessage(
+                        failure,
+                        fallbackStage: .processingResult
+                    )
+                    statusText = failure.visionError.localizedDescription
+                    if cameraTarget == .face { profileAnalysisProgress = 0 }
+                } else if let visionError = error as? VisionAPIError {
+                    recognitionErrorTitle = cameraTarget == .face
+                        ? "用户档案创建失败"
+                        : "未识别到化妆品"
+                    recognitionErrorMessage = visionFailureMessage(
+                        visionError,
+                        fallbackStage: .processingResult
+                    )
                     statusText = visionError.localizedDescription
                     if cameraTarget == .face { profileAnalysisProgress = 0 }
                 } else if cameraTarget == .cosmetics,
@@ -178,22 +191,19 @@ final class FirstTimeUseViewModel {
                     statusText = "化妆品保存失败，请重试"
                 } else {
                     profileAnalysisProgress = 0
-                    if let faceError = error as? FaceAnalysisError {
-                        recognitionErrorTitle = faceError.localizedDescription
-                        recognitionErrorMessage = faceError.localizedDescription
-                        statusText = faceError.localizedDescription
-                    } else {
-                        recognitionErrorTitle = "用户档案创建失败"
-                        recognitionErrorMessage = "面部分析暂时未完成，请重新选择照片。"
-                        statusText = "用户档案创建失败，请重试"
-                    }
+                    recognitionErrorTitle = "用户档案创建失败"
+                    recognitionErrorMessage = visionFailureMessage(
+                        error,
+                        fallbackStage: .processingResult
+                    )
+                    statusText = error.localizedDescription
                 }
         }
     }
 
     func reportInputError(_ error: VisionAPIError) {
         recognitionErrorTitle = cameraTarget == .face ? "用户档案创建失败" : "未识别到化妆品"
-        recognitionErrorMessage = error.localizedDescription
+        recognitionErrorMessage = visionFailureMessage(error, fallbackStage: .preparingImage)
         processingStage = .none
         isProcessing = false
     }

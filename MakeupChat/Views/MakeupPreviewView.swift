@@ -165,18 +165,20 @@ struct MakeupPreviewView: View {
                     Button {
                         requestRenderedPreview(for: plan)
                     } label: {
-                        if isRenderingPreview {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text("开始上妆")
+                        Group {
+                            if isRenderingPreview {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text("开始上妆")
+                            }
                         }
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .tracking(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
-                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.button))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .tracking(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color(red: 0.15, green: 0.15, blue: 0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.button))
                     }
                     .buttonStyle(.plain)
                     .disabled(isRenderingPreview)

@@ -144,8 +144,10 @@ final class VisionJobServiceTests: XCTestCase {
                 idempotencyKey: "request-face"
             )
             XCTFail("Direct DTO success responses must be rejected.")
-        } catch let error as VisionAPIError {
-            XCTAssertEqual(error, .resultInvalid)
+        } catch let failure as VisionRequestFailure {
+            XCTAssertEqual(failure.visionError, .resultInvalid)
+            XCTAssertEqual(failure.stage, .submittingJob)
+            XCTAssertEqual(failure.httpStatus, 202)
         }
     }
 
@@ -173,8 +175,10 @@ final class VisionJobServiceTests: XCTestCase {
                 idempotencyKey: "request-face"
             )
             XCTFail("Vision job creation must accept only HTTP 202.")
-        } catch let error as VisionAPIError {
-            XCTAssertEqual(error, .resultInvalid)
+        } catch let failure as VisionRequestFailure {
+            XCTAssertEqual(failure.visionError, .resultInvalid)
+            XCTAssertEqual(failure.stage, .submittingJob)
+            XCTAssertEqual(failure.httpStatus, 200)
         }
     }
 
@@ -274,6 +278,47 @@ final class VisionJobServiceTests: XCTestCase {
         let response = try await VisionResultImageService(client: makeClient()).downloadPNG(jobID: "job-1")
         XCTAssertEqual(response.data, png)
         XCTAssertEqual(response.contentType, "image/png")
+    }
+
+    func testVisionRequestFailurePreservesSafeServerDiagnostics() {
+        let metadata = APIResponseMetadata(
+            serverRequestID: "req_safe_123",
+            location: nil,
+            retryAfterSeconds: nil
+        )
+        let error = APIClientError.httpStatus(
+            422,
+            "演示图片与任务能力不匹配",
+            code: "DEMO_FIXTURE_MISMATCH",
+            metadata
+        )
+
+        let failure = VisionRequestFailure.capturing(error, stage: .submittingJob)
+        let message = failure.localizedDescription
+
+        XCTAssertEqual(failure.visionError, .demoFixtureMismatch)
+        XCTAssertTrue(message.contains("阶段：提交分析任务"))
+        XCTAssertTrue(message.contains("HTTP 状态：422"))
+        XCTAssertTrue(message.contains("错误码：DEMO_FIXTURE_MISMATCH"))
+        XCTAssertTrue(message.contains("请求编号：req_safe_123"))
+        XCTAssertFalse(message.localizedCaseInsensitiveContains("bearer"))
+        XCTAssertFalse(message.localizedCaseInsensitiveContains("access_token"))
+        XCTAssertFalse(message.localizedCaseInsensitiveContains("image data"))
+    }
+
+    func testNetworkUnavailableHasNoInventedHTTPStatusOrRequestID() {
+        let failure = VisionRequestFailure.capturing(
+            APIClientError.networkUnavailable,
+            stage: .submittingJob
+        )
+        let message = failure.localizedDescription
+
+        XCTAssertEqual(failure.visionError, .networkUnavailable)
+        XCTAssertNil(failure.httpStatus)
+        XCTAssertNil(failure.serverRequestID)
+        XCTAssertTrue(message.contains("错误码：network_unavailable"))
+        XCTAssertFalse(message.contains("HTTP 状态："))
+        XCTAssertFalse(message.contains("请求编号："))
     }
 
     func testLiveFaceAnalysisContractWhenExplicitlyEnabled() async throws {

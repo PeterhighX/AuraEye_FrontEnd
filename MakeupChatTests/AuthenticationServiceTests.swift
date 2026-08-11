@@ -292,7 +292,9 @@ final class AuthenticationServiceTests: XCTestCase {
             }
         }
 
-        let response: APIResponse<AIJobDTO<JSONValue>> = try await makeClient().sendResponse(
+        let anonymousClient = makeClient()
+        let authenticatedClient = await anonymousClient.authenticated(with: "expired-access-token")
+        let response: APIResponse<AIJobDTO<JSONValue>> = try await authenticatedClient.sendResponse(
             path: APIEndpoint.visionJob("job-1"),
             expectedStatusCode: 200
         )

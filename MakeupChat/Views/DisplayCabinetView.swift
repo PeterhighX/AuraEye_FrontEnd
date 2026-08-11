@@ -110,6 +110,7 @@ struct DisplayCabinetView: View {
         .overlay {
             if showImageSourcePicker {
                 MediaSourceDialog(
+                    showsCamera: !usesFixedDemoGallery,
                     onCamera: {
                         imageSource = .camera
                         showImageSourcePicker = false
@@ -147,6 +148,10 @@ struct DisplayCabinetView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+    }
+
+    private var usesFixedDemoGallery: Bool {
+        SessionManager.shared.context?.features.galleryMode == .fixedDemo
     }
 
     private func productConfirmation(_ product: CosmeticsRecognitionResult) -> some View {

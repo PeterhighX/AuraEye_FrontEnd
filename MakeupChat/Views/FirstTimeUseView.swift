@@ -121,6 +121,7 @@ struct FirstTimeUseView: View {
         .overlay {
             if showImageSourcePicker {
                 MediaSourceDialog(
+                    showsCamera: !usesFixedDemoGallery,
                     onCamera: {
                         imageSource = .camera
                         showImageSourcePicker = false
@@ -138,6 +139,10 @@ struct FirstTimeUseView: View {
                 generationWaitingOverlay
             }
         }
+    }
+
+    private var usesFixedDemoGallery: Bool {
+        SessionManager.shared.context?.features.galleryMode == .fixedDemo
     }
 
     private var generationWaitingOverlay: some View {

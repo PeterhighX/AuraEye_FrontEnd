@@ -29,6 +29,7 @@ final class UserProfileSetupViewModel {
         isAnalyzing = true
         analysisState = .preparingImage
         errorMessage = nil
+        var fallbackFailureStage = VisionRequestStage.processingResult
         defer { isAnalyzing = false }
 
         do {
@@ -40,23 +41,29 @@ final class UserProfileSetupViewModel {
                 userId: user.userId
             )
 
+            fallbackFailureStage = .savingProfile
             user.userPortraitPath = result.portraitPath
             user.userFileJSON = result.profileJSON
             try userRepository.update(user)
             session.markFaceScanned(imagePath: result.portraitPath)
             analysisState = .succeeded(result)
             return true
+        } catch let failure as VisionRequestFailure {
+            analysisState = .failed(failure.visionError)
+            errorMessage = visionFailureMessage(failure, fallbackStage: fallbackFailureStage)
+            return false
         } catch let error as VisionAPIError {
             analysisState = .failed(error)
-            errorMessage = error.localizedDescription
+            errorMessage = visionFailureMessage(error, fallbackStage: fallbackFailureStage)
             return false
         } catch let error as FaceAnalysisError {
             analysisState = .failed(.resultInvalid)
             errorMessage = error.localizedDescription
             return false
         } catch {
-            analysisState = .failed(.resultInvalid)
-            errorMessage = "面部分析暂时未完成，请重新选择照片。"
+            let failure = VisionRequestFailure.capturing(error, stage: fallbackFailureStage)
+            analysisState = .failed(failure.visionError)
+            errorMessage = visionFailureMessage(failure, fallbackStage: fallbackFailureStage)
             return false
         }
     }
@@ -68,6 +75,6 @@ final class UserProfileSetupViewModel {
 
     func reportInputError(_ error: VisionAPIError) {
         analysisState = .failed(error)
-        errorMessage = error.localizedDescription
+        errorMessage = visionFailureMessage(error, fallbackStage: .preparingImage)
     }
 }

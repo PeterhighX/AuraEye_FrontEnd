@@ -73,6 +73,7 @@ struct UserProfileSetupView: View {
         .overlay {
             if showSourcePicker {
                 MediaSourceDialog(
+                    showsCamera: !usesFixedDemoGallery,
                     onCamera: {
                         imageSource = .camera
                         showSourcePicker = false
@@ -86,6 +87,10 @@ struct UserProfileSetupView: View {
                 )
             }
         }
+    }
+
+    private var usesFixedDemoGallery: Bool {
+        SessionManager.shared.context?.features.galleryMode == .fixedDemo
     }
 
     private var analysisOverlay: some View {

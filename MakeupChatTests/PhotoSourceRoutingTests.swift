@@ -14,6 +14,8 @@ final class PhotoSourceRoutingTests: XCTestCase {
 
         XCTAssertEqual(fixed.galleryMode, .fixedDemo)
         XCTAssertEqual(authorized.galleryMode, .authorizedLibrary)
+        XCTAssertFalse(fixed.galleryMode.allowsCameraCapture)
+        XCTAssertTrue(authorized.galleryMode.allowsCameraCapture)
         XCTAssertThrowsError(
             try JSONDecoder().decode(
                 AccountFeatures.self,

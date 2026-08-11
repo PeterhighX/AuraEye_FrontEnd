@@ -464,6 +464,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A10000000000000000000006 /* Build configuration list for PBXNativeTarget "MakeupChat" */;
 			buildPhases = (
+				F90000000000000000000001 /* Verify Release Configuration */,
 				A10000000000000000000003 /* Sources */,
 				A10000000000000000000004 /* Resources */,
 			);
@@ -548,6 +549,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F90000000000000000000001 /* Verify Release Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Verify Release Configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  case \" ${SWIFT_ACTIVE_COMPILATION_CONDITIONS} ${OTHER_SWIFT_FLAGS} \" in\n    *AURAEYE_ENABLE_LOCAL_AUTH_STUB*)\n      echo \"error: Release must not enable AURAEYE_ENABLE_LOCAL_AUTH_STUB\"\n      exit 1\n      ;;\n  esac\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A10000000000000000000003 /* Sources */ = {
@@ -834,7 +857,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
-				EXCLUDED_SOURCE_FILE_NAMES = DemoFixtures;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
 				INFOPLIST_FILE = MakeupChat/Supporting/Info.plist;

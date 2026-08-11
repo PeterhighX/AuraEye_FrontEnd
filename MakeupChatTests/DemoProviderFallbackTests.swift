@@ -37,8 +37,11 @@ final class DemoProviderFallbackTests: XCTestCase {
                 idempotencyKey: "request-1"
             )
             XCTFail("Expected a frozen demo business error")
-        } catch let error as VisionAPIError {
-            XCTAssertEqual(error, .demoFixtureNotRecognized)
+        } catch let failure as VisionRequestFailure {
+            XCTAssertEqual(failure.visionError, .demoFixtureNotRecognized)
+            XCTAssertEqual(failure.stage, .submittingJob)
+            XCTAssertEqual(failure.httpStatus, 422)
+            XCTAssertEqual(failure.serverCode, "DEMO_FIXTURE_NOT_RECOGNIZED")
         }
 
         XCTAssertEqual(VisionURLProtocolStub.requests.map(\.url?.path), ["/v1/vision/jobs"])

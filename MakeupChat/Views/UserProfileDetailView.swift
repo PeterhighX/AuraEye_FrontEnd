@@ -80,6 +80,7 @@ struct UserProfileDetailView: View {
         .overlay {
             if showsSourcePicker {
                 MediaSourceDialog(
+                    showsCamera: !usesFixedDemoGallery,
                     onCamera: {
                         imageSource = .camera
                         showsSourcePicker = false
@@ -310,18 +311,41 @@ struct UserProfileDetailView: View {
         user = try? userRepository.currentUser()
     }
 
+    private var usesFixedDemoGallery: Bool {
+        SessionManager.shared.context?.features.galleryMode == .fixedDemo
+    }
+
     private func runAnalysis() {
         guard !isAnalyzing else { return }
-        let image: UIImage?
-        if let capturedPortrait {
-            image = capturedPortrait
-        } else if let path = user?.userPortraitPath {
-            image = LocalMediaStore.loadImage(fromStoredPath: path)
-        } else {
-            image = nil
+
+        if !usesFixedDemoGallery, let capturedPortrait {
+            generateVirtualAvatar(from: capturedPortrait)
+            return
         }
-        guard let image else { return }
-        generateVirtualAvatar(from: image)
+
+        guard let storedPath = user?.userPortraitPath,
+              let data = LocalMediaStore.loadData(fromStoredPath: storedPath),
+              let contentType = LocalMediaStore.contentType(forStoredPath: storedPath),
+              (!usesFixedDemoGallery || isCanonicalDemoPortrait(data)),
+              let input = try? VisionImageInput(photoData: data, contentType: contentType) else {
+            analysisErrorMessage = usesFixedDemoGallery
+                ? "请从演示相册重新选择面部照片"
+                : "原始面部照片无法读取，请重新选择照片。"
+            return
+        }
+
+        Task { await generateVirtualAvatar(from: input) }
+    }
+
+    private func isCanonicalDemoPortrait(_ data: Data, bundle: Bundle = .main) -> Bool {
+        guard let url = bundle.url(
+            forResource: "demo_face_portrait_001",
+            withExtension: "jpg",
+            subdirectory: "DemoFixtures"
+        ), let canonicalData = try? Data(contentsOf: url, options: [.mappedIfSafe]) else {
+            return false
+        }
+        return data == canonicalData
     }
 
     private func generateVirtualAvatar(from image: UIImage) {
@@ -330,21 +354,21 @@ struct UserProfileDetailView: View {
         Task {
             defer { isAnalyzing = false }
             guard var profile = try? userRepository.currentUser() else { return }
+            var failureStage = VisionRequestStage.processingResult
             do {
                 let result = try await faceAnalysisService.analyze(
                     image: image,
                     userId: profile.userId
                 )
 
+                failureStage = .savingProfile
                 profile.userPortraitPath = result.portraitPath
                 profile.userFileJSON = result.profileJSON
                 try userRepository.update(profile)
                 capturedPortrait = nil
                 user = profile
-            } catch let error as FaceAnalysisError {
-                analysisErrorMessage = error.localizedDescription
             } catch {
-                analysisErrorMessage = "面部分析暂时未完成，请重新选择照片。"
+                analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
             }
         }
     }
@@ -354,18 +378,20 @@ struct UserProfileDetailView: View {
         isAnalyzing = true
         defer { isAnalyzing = false }
         guard var profile = try? userRepository.currentUser() else { return }
+        var failureStage = VisionRequestStage.processingResult
         do {
             let result = try await faceAnalysisService.analyze(
                 input: input,
                 userId: profile.userId
             )
+            failureStage = .savingProfile
             profile.userPortraitPath = result.portraitPath
             profile.userFileJSON = result.profileJSON
             try userRepository.update(profile)
             capturedPortrait = nil
             user = profile
         } catch {
-            analysisErrorMessage = error.localizedDescription
+            analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
         }
     }
 }

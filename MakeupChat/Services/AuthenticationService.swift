@@ -71,6 +71,10 @@ enum AccountMode: String, Codable, Sendable {
 enum GalleryMode: String, Codable, Sendable {
     case fixedDemo = "fixed_demo"
     case authorizedLibrary = "authorized_library"
+
+    var allowsCameraCapture: Bool {
+        self == .authorizedLibrary
+    }
 }
 
 struct AccountFeatures: Codable, Equatable, Sendable {

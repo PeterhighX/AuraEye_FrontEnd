@@ -234,6 +234,13 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
             )
             try persistence.removePendingJob(accountID: input.userID, capability: capability)
             return try Self.map(dto: dto, previewImage: input.image)
+        } catch let failure as VisionRequestFailure {
+            if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
+                .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
+                .unsupportedMediaType].contains(failure.visionError) {
+                try? persistence.removePendingJob(accountID: input.userID, capability: capability)
+            }
+            throw failure
         } catch let error as VisionAPIError {
             if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
                 .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
@@ -290,7 +297,9 @@ final class AccountAwareItemRecognitionProvider: ItemRecognitionProviding {
             let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
             return try await UnifiedItemRecognitionProvider(client: client).recognizeItem(input)
         } catch {
-            throw normalizedVisionError(error)
+            let failure = VisionRequestFailure.capturing(error, stage: .processingResult)
+            _ = visionFailureMessage(failure, fallbackStage: .processingResult)
+            throw failure
         }
     }
 }

@@ -195,21 +195,21 @@ enum APIClientError: LocalizedError {
     case invalidResponse
     case invalidServerResponse(statusCode: Int, requestID: String?)
     case problem(APIProblem, APIResponseMetadata)
-    case httpStatus(Int, String, APIResponseMetadata)
+    case httpStatus(Int, String, code: String?, APIResponseMetadata)
     case invalidImage
 
     var statusCode: Int? {
         switch self {
         case .invalidServerResponse(let statusCode, _): return statusCode
         case .problem(let problem, _): return problem.status
-        case .httpStatus(let status, _, _): return status
+        case .httpStatus(let status, _, _, _): return status
         case .networkUnavailable, .invalidResponse, .invalidImage: return nil
         }
     }
 
     var responseMetadata: APIResponseMetadata? {
         switch self {
-        case .problem(_, let metadata), .httpStatus(_, _, let metadata): return metadata
+        case .problem(_, let metadata), .httpStatus(_, _, _, let metadata): return metadata
         case .invalidServerResponse(_, let requestID):
             return APIResponseMetadata(serverRequestID: requestID, location: nil, retryAfterSeconds: nil)
         case .networkUnavailable, .invalidResponse, .invalidImage: return nil
@@ -219,7 +219,21 @@ enum APIClientError: LocalizedError {
     var problemCode: String? {
         switch self {
         case .problem(let problem, _): return problem.code
+        case .httpStatus(_, _, let code, _): return code
         default: return nil
+        }
+    }
+
+    var diagnosticRequestID: String? {
+        switch self {
+        case .problem(let problem, let metadata):
+            return metadata.serverRequestID ?? problem.requestId
+        case .httpStatus(_, _, _, let metadata):
+            return metadata.serverRequestID
+        case .invalidServerResponse(_, let requestID):
+            return requestID
+        case .networkUnavailable, .invalidResponse, .invalidImage:
+            return nil
         }
     }
 
@@ -227,7 +241,7 @@ enum APIClientError: LocalizedError {
         switch self {
         case .problem(let problem, let metadata):
             return problem.retryable == true || metadata.retryAfterSeconds != nil
-        case .httpStatus(_, _, let metadata):
+        case .httpStatus(_, _, _, let metadata):
             return metadata.retryAfterSeconds != nil
         default:
             return false
@@ -244,7 +258,7 @@ enum APIClientError: LocalizedError {
             return "服务器响应格式异常（\(status)）\(requestIDSuffix(requestID))"
         case let .problem(problem, metadata):
             return "\(problem.detail ?? problem.title)\(requestIDSuffix(metadata.serverRequestID ?? problem.requestId))"
-        case let .httpStatus(status, message, metadata):
+        case let .httpStatus(status, message, _, metadata):
             return "接口请求失败（\(status)）：\(message)\(requestIDSuffix(metadata.serverRequestID))"
         case .invalidImage:
             return "无法将图片转换为上传数据。"
@@ -604,6 +618,7 @@ actor APIClient {
                 payload.message
                     ?? payload.error?.message
                     ?? HTTPURLResponse.localizedString(forStatusCode: response.statusCode),
+                code: payload.code ?? payload.error?.code,
                 mergingRequestID(metadata, fallback: payload.requestId)
             )
         }

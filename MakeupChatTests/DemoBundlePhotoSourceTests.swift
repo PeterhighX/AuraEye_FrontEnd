@@ -36,4 +36,28 @@ final class DemoBundlePhotoSourceTests: XCTestCase {
             XCTAssertEqual(loadedData, originals[name])
         }
     }
+
+    func testStoredPortraitDataReusesExactlyTheSameRequestBytes() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stored-portrait-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 3, height: 3))
+        let image = renderer.image { context in
+            UIColor.systemPink.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 3, height: 3))
+        }
+        let originalData = try XCTUnwrap(image.jpegData(compressionQuality: 1))
+        let storedURL = directory.appendingPathComponent("visual_profile_demo.jpg")
+        try originalData.write(to: storedURL, options: .atomic)
+
+        let firstInput = try VisionImageInput(photoData: originalData, contentType: "image/jpeg")
+        let restoredData = try XCTUnwrap(LocalMediaStore.loadData(fromStoredPath: storedURL.path))
+        let restoredType = try XCTUnwrap(LocalMediaStore.contentType(forStoredPath: storedURL.path))
+        let reanalysisInput = try VisionImageInput(photoData: restoredData, contentType: restoredType)
+
+        XCTAssertEqual(try firstInput.requestPayload().data, try reanalysisInput.requestPayload().data)
+        XCTAssertEqual(try reanalysisInput.requestPayload().mimeType, "image/jpeg")
+    }
 }

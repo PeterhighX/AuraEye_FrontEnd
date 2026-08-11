@@ -121,6 +121,23 @@ enum LocalMediaStore {
         return UIImage(contentsOfFile: url.path)
     }
 
+    /// 读取保存时的文件字节，不经过 UIImage 解码或重新编码。
+    static func loadData(fromStoredPath storedPath: String?) -> Data? {
+        guard let url = fileURL(forStoredPath: storedPath) else { return nil }
+        return try? Data(contentsOf: url, options: [.mappedIfSafe])
+    }
+
+    /// 根据已保存文件扩展名恢复视觉接口使用的 MIME 类型。
+    static func contentType(forStoredPath storedPath: String?) -> String? {
+        guard let url = fileURL(forStoredPath: storedPath) else { return nil }
+        switch url.pathExtension.lowercased() {
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "heic", "heif": return "image/heic"
+        default: return nil
+        }
+    }
+
     static func fileExists(storedPath: String?) -> Bool {
         guard let url = fileURL(forStoredPath: storedPath) else { return false }
         return FileManager.default.fileExists(atPath: url.path)

@@ -98,6 +98,7 @@ struct HomeView: View {
         .overlay {
             if showProfileImageSourcePicker {
                 MediaSourceDialog(
+                    showsCamera: !usesFixedDemoGallery,
                     onCamera: {
                         profileImageSource = .camera
                         showProfileImageSourcePicker = false
@@ -111,6 +112,10 @@ struct HomeView: View {
                 )
             }
         }
+    }
+
+    private var usesFixedDemoGallery: Bool {
+        SessionManager.shared.context?.features.galleryMode == .fixedDemo
     }
 
     private var homeForeground: some View {
