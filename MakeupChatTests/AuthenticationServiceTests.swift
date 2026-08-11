@@ -35,6 +35,19 @@ final class AuthenticationServiceTests: XCTestCase {
         ))
     }
 
+    func testLogoutRequestEncodesRequiredRefreshTokenAndRequestID() throws {
+        let request = LogoutRequest(
+            refreshToken: "refresh-token-value",
+            requestID: "req_logout_test-001"
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+
+        XCTAssertEqual(object["refresh_token"], "refresh-token-value")
+        XCTAssertEqual(object["request_id"], "req_logout_test-001")
+    }
+
     func testMissingAPIBaseURLReturnsConfigurationMissing() {
         XCTAssertThrowsError(try APIConfiguration.loadBaseURL(rawValue: nil)) { error in
             XCTAssertEqual(error as? APIConfigurationError, .configurationMissing)
@@ -211,6 +224,87 @@ final class AuthenticationServiceTests: XCTestCase {
         } catch let error as APIClientError {
             XCTAssertEqual(error.statusCode, 204)
         }
+    }
+
+    func testLogoutRequiresRevokedResponseField() async throws {
+        VisionURLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/auth/logout")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+            let body = try XCTUnwrap(request.httpBody)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+            XCTAssertEqual(object["refresh_token"], "refresh-token")
+            XCTAssertNotNil(object["request_id"])
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(#"{"request_id":"req","data":{"revoked":true}}"#.utf8))
+        }
+
+        try await RemoteAuthenticationService(client: makeClient()).logout(
+            accessToken: "access-token",
+            refreshToken: "refresh-token"
+        )
+    }
+
+    @MainActor
+    func testAuthenticatedRequestRefreshesOnceAfterUnauthorizedAndRetries() async throws {
+        SessionManager.shared.establish(account: AuthenticatedAccount(
+            userId: "user-1",
+            username: "aurayetest",
+            displayName: "Demo",
+            accessToken: "expired-access-token",
+            refreshToken: "refresh-token",
+            expiresAt: nil,
+            accountMode: .demo,
+            features: .demo
+        ))
+        defer { SessionManager.shared.clear() }
+
+        VisionURLProtocolStub.handler = { request in
+            let isRefresh = request.url?.path == "/v1/auth/refresh"
+            let isRetriedRequest = request.value(forHTTPHeaderField: "Authorization") == "Bearer fresh-access-token"
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: isRefresh || isRetriedRequest ? 200 : 401,
+                httpVersion: nil,
+                headerFields: ["Content-Type": isRefresh || isRetriedRequest
+                    ? "application/json" : "application/problem+json"]
+            )!
+            switch request.url?.path {
+            case "/v1/auth/refresh":
+                let body = try XCTUnwrap(request.httpBody)
+                let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+                XCTAssertEqual(object["refresh_token"], "refresh-token")
+                XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+                return (response, Data("""
+                {"request_id":"refresh","data":{"access_token":"fresh-access-token","refresh_token":"next-refresh-token","access_token_expires_at":"2026-08-11T14:00:00Z","user":{"id":"user-1","username":"aurayetest","display_name":"Demo","account_mode":"demo"},"features":{"gallery_mode":"fixed_demo","use_demo_assets":true,"allow_live_recognition_seed":false}}}
+                """.utf8))
+            case "/v1/vision/jobs/job-1":
+                if request.value(forHTTPHeaderField: "Authorization") == "Bearer fresh-access-token" {
+                    return (response, Data(#"{"request_id":"job","data":{"job_id":"job-1","status":"succeeded","result":{}}}"#.utf8))
+                }
+                return (response, Data(#"{"title":"Unauthorized","status":401,"code":"INVALID_SESSION","retryable":false,"request_id":"expired"}"#.utf8))
+            default:
+                throw URLError(.badURL)
+            }
+        }
+
+        let response: APIResponse<AIJobDTO<JSONValue>> = try await makeClient().sendResponse(
+            path: APIEndpoint.visionJob("job-1"),
+            expectedStatusCode: 200
+        )
+
+        XCTAssertEqual(response.value.jobId, "job-1")
+        XCTAssertEqual(SessionManager.shared.context?.accessToken, "fresh-access-token")
+        XCTAssertEqual(SessionManager.shared.context?.refreshToken, "next-refresh-token")
+        XCTAssertEqual(VisionURLProtocolStub.requests.map(\.url?.path), [
+            "/v1/vision/jobs/job-1",
+            "/v1/auth/refresh",
+            "/v1/vision/jobs/job-1"
+        ])
     }
 
     @MainActor

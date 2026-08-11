@@ -14,6 +14,7 @@ final class AppSession {
     var hasCompletedOnboardingCosmeticsStep = false
     var hasGeneratedMakeup = false
     var scannedFaceImagePath: String?
+    var makeupRenderPreviewPath: String?
     var hasResetOnboardingThisLaunch = false
     var shouldRequestProfileCapture = false
     /// 负一屏以首页同层覆盖方式呈现时，暂停根 Tab 的横向切换手势。

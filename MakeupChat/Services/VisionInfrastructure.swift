@@ -454,6 +454,91 @@ final class VisionResultImageService {
     }
 }
 
+protocol MakeupRenderProviding {
+    func render(input: VisionImageInput, accountID: String) async throws -> String
+}
+
+final class UnifiedMakeupRenderProvider: MakeupRenderProviding {
+    private let service: VisionJobService
+    private let jobs: AIJobRepository
+    private let images: VisionResultImageService
+    private let poller: JobPoller
+    private let persistence: VisionJobPersistence
+
+    init(
+        client: APIClient,
+        poller: JobPoller = JobPoller(),
+        persistence: VisionJobPersistence = VisionJobPersistence()
+    ) {
+        service = VisionJobService(client: client)
+        jobs = AIJobRepository(client: client)
+        images = VisionResultImageService(client: client)
+        self.poller = poller
+        self.persistence = persistence
+    }
+
+    func render(input: VisionImageInput, accountID: String) async throws -> String {
+        let capability = VisionCapability.makeupRender
+        let pending = try persistence.pendingJob(accountID: accountID, capability: capability)
+        let requestID = pending?.requestID ?? "req_render_\(UUID().uuidString.lowercased())"
+        let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
+
+        if pending == nil {
+            try persistence.savePendingJob(VisionPendingJob(
+                accountID: accountID, capability: capability, requestID: requestID,
+                idempotencyKey: idempotencyKey, jobID: nil, status: "submitting",
+                serverRequestID: nil, location: nil, retryAfterSeconds: nil
+            ))
+        }
+
+        var jobID = pending?.jobID
+        if jobID == nil {
+            let response = try await service.create(
+                input: input,
+                capability: capability,
+                options: .makeupRender(.init()),
+                requestID: requestID,
+                idempotencyKey: idempotencyKey
+            )
+            guard response.value.capability == capability else { throw VisionAPIError.resultInvalid }
+            jobID = response.value.jobId
+            try persistence.savePendingJob(VisionPendingJob(
+                accountID: accountID, capability: capability, requestID: requestID,
+                idempotencyKey: idempotencyKey, jobID: response.value.jobId,
+                status: response.value.status.rawValue,
+                serverRequestID: response.metadata.serverRequestID,
+                location: response.metadata.location,
+                retryAfterSeconds: response.metadata.retryAfterSeconds
+            ))
+        }
+        guard let jobID else { throw VisionAPIError.jobNotFound }
+
+        let _: JSONValue = try await poller.poll(jobID: jobID, fetch: { [jobs] in
+            try await jobs.job(id: $0)
+        })
+        let response = try await images.downloadPNG(jobID: jobID)
+        guard let image = UIImage(data: response.data) else { throw VisionAPIError.resultInvalid }
+        let path = try LocalMediaStore.savePNGImage(
+            image,
+            bucket: .eyePreviews,
+            fileName: "makeup_render_\(jobID).png"
+        )
+        try persistence.removePendingJob(accountID: accountID, capability: capability)
+        return path
+    }
+}
+
+final class AccountAwareMakeupRenderProvider: MakeupRenderProviding {
+    func render(input: VisionImageInput, accountID: String) async throws -> String {
+        do {
+            let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
+            return try await UnifiedMakeupRenderProvider(client: client).render(input: input, accountID: accountID)
+        } catch {
+            throw normalizedVisionError(error)
+        }
+    }
+}
+
 struct JobPoller {
     let maximumWait: TimeInterval
     let defaultPollMilliseconds: Int

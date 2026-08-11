@@ -142,11 +142,20 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
                 }
             )
             try persistence.removePendingJob(accountID: input.userID, capability: capability)
-            let portraitPath = try LocalMediaStore.saveImage(
-                input.image,
-                bucket: .portraits,
-                fileName: "visual_profile_\(input.userID).jpg"
-            )
+            let portraitPath: String
+            if let originalData = input.originalData, let contentType = input.contentType {
+                portraitPath = try LocalMediaStore.saveData(
+                    originalData,
+                    bucket: .portraits,
+                    fileName: "visual_profile_\(input.userID).\(Self.fileExtension(for: contentType))"
+                )
+            } else {
+                portraitPath = try LocalMediaStore.saveImage(
+                    input.image,
+                    bucket: .portraits,
+                    fileName: "visual_profile_\(input.userID).jpg"
+                )
+            }
             return VisualProfileResult(dto: dto, portraitPath: portraitPath)
         } catch let error as VisionAPIError {
             if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
@@ -155,6 +164,14 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
                 try? persistence.removePendingJob(accountID: input.userID, capability: capability)
             }
             throw error
+        }
+    }
+
+    private static func fileExtension(for contentType: String) -> String {
+        switch contentType.lowercased() {
+        case "image/png": return "png"
+        case "image/heic", "image/heif": return "heic"
+        default: return "jpg"
         }
     }
 }

@@ -67,6 +67,18 @@ enum LocalMediaStore {
         return relativePath(bucket: bucket, fileName: fileName)
     }
 
+    /// 保存已验证的原始图片字节，供同一视觉任务链路重试时复用。
+    @discardableResult
+    static func saveData(
+        _ data: Data,
+        bucket: MediaBucket,
+        fileName: String
+    ) throws -> String {
+        let url = try fileURL(bucket: bucket, fileName: fileName)
+        try data.write(to: url, options: .atomic)
+        return relativePath(bucket: bucket, fileName: fileName)
+    }
+
     @discardableResult
     static func saveText(_ text: String, bucket: MediaBucket, fileName: String) throws -> String {
         let url = try fileURL(bucket: bucket, fileName: fileName)

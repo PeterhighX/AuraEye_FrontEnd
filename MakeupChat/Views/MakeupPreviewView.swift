@@ -6,6 +6,10 @@ struct MakeupPreviewView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var expandedStep: Int?
     @State private var selectedLookIndex = 0
+    @State private var isRenderingPreview = false
+    @State private var renderError: String?
+
+    private let makeupRenderer: any MakeupRenderProviding = AccountAwareMakeupRenderProvider()
 
     private let stepColors: [Color] = [
         Color(red: 253 / 255, green: 235 / 255, blue: 235 / 255),
@@ -84,6 +88,15 @@ struct MakeupPreviewView: View {
         .onAppear {
             selectedLookIndex = MakeupLookCatalog.plans.firstIndex(where: { $0.id == session.selectedLookID }) ?? 0
         }
+        .alert("试妆预览未完成", isPresented: Binding(
+            get: { renderError != nil },
+            set: { if !$0 { renderError = nil } }
+        )) {
+            Button("继续上妆") { proceedToSteps() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(renderError ?? "试妆预览暂时不可用。")
+        }
         .accessibilityAction(.escape) { expandedStep = nil }
     }
 
@@ -92,14 +105,20 @@ struct MakeupPreviewView: View {
         let look = plan.look
 
         return HStack(spacing: 12) {
-            Image(look.imageAssetName)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 120, height: 120)
-                .scaleEffect(1.1)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.08), radius: 2)
+            Group {
+                if let rendered = session.makeupRenderPreviewPath {
+                    LocalImageView(storedPath: rendered, assetName: look.imageAssetName)
+                } else {
+                    Image(look.imageAssetName)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
+            .frame(width: 120, height: 120)
+            .scaleEffect(1.1)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.08), radius: 2)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -144,11 +163,13 @@ struct MakeupPreviewView: View {
                     }
                     Spacer()
                     Button {
-                        session.selectedLookID = plan.id
-                        session.markFirstUseCompleted()
-                        path.append(AppRoute.makeupSteps)
+                        requestRenderedPreview(for: plan)
                     } label: {
-                        Text("开始上妆")
+                        if isRenderingPreview {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("开始上妆")
+                        }
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
                             .tracking(1)
@@ -158,6 +179,7 @@ struct MakeupPreviewView: View {
                             .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.button))
                     }
                     .buttonStyle(.plain)
+                    .disabled(isRenderingPreview)
                 }
             }
         }
@@ -167,6 +189,49 @@ struct MakeupPreviewView: View {
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
         .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
         .padding(.horizontal, 16)
+    }
+
+    private func requestRenderedPreview(for plan: MakeupLookPlan) {
+        session.selectedLookID = plan.id
+        guard session.makeupRenderPreviewPath == nil,
+              let portrait = portraitInput(),
+              let accountID = SessionManager.shared.context?.userId else {
+            proceedToSteps()
+            return
+        }
+        isRenderingPreview = true
+        Task {
+            defer { isRenderingPreview = false }
+            do {
+                session.makeupRenderPreviewPath = try await makeupRenderer.render(
+                    input: portrait,
+                    accountID: accountID
+                )
+                proceedToSteps()
+            } catch {
+                renderError = (error as? VisionAPIError)?.localizedDescription
+                    ?? "试妆预览暂时不可用。"
+            }
+        }
+    }
+
+    private func proceedToSteps() {
+        session.markFirstUseCompleted()
+        path.append(AppRoute.makeupSteps)
+    }
+
+    private func portraitInput() -> VisionImageInput? {
+        guard let url = LocalMediaStore.fileURL(forStoredPath: session.scannedFaceImagePath),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        let contentType: String
+        switch url.pathExtension.lowercased() {
+        case "png": contentType = "image/png"
+        case "heic", "heif": contentType = "image/heic"
+        default: contentType = "image/jpeg"
+        }
+        return try? VisionImageInput(photoData: data, contentType: contentType)
     }
 
     private func stepCard(

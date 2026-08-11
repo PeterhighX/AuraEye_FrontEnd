@@ -41,10 +41,10 @@ struct RefreshTokenRequest: Encodable, Sendable {
 }
 
 struct LogoutRequest: Encodable, Sendable {
-    let refreshToken: String?
+    let refreshToken: String
     let requestId: String
 
-    init(refreshToken: String?, requestID: String = LoginRequest.makeRequestID()) {
+    init(refreshToken: String, requestID: String = LoginRequest.makeRequestID()) {
         self.refreshToken = refreshToken
         self.requestId = requestID
     }
@@ -56,10 +56,10 @@ struct LogoutRequest: Encodable, Sendable {
 }
 
 struct LogoutResponseDTO: Decodable, Sendable {
-    let loggedOut: Bool?
+    let revoked: Bool
 
     enum CodingKeys: String, CodingKey {
-        case loggedOut = "logged_out"
+        case revoked
     }
 }
 

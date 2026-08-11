@@ -257,6 +257,7 @@ enum APIClientError: LocalizedError {
 }
 
 actor APIClient {
+    private static let authorizationRefreshCoordinator = AuthorizationRefreshCoordinator()
     private let configuration: APIConfiguration
     private let session: URLSession
     private let encoder: JSONEncoder
@@ -359,7 +360,36 @@ actor APIClient {
         path: String,
         expectedContentType: String
     ) async throws -> APIBinaryResponse {
-        var request = try makeRequest(path: path, method: .get)
+        let request = try makeRequest(path: path, method: .get)
+        return try await downloadResponse(
+            request: request,
+            expectedContentType: expectedContentType,
+            permitsAuthorizationRefresh: true
+        )
+    }
+
+    private func downloadResponse(
+        request: URLRequest,
+        expectedContentType: String,
+        permitsAuthorizationRefresh: Bool
+    ) async throws -> APIBinaryResponse {
+        do {
+            return try await downloadResponseOnce(request: request, expectedContentType: expectedContentType)
+        } catch let error as APIClientError where permitsAuthorizationRefresh && error.statusCode == 401 {
+            let retry = try await requestWithRefreshedAuthorization(from: request)
+            return try await downloadResponse(
+                request: retry,
+                expectedContentType: expectedContentType,
+                permitsAuthorizationRefresh: false
+            )
+        }
+    }
+
+    private func downloadResponseOnce(
+        request initialRequest: URLRequest,
+        expectedContentType: String
+    ) async throws -> APIBinaryResponse {
+        var request = initialRequest
         request.setValue(expectedContentType, forHTTPHeaderField: "Accept")
         let data: Data
         let response: URLResponse
@@ -413,6 +443,34 @@ actor APIClient {
         _ request: URLRequest,
         expectedStatusCode: Int?
     ) async throws -> APIResponse<Response> {
+        try await perform(
+            request,
+            expectedStatusCode: expectedStatusCode,
+            permitsAuthorizationRefresh: true
+        )
+    }
+
+    private func perform<Response: Decodable>(
+        _ request: URLRequest,
+        expectedStatusCode: Int?,
+        permitsAuthorizationRefresh: Bool
+    ) async throws -> APIResponse<Response> {
+        do {
+            return try await performOnce(request, expectedStatusCode: expectedStatusCode)
+        } catch let error as APIClientError where permitsAuthorizationRefresh && error.statusCode == 401 {
+            let retry = try await requestWithRefreshedAuthorization(from: request)
+            return try await perform(
+                retry,
+                expectedStatusCode: expectedStatusCode,
+                permitsAuthorizationRefresh: false
+            )
+        }
+    }
+
+    private func performOnce<Response: Decodable>(
+        _ request: URLRequest,
+        expectedStatusCode: Int?
+    ) async throws -> APIResponse<Response> {
         let data: Data
         let response: URLResponse
         do {
@@ -435,6 +493,78 @@ actor APIClient {
             fallback: envelope.requestId
         )
         return APIResponse(value: envelope.data, metadata: metadata)
+    }
+
+    private func requestWithRefreshedAuthorization(from request: URLRequest) async throws -> URLRequest {
+        guard let authorization = request.value(forHTTPHeaderField: "Authorization"),
+              authorization.hasPrefix("Bearer ") else {
+            throw APIClientError.invalidServerResponse(statusCode: 401, requestID: nil)
+        }
+        let rejectedToken = String(authorization.dropFirst("Bearer ".count))
+        let context = await MainActor.run { SessionManager.shared.context }
+        guard let context, let refreshToken = context.refreshToken, !refreshToken.isEmpty else {
+            await MainActor.run { SessionManager.shared.clear() }
+            throw APIClientError.invalidServerResponse(statusCode: 401, requestID: nil)
+        }
+
+        let refreshed: AuthenticatedAccount
+        if context.accessToken != rejectedToken {
+            refreshed = try await MainActor.run {
+                guard let account = SessionManager.shared.context else {
+                    throw APIClientError.invalidServerResponse(statusCode: 401, requestID: nil)
+                }
+                return AuthenticatedAccount(
+                    userId: account.userId,
+                    username: account.username,
+                    displayName: account.displayName,
+                    accessToken: account.accessToken,
+                    refreshToken: account.refreshToken,
+                    expiresAt: nil,
+                    accountMode: account.accountMode,
+                    features: account.features
+                )
+            }
+        } else {
+            do {
+                refreshed = try await Self.authorizationRefreshCoordinator.refresh { [self] in
+                    try await self.refreshSession(refreshToken: refreshToken)
+                }
+                await MainActor.run { SessionManager.shared.establish(account: refreshed) }
+            } catch {
+                await MainActor.run { SessionManager.shared.clear() }
+                throw error
+            }
+        }
+
+        var retry = request
+        retry.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+        return retry
+    }
+
+    private func refreshSession(refreshToken: String) async throws -> AuthenticatedAccount {
+        var request = try makeRequest(path: APIEndpoint.refresh, method: .post)
+        request.setValue(nil, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(RefreshTokenRequest(refreshToken: refreshToken))
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch is URLError {
+            throw APIClientError.networkUnavailable
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+        try validate(httpResponse, data: data, expectedStatusCode: 200)
+        guard let envelope = try? decoder.decode(APIEnvelope<AuthenticatedAccount>.self, from: data) else {
+            throw APIClientError.invalidServerResponse(
+                statusCode: httpResponse.statusCode,
+                requestID: responseMetadata(from: httpResponse).serverRequestID
+            )
+        }
+        return envelope.data
     }
 
     private func validate(
@@ -586,13 +716,32 @@ final class RemoteAuthenticationService: AuthenticationServicing {
         )
     }
 
-    func logout(accessToken: String, refreshToken: String?) async throws {
+    func logout(accessToken: String, refreshToken: String) async throws {
         let authenticatedClient = await client.authenticated(with: accessToken)
-        let _: LogoutResponseDTO = try await authenticatedClient.send(
+        let response: LogoutResponseDTO = try await authenticatedClient.send(
             path: APIEndpoint.logout,
             body: LogoutRequest(refreshToken: refreshToken),
             expectedStatusCode: 200
         )
+        guard response.revoked else {
+            throw APIClientError.invalidResponse
+        }
+    }
+}
+
+private actor AuthorizationRefreshCoordinator {
+    private var activeRefresh: Task<AuthenticatedAccount, Error>?
+
+    func refresh(
+        operation: @escaping @Sendable () async throws -> AuthenticatedAccount
+    ) async throws -> AuthenticatedAccount {
+        if let activeRefresh {
+            return try await activeRefresh.value
+        }
+        let task = Task { try await operation() }
+        activeRefresh = task
+        defer { activeRefresh = nil }
+        return try await task.value
     }
 }
 
