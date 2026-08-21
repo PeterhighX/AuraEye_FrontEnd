@@ -7,7 +7,6 @@ enum MediaPathMigrator {
         migrateUsers(db)
         migrateCosmetics(db)
         migrateOnboarding(db)
-        migrateChatMessages(db)
     }
 
     private static func migrateUsers(_ db: OpaquePointer) {
@@ -22,10 +21,6 @@ enum MediaPathMigrator {
 
     private static func migrateOnboarding(_ db: OpaquePointer) {
         rewriteColumn(db, table: "onboarding_steps", column: "preview_path", idColumn: "id")
-    }
-
-    private static func migrateChatMessages(_ db: OpaquePointer) {
-        rewriteColumn(db, table: "chat_messages", column: "image_path", idColumn: "id")
     }
 
     private static func rewriteColumn(

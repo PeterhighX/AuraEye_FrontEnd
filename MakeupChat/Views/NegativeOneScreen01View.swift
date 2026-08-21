@@ -4,17 +4,20 @@ import SwiftUI
 struct AIChatRouteView: View {
     @Bindable var session: AppSession
     @Binding var path: NavigationPath
-    @State private var viewModel = ChatViewModel()
+    @State private var viewModel: ChatViewModel?
+    @State private var configurationError: String?
     @State private var entranceOffset: CGFloat = -UIScreen.main.bounds.width
     @State private var isReturningHome = false
 
     var body: some View {
-        NegativeOneScreen01View(
-            viewModel: viewModel,
-            onBack: returnToPreviousScreen
-        ) {
-            session.markMakeupGenerated()
-            path.append(AppRoute.makeupPreview)
+        Group {
+            if let viewModel {
+                NegativeOneScreen01View(viewModel: viewModel, onBack: returnToPreviousScreen)
+            } else if let configurationError {
+                ContentUnavailableView("对话服务不可用", systemImage: "exclamationmark.triangle", description: Text(configurationError))
+            } else {
+                ProgressView()
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -31,9 +34,19 @@ struct AIChatRouteView: View {
         )
         .offset(x: entranceOffset)
         .onAppear {
+            configureChatIfNeeded()
             withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
                 entranceOffset = 0
             }
+        }
+    }
+
+    private func configureChatIfNeeded() {
+        guard viewModel == nil, configurationError == nil else { return }
+        do {
+            viewModel = try ChatCompositionRoot.makeViewModel()
+        } catch {
+            configurationError = error.localizedDescription
         }
     }
 
@@ -62,18 +75,12 @@ struct AIChatRouteView: View {
 struct NegativeOneScreen01View: View {
     @Bindable var viewModel: ChatViewModel
     var onBack: () -> Void = {}
-    var onMakeupReady: () -> Void = {}
 
     var body: some View {
         ChatConversationView(
             viewModel: viewModel,
             layoutMode: .full,
-            onBack: onBack,
-            onMakeupReady: onMakeupReady
+            onBack: onBack
         )
     }
-}
-
-#Preview {
-    NegativeOneScreen01View(viewModel: ChatViewModel())
 }

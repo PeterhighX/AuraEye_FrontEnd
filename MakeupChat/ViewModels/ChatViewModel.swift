@@ -1,120 +1,77 @@
 import Foundation
 import Observation
-import UIKit
 
 @Observable
 @MainActor
 final class ChatViewModel {
-    private(set) var user: UserProfile
+    private(set) var user: UserProfile?
     private(set) var messages: [ChatMessage] = []
-    private(set) var tipText: String = ""
-    var inputText: String = ""
-    var isLoading = false
-    private(set) var isMakeupReady = false
+    private(set) var conversationId: String?
+    var inputText = ""
+    private(set) var isSending = false
+    private(set) var configurationError: String?
 
-    private let chatService: ChatSessionService
-    private let agentService: any AIAgentServicing
+    private let store: AccountScopedChatStore
+    private var sendTask: Task<Void, Never>?
 
-    init(
-        chatService: ChatSessionService = ChatSessionService(),
-        agentService: any AIAgentServicing = LocalAIAgentService()
-    ) {
-        self.chatService = chatService
-        self.agentService = agentService
-        self.user = UserProfile(
-            userId: "mrs_zhang",
-            displayName: "Mrs.Zhang",
-            status: "开心",
-            credits: 50
-        )
-        reload()
+    init(store: AccountScopedChatStore) {
+        self.store = store
     }
 
     func reload() {
         do {
-            let session = try chatService.loadSession()
-            user = session.0
-            messages = session.1
-            tipText = chatService.cosmeticTip()
+            let loaded = try store.load()
+            user = loaded.0
+            conversationId = loaded.1
+            messages = loaded.2
+            configurationError = nil
         } catch {
-            tipText = chatService.cosmeticTip()
+            configurationError = error.localizedDescription
         }
     }
 
     func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isLoading else { return }
+        guard !text.isEmpty, !isSending else { return }
         inputText = ""
+        startSend { try await self.store.sendNew(text: text) }
+    }
 
-        Task {
-            isLoading = true
-            do {
-                _ = try chatService.persistUserText(text, user: user)
-                reload()
+    func retry(message: ChatMessage) {
+        guard message.sender == .user, message.deliveryStatus.isRetryable, !isSending else { return }
+        startSend { try await self.store.retry(localMessageId: message.id) }
+    }
 
-                // 预设演示先保留用户文字，待用户选图后再由 Agent 一次性回应。
-                if text.contains("这是我的图片，我想看到在公园玩耍的样子") {
-                    isLoading = false
-                    return
-                }
+    func cancelPendingSend() {
+        sendTask?.cancel()
+        sendTask = nil
+        isSending = false
+        ChatSendRegistry.shared.unregister(userId: store.context.userId)
+    }
 
-                let thinking = ChatMessage(
-                    sender: .ai,
-                    text: "正在理解你的需求并整理妆容建议…",
-                    aiAvatarName: "AvatarAI2",
-                    kind: .generating
-                )
-                messages.append(thinking)
-
-                let response = try await agentService.reply(
-                    to: AIAgentRequest(
-                        userId: user.userId,
-                        displayName: user.displayName,
-                        message: text
-                    )
-                )
-                _ = try chatService.persistAIResponse(response, user: user)
-                reload()
-            } catch {
-                messages.removeAll { $0.kind == .generating }
+    private func startSend(_ operation: @escaping @MainActor () async throws -> Void) {
+        isSending = true
+        sendTask = Task { [weak self] in
+            guard let self else { return }
+            ChatSendRegistry.shared.register(userId: self.store.context.userId) { [weak self] in
+                self?.sendTask?.cancel()
             }
-            isLoading = false
-        }
-    }
-
-    func sendSuggestion(_ suggestion: String) {
-        inputText = suggestion
-        sendMessage()
-    }
-
-    func uploadDemoPhoto() {
-        perform {
-            _ = try chatService.attachDemoPhoto(user: user)
-            reload()
-        }
-    }
-
-    func uploadPhoto(_ image: UIImage) {
-        guard !isLoading else { return }
-        Task {
-            isLoading = true
-            defer { isLoading = false }
+            defer {
+                ChatSendRegistry.shared.unregister(userId: self.store.context.userId)
+                self.isSending = false
+                self.sendTask = nil
+            }
             do {
-                _ = try chatService.attachPhoto(image, user: user)
-                reload()
+                try await operation()
+                guard SessionManager.shared.context?.userId == self.store.context.userId else { return }
+                self.messages = (try? self.store.messages()) ?? self.messages
+            } catch is CancellationError {
+                // 登出或显式取消后不将状态写入其他账号的页面。
             } catch {
-                // 后续远端 Agent 接入后在此映射上传/生成错误。
+                guard SessionManager.shared.context?.userId == self.store.context.userId else { return }
+                self.messages = (try? self.store.messages()) ?? self.messages
             }
         }
-    }
-
-    private func perform(_ work: () throws -> Void) {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            try work()
-        } catch {
-            // Keep UI responsive even if persistence fails.
-        }
+        messages = (try? store.messages()) ?? messages
     }
 }

@@ -11,7 +11,6 @@ final class DatabaseManager {
         openDatabase()
         migrate()
         seedIfNeeded()
-        resetForFreshLaunch()
     }
 
     deinit {
@@ -55,6 +54,7 @@ final class DatabaseManager {
         ensureColumn("scanned_at", definition: "REAL", in: "cosmetics", database: db)
         applyVisionAPIV11Migration(database: db)
         applyUnifiedVisionJobMigration(database: db)
+        applyChatHermesMigration(database: db)
         MediaPathMigrator.migrateIfNeeded(in: db)
     }
 
@@ -134,6 +134,31 @@ final class DatabaseManager {
         }
     }
 
+    /// Hermes 文本对话按登录账号分区缓存；移除不符合正式契约的旧演示聊天记录和字段。
+    private func applyChatHermesMigration(database: OpaquePointer) {
+        let currentVersion = scalarInt(database, sql: "PRAGMA user_version;") ?? 0
+        guard currentVersion < 4 else { return }
+
+        guard execute("BEGIN IMMEDIATE;", in: database) else { return }
+        let statements = [
+            "CREATE TABLE IF NOT EXISTS chat_conversations (user_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL UNIQUE, created_at REAL NOT NULL, updated_at REAL NOT NULL, FOREIGN KEY(user_id) REFERENCES users(user_id));",
+            "DROP TABLE IF EXISTS chat_messages_v4;",
+            "CREATE TABLE chat_messages_v4 (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, conversation_id TEXT, sender TEXT NOT NULL, text TEXT NOT NULL, ai_avatar_name TEXT, client_request_id TEXT, server_message_id TEXT, server_request_id TEXT, delivery_status TEXT NOT NULL DEFAULT 'completed', error_code TEXT, error_detail TEXT, http_status INTEGER, created_at REAL NOT NULL, updated_at REAL NOT NULL DEFAULT 0, FOREIGN KEY(user_id) REFERENCES users(user_id));",
+            "DROP TABLE chat_messages;",
+            "ALTER TABLE chat_messages_v4 RENAME TO chat_messages;",
+            "CREATE INDEX idx_chat_user_conversation_time ON chat_messages(user_id, conversation_id, created_at);",
+            "CREATE UNIQUE INDEX idx_chat_request_sender ON chat_messages(user_id, conversation_id, client_request_id, sender) WHERE client_request_id IS NOT NULL;",
+            "PRAGMA user_version = 4;",
+            "COMMIT;"
+        ]
+        for statement in statements {
+            guard execute(statement, in: database) else {
+                _ = execute("ROLLBACK;", in: database)
+                return
+            }
+        }
+    }
+
     /// SQLite 不支持所有版本通用的 `ADD COLUMN IF NOT EXISTS`，先读取表结构再迁移。
     private func ensureColumn(
         _ column: String,
@@ -178,41 +203,6 @@ final class DatabaseManager {
         guard count == 0 else { return }
 
         DatabaseSeeder.seed(into: db)
-    }
-
-    /// 当前产品规则：每次 App 进程重新启动都视为首次使用。
-    /// 保留系统参考数据（如眼型库），清空所有用户产生的记录。
-    private func resetForFreshLaunch() {
-        guard let db else { return }
-
-        let sql = """
-        BEGIN IMMEDIATE;
-        DELETE FROM chat_messages;
-        DELETE FROM onboarding_steps;
-        DELETE FROM cosmetics;
-        UPDATE users SET
-            display_name = 'Mrs.Zhang',
-            status = '开心',
-            credits = 50,
-            user_file = NULL,
-            user_portrait = NULL,
-            user_update_photo = NULL,
-            eye_preview = NULL,
-            eye_steps = NULL,
-            updated_at = strftime('%s', 'now');
-        COMMIT;
-        """
-
-        var error: UnsafeMutablePointer<CChar>?
-        if sqlite3_exec(db, sql, nil, nil, &error) != SQLITE_OK {
-            _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
-            if let error {
-                sqlite3_free(error)
-            }
-            return
-        }
-
-        LocalMediaStore.clearAllUserGeneratedMedia()
     }
 
     private func scalarInt(_ db: OpaquePointer, sql: String) -> Int? {

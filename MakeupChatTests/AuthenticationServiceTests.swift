@@ -424,3 +424,118 @@ final class AuthenticationServiceTests: XCTestCase {
         )
     }
 }
+
+final class ChatContractTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        VisionURLProtocolStub.requests = []
+        VisionURLProtocolStub.handler = nil
+    }
+
+    func testChatRequestEncodesExactlyFrozenFields() throws {
+        let request = ChatSendRequest(
+            requestId: "req_chat_01JTEST",
+            conversationId: "conversation_01JTEST",
+            message: "请推荐通勤妆容"
+        )
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: String]
+        )
+
+        XCTAssertEqual(Set(object.keys), ["request_id", "conversation_id", "message"])
+        XCTAssertNil(object["user_id"])
+        XCTAssertNil(object["display_name"])
+    }
+
+    func testRemoteChatUsesBearerAndRequires201Envelope() async throws {
+        VisionURLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/chat/messages")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer chat-access-token")
+            let body = try XCTUnwrap(request.httpBody)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+            XCTAssertEqual(Set(object.keys), ["request_id", "conversation_id", "message"])
+            XCTAssertEqual(object["request_id"], "req_chat_01JTEST")
+            XCTAssertEqual(object["conversation_id"], "conversation_01JTEST")
+
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 201,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json", "X-Request-Id": "req_http_chat_01"]
+            )!
+            return (response, Data("""
+            {"request_id":"req_http_chat_01","data":{"client_request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"已为你整理通勤妆容建议。","avatar_asset":"AvatarAI2","status":"completed"}}
+            """.utf8))
+        }
+
+        let reply = try await RemoteAIAgentService(client: makeAuthenticatedClient()).send(
+            ChatSendRequest(requestId: "req_chat_01JTEST", conversationId: "conversation_01JTEST", message: "请推荐通勤妆容")
+        )
+        XCTAssertEqual(reply.clientRequestId, "req_chat_01JTEST")
+        XCTAssertEqual(reply.conversationId, "conversation_01JTEST")
+        XCTAssertEqual(reply.messageId, "resp_01")
+        XCTAssertEqual(reply.serverRequestId, "req_http_chat_01")
+    }
+
+    func testRemoteChatRejectsMismatchedClientRequestID() async throws {
+        VisionURLProtocolStub.handler = { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 201, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data("""
+            {"request_id":"req_http","data":{"client_request_id":"req_other","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"回复","avatar_asset":"AvatarAI2","status":"completed"}}
+            """.utf8))
+        }
+
+        do {
+            _ = try await RemoteAIAgentService(client: makeAuthenticatedClient()).send(
+                ChatSendRequest(requestId: "req_chat_01JTEST", conversationId: "conversation_01JTEST", message: "测试")
+            )
+            XCTFail("Mismatched client request ID must be rejected")
+        } catch is ChatContractError {
+            // Expected.
+        }
+    }
+
+    @MainActor
+    func testAccountScopedStoreKeepsConversationAndMessagesSeparated() async throws {
+        let first = SessionContext(userId: "chat-user-a-\(UUID().uuidString)", username: "alpha", displayName: "Alpha", accountMode: .standard, features: .standard, accessToken: "a", refreshToken: nil)
+        let second = SessionContext(userId: "chat-user-b-\(UUID().uuidString)", username: "beta", displayName: "Beta", accountMode: .standard, features: .standard, accessToken: "b", refreshToken: nil)
+        let firstStore = AccountScopedChatStore(context: first, agentService: ChatReplyStub())
+        let secondStore = AccountScopedChatStore(context: second, agentService: ChatReplyStub())
+
+        let firstConversation = try firstStore.load().1
+        _ = try secondStore.load()
+        try await firstStore.sendNew(text: "第一账号消息")
+
+        XCTAssertNotEqual(firstConversation, try secondStore.load().1)
+        XCTAssertEqual(try firstStore.messages().count, 2)
+        XCTAssertTrue(try secondStore.messages().isEmpty)
+    }
+
+    func testHermesUnavailableIsRetryableButInvalidResponseIsNot() {
+        let unavailable = ChatRequestFailure.capture(APIClientError.httpStatus(
+            503, "Hermes unavailable", code: "HERMES_UNAVAILABLE",
+            APIResponseMetadata(serverRequestID: "req", location: nil, retryAfterSeconds: nil)
+        ))
+        XCTAssertTrue(unavailable.retryable)
+        XCTAssertFalse(ChatRequestFailure.capture(ChatContractError.invalidResponse).retryable)
+    }
+
+    private func makeAuthenticatedClient() -> APIClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [VisionURLProtocolStub.self]
+        return APIClient(
+            configuration: APIConfiguration(baseURL: URL(string: "https://example.test/v1")!, accessToken: "chat-access-token", timeout: 5),
+            session: URLSession(configuration: configuration)
+        )
+    }
+}
+
+private struct ChatReplyStub: AIAgentServicing {
+    func send(_ request: ChatSendRequest) async throws -> ChatReply {
+        ChatReply(clientRequestId: request.requestId, conversationId: request.conversationId, messageId: "resp_\(request.requestId)", message: "远端回复", avatarAsset: "AvatarAI2", status: "completed", serverRequestId: "server_\(request.requestId)")
+    }
+}

@@ -103,6 +103,9 @@ final class AppSession {
     }
 
     func logout() {
+        if let userId = authenticatedAccount?.userId {
+            ChatSendRegistry.shared.cancel(userId: userId)
+        }
         authenticatedAccount = nil
         SessionManager.shared.clear()
     }

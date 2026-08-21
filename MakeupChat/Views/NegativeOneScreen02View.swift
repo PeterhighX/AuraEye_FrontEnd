@@ -7,7 +7,3 @@ struct NegativeOneScreen02View: View {
         ChatConversationView(viewModel: viewModel, layoutMode: .keyboard)
     }
 }
-
-#Preview {
-    NegativeOneScreen02View(viewModel: ChatViewModel())
-}

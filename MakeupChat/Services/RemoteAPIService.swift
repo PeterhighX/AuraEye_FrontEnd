@@ -350,6 +350,19 @@ actor APIClient {
         )
     }
 
+    func sendResponse<Body: Encodable, Response: Decodable>(
+        path: String,
+        method: HTTPMethod = .post,
+        body: Body,
+        idempotencyKey: String? = nil,
+        expectedStatusCode: Int? = nil
+    ) async throws -> APIResponse<Response> {
+        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        return try await perform(request, expectedStatusCode: expectedStatusCode)
+    }
+
     func sendMultipartResponse<Response: Decodable>(
         path: String,
         fields: [String: String],
@@ -781,48 +794,71 @@ private actor AuthorizationRefreshCoordinator {
 
 // MARK: - 1. Negative-one-screen chat
 
-private struct RemoteChatRequest: Encodable {
-    let userId: String
-    let displayName: String
-    let message: String
-
-    enum CodingKeys: String, CodingKey {
-        case userId = "user_id"
-        case displayName = "display_name"
-        case message
-    }
-}
-
 private struct RemoteChatResponse: Decodable {
+    let clientRequestId: String
+    let conversationId: String
+    let messageId: String
     let message: String
-    let avatarAsset: String?
+    let avatarAsset: String
+    let status: String
 
     enum CodingKeys: String, CodingKey {
+        case clientRequestId = "client_request_id"
+        case conversationId = "conversation_id"
+        case messageId = "message_id"
         case message
         case avatarAsset = "avatar_asset"
+        case status
     }
 }
 
-final class RemoteAIAgentService: AIAgentServicing {
+final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
     private let client: APIClient
 
     init(client: APIClient) {
         self.client = client
     }
 
-    func reply(to request: AIAgentRequest) async throws -> AIAgentResponse {
-        let response: RemoteChatResponse = try await client.send(
+    func send(_ request: ChatSendRequest) async throws -> ChatReply {
+        try validate(request)
+        let response: APIResponse<RemoteChatResponse> = try await client.sendResponse(
             path: APIEndpoint.chatMessages,
-            body: RemoteChatRequest(
-                userId: request.userId,
-                displayName: request.displayName,
-                message: request.message
-            )
+            method: .post,
+            body: request,
+            expectedStatusCode: 201
         )
-        return AIAgentResponse(
-            text: response.message,
-            avatarName: response.avatarAsset ?? "AvatarAI2"
+        let value = response.value
+        guard !value.clientRequestId.isEmpty,
+              !value.conversationId.isEmpty,
+              !value.messageId.isEmpty,
+              !value.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              value.status == "completed" else {
+            throw ChatContractError.invalidResponse
+        }
+        guard value.clientRequestId == request.requestId,
+              value.conversationId == request.conversationId else {
+            throw ChatContractError.mismatchedResponse
+        }
+        return ChatReply(
+            clientRequestId: value.clientRequestId,
+            conversationId: value.conversationId,
+            messageId: value.messageId,
+            message: value.message,
+            avatarAsset: value.avatarAsset,
+            status: value.status,
+            serverRequestId: response.metadata.serverRequestID
         )
+    }
+
+    private func validate(_ request: ChatSendRequest) throws {
+        let idPattern = #"^[A-Za-z0-9._:-]{8,128}$"#
+        let message = request.message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard request.requestId.range(of: idPattern, options: .regularExpression) != nil,
+              request.conversationId.range(of: idPattern, options: .regularExpression) != nil,
+              message.count <= 4000,
+              !message.isEmpty else {
+            throw ChatContractError.invalidRequest
+        }
     }
 }
 

@@ -11,8 +11,6 @@ enum MediaBucket: String {
     case eyePreviews
     /// `cosmetics.preview_path` 化妆品扫描图
     case cosmetics
-    /// `chat_messages.image_path` 聊天图片
-    case chat
     /// 第一次使用 · 妆容生成步骤预览
     case makeupPreviews
 }

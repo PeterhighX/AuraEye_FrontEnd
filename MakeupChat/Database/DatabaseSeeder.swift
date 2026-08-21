@@ -76,28 +76,6 @@ enum DatabaseSeeder {
             .double(now)
         ])
 
-        let demoMessages: [(String, String, String, String?, String?, String)] = [
-            ("ai", "Mrs Zhang. 请给我一张图片帮你生成今日的妆容", "FirstTimeAssistant", nil, nil, "text")
-        ]
-
-        for (index, item) in demoMessages.enumerated() {
-            let (sender, text, avatar, asset, _, kind) = item
-            exec(db, sql: """
-            INSERT INTO chat_messages (
-                id, user_id, sender, text, image_asset_name, image_path,
-                ai_avatar_name, message_kind, created_at
-            ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?);
-            """, bindings: [
-                .text("seed_\(index)"),
-                .text("mrs_zhang"),
-                .text(sender),
-                .text(text),
-                asset.map { .text($0) } ?? .null,
-                .text(avatar),
-                .text(kind),
-                .double(now + Double(index))
-            ])
-        }
     }
 
     private static func exec(_ db: OpaquePointer, sql: String, bindings: [SQLBinding]) {

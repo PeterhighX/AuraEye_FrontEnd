@@ -24,6 +24,37 @@ final class UserRepository {
         }
     }
 
+    func fetch(userId: String) throws -> UserProfile? {
+        try db.perform { db in
+            let sql = "SELECT * FROM users WHERE user_id = ? LIMIT 1;"
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw DatabaseError.prepareFailed
+            }
+            sqlite3_bind_text(statement, 1, userId, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+            return mapUser(statement)
+        }
+    }
+
+    func upsertChatUser(userId: String, displayName: String) throws -> UserProfile {
+        let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let now = Date().timeIntervalSince1970
+        try db.perform { db in
+            let sql = """
+            INSERT INTO users (user_id, display_name, status, credits, updated_at)
+            VALUES (?, ?, '开心', 0, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                display_name = excluded.display_name,
+                updated_at = excluded.updated_at;
+            """
+            try exec(db, sql: sql, bindings: [userId, normalizedName.isEmpty ? userId : normalizedName, now])
+        }
+        guard let user = try fetch(userId: userId) else { throw DatabaseError.executionFailed }
+        return user
+    }
+
     func update(_ user: UserProfile) throws {
         try db.perform { db in
             let sql = """

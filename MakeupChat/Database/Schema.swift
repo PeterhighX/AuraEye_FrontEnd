@@ -20,13 +20,29 @@ enum Schema {
     CREATE TABLE IF NOT EXISTS chat_messages (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
+        conversation_id TEXT,
         sender TEXT NOT NULL,
         text TEXT NOT NULL,
-        image_asset_name TEXT,
-        image_path TEXT,
         ai_avatar_name TEXT,
-        message_kind TEXT NOT NULL DEFAULT 'text',
+        client_request_id TEXT,
+        server_message_id TEXT,
+        server_request_id TEXT,
+        delivery_status TEXT NOT NULL DEFAULT 'completed',
+        error_code TEXT,
+        error_detail TEXT,
+        http_status INTEGER,
         created_at REAL NOT NULL,
+        updated_at REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(user_id)
+    );
+    """
+
+    static let createChatConversations = """
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+        user_id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL UNIQUE,
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL,
         FOREIGN KEY(user_id) REFERENCES users(user_id)
     );
     """
@@ -93,11 +109,11 @@ enum Schema {
     static let migrations: [String] = [
         createUsers,
         createChatMessages,
+        createChatConversations,
         createEyeStyles,
         createCosmetics,
         createOnboardingSteps,
         createVisionPendingJobs,
-        "CREATE INDEX IF NOT EXISTS idx_chat_user_time ON chat_messages(user_id, created_at);",
         "CREATE INDEX IF NOT EXISTS idx_onboarding_user ON onboarding_steps(user_id, step_index);",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_vision_pending_idempotency ON vision_pending_jobs(account_id, capability, idempotency_key) WHERE idempotency_key IS NOT NULL;"
     ]

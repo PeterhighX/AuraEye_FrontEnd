@@ -18,7 +18,8 @@ struct HomeView: View {
     @State private var isAIEntryPressed = false
     @State private var showsAIChat = false
     @State private var pageTransitionProgress: CGFloat = 0
-    @State private var aiChatViewModel = ChatViewModel()
+    @State private var aiChatViewModel: ChatViewModel?
+    @State private var chatConfigurationError: String?
     @State private var isClosingAIChat = false
     @StateObject private var weatherProvider = LiveWeatherProvider()
 
@@ -32,15 +33,11 @@ struct HomeView: View {
                     .offset(x: pageTransitionProgress * proxy.size.width)
                     .allowsHitTesting(!showsAIChat)
 
-                if showsAIChat {
+                if showsAIChat, let aiChatViewModel {
                     ChatConversationView(
                         viewModel: aiChatViewModel,
                         layoutMode: .full,
-                        onBack: { closeAIChat() },
-                        onMakeupReady: {
-                            session.markMakeupGenerated()
-                            closeAIChat(nextRoute: .makeupPreview)
-                        }
+                        onBack: { closeAIChat() }
                     )
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .offset(x: (pageTransitionProgress - 1) * proxy.size.width)
@@ -71,6 +68,14 @@ struct HomeView: View {
             if requested {
                 presentRequestedProfileCaptureIfNeeded()
             }
+        }
+        .alert("对话服务不可用", isPresented: Binding(
+            get: { chatConfigurationError != nil },
+            set: { if !$0 { chatConfigurationError = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(chatConfigurationError ?? "")
         }
         .fullScreenCover(isPresented: $showProfileImagePicker) {
             CameraPickerView(
@@ -186,6 +191,12 @@ struct HomeView: View {
 
     private func openAIChat() {
         guard !showsAIChat else { return }
+        do {
+            aiChatViewModel = try ChatCompositionRoot.makeViewModel()
+        } catch {
+            chatConfigurationError = error.localizedDescription
+            return
+        }
         isClosingAIChat = false
         pageTransitionProgress = 0
         showsAIChat = true

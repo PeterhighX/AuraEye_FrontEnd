@@ -4,14 +4,13 @@ struct MakeupInputBar: View {
     @Binding var text: String
     var focusBinding: FocusState<Bool>.Binding
     var onSend: () -> Void
-    var onCamera: () -> Void
-    var onUpload: () -> Void
+    var isSending = false
     var isKeyboardPresented = false
 
     var body: some View {
         HStack(spacing: 0) {
-            iconButton("plus", size: 30, action: onUpload)
-            iconButton("camera", size: 28, action: onCamera)
+            iconButton("plus", size: 30)
+            iconButton("camera", size: 28)
                 .padding(.leading, 4)
 
             TextField("来探寻今日的妆容灵感", text: $text)
@@ -50,19 +49,22 @@ struct MakeupInputBar: View {
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
+            .disabled(isSending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.top, isKeyboardPresented ? 0 : 8)
         .padding(.bottom, isKeyboardPresented ? 0 : 8)
     }
 
-    private func iconButton(_ systemName: String, size: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func iconButton(_ systemName: String, size: CGFloat) -> some View {
+        Button(action: {}) {
             Image(systemName: systemName)
                 .font(.system(size: size * 0.55))
                 .foregroundStyle(Color(red: 0.3, green: 0.3, blue: 0.3))
                 .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
+        .disabled(true)
+        .accessibilityLabel("本阶段暂不支持图片对话")
     }
 }

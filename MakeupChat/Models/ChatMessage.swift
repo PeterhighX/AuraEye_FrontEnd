@@ -26,46 +26,69 @@ struct UserProfile: Identifiable {
     }
 }
 
-enum ChatMessageKind: String {
-    case text
-    case photo
-    case generating
-    case eyePreview
-}
-
 enum ChatSender: String {
     case ai
     case user
 }
 
+enum ChatDeliveryStatus: String {
+    case sending
+    case completed
+    case failedRetryable = "failed_retryable"
+    case failedPermanent = "failed_permanent"
+
+    var isRetryable: Bool { self == .failedRetryable }
+}
+
 struct ChatMessage: Identifiable {
     let id: String
+    let userId: String
+    let conversationId: String
     let sender: ChatSender
     let text: String
-    let imageName: String?
-    let imagePath: String?
     let aiAvatarName: String
-    let kind: ChatMessageKind
+    let clientRequestId: String?
+    let serverMessageId: String?
+    let serverRequestId: String?
+    let deliveryStatus: ChatDeliveryStatus
+    let errorCode: String?
+    let errorDetail: String?
+    let httpStatus: Int?
     let createdAt: Date
+    let updatedAt: Date
 
     init(
         id: String = UUID().uuidString,
+        userId: String,
+        conversationId: String,
         sender: ChatSender,
         text: String,
-        imageName: String? = nil,
-        imagePath: String? = nil,
         aiAvatarName: String = "AvatarAI",
-        kind: ChatMessageKind = .text,
-        createdAt: Date = .now
+        clientRequestId: String? = nil,
+        serverMessageId: String? = nil,
+        serverRequestId: String? = nil,
+        deliveryStatus: ChatDeliveryStatus,
+        errorCode: String? = nil,
+        errorDetail: String? = nil,
+        httpStatus: Int? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
     ) {
         self.id = id
+        self.userId = userId
+        self.conversationId = conversationId
         self.sender = sender
         self.text = text
-        self.imageName = imageName
-        self.imagePath = imagePath
         self.aiAvatarName = aiAvatarName
-        self.kind = kind
+        self.clientRequestId = clientRequestId
+        self.serverMessageId = serverMessageId
+        self.serverRequestId = serverRequestId
+        self.deliveryStatus = deliveryStatus
+        self.errorCode = errorCode
+        self.errorDetail = errorDetail
+        self.httpStatus = httpStatus
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 
