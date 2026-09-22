@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ChatBubbleView: View {
     let message: ChatMessage
@@ -20,10 +21,20 @@ struct ChatBubbleView: View {
 
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(message.text)
-                .font(.system(size: 14, weight: .thin))
-                .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
-                .lineSpacing(4)
+            if message.sender == .ai,
+               message.deliveryStatus == .streaming,
+               message.text.isEmpty {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text("正在思考…")
+                }
+                .foregroundStyle(.secondary)
+            } else {
+                Text(message.text)
+                    .font(.system(size: 14, weight: .thin))
+                    .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
+                    .lineSpacing(4)
+            }
 
             if message.sender == .user {
                 deliveryStatus
@@ -42,6 +53,8 @@ struct ChatBubbleView: View {
         case .sending:
             Label("发送中", systemImage: "clock")
                 .foregroundStyle(.secondary)
+        case .streaming:
+            EmptyView()
         case .completed:
             EmptyView()
         case .failedRetryable, .failedPermanent:
@@ -71,11 +84,23 @@ struct ChatBubbleView: View {
     }
 
     private func avatarImage(_ name: String) -> some View {
-        Image(name)
-            .resizable()
-            .scaledToFill()
-            .frame(width: 36, height: 36)
-            .clipShape(Circle())
+        let image = UIImage(named: name)
+            ?? (name.hasPrefix("AvatarAI") ? UIImage(named: "AvatarAI2") : nil)
+        ZStack {
+            Circle().fill(Color.white.opacity(0.9))
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: name.hasPrefix("AvatarAI") ? "sparkles" : "person.fill")
+                    .foregroundStyle(Color.purple.opacity(0.8))
+            }
+        }
+        .frame(width: 36, height: 36)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.white.opacity(0.95), lineWidth: 1.5))
+        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
     }
 }
 

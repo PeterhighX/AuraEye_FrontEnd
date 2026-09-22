@@ -447,11 +447,12 @@ final class ChatContractTests: XCTestCase {
         XCTAssertNil(object["display_name"])
     }
 
-    func testRemoteChatUsesBearerAndRequires201Envelope() async throws {
+    func testRemoteChatUsesBearerAndConsumesSSE() async throws {
         VisionURLProtocolStub.handler = { request in
             XCTAssertEqual(request.url?.path, "/v1/chat/messages")
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer chat-access-token")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "text/event-stream")
             let body = try XCTUnwrap(request.httpBody)
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
             XCTAssertEqual(Set(object.keys), ["request_id", "conversation_id", "message"])
@@ -460,39 +461,53 @@ final class ChatContractTests: XCTestCase {
 
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
-                statusCode: 201,
+                statusCode: 200,
                 httpVersion: nil,
-                headerFields: ["Content-Type": "application/json", "X-Request-Id": "req_http_chat_01"]
+                headerFields: ["Content-Type": "text/event-stream", "X-Request-Id": "req_http_chat_01"]
             )!
             return (response, Data("""
-            {"request_id":"req_http_chat_01","data":{"client_request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"已为你整理通勤妆容建议。","avatar_asset":"AvatarAI2","status":"completed"}}
+            event: message.accepted
+            data: {"type":"message.accepted","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01"}
+
+            event: assistant.delta
+            data: {"type":"assistant.delta","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","delta":"已为你整理"}
+
+            event: message.completed
+            data: {"type":"message.completed","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"已为你整理通勤妆容建议。","server_request_id":"req_http_chat_01"}
+
             """.utf8))
         }
 
-        let reply = try await RemoteAIAgentService(client: makeAuthenticatedClient()).send(
+        let stream = RemoteAIAgentService(client: makeAuthenticatedClient()).stream(
             ChatSendRequest(requestId: "req_chat_01JTEST", conversationId: "conversation_01JTEST", message: "请推荐通勤妆容")
         )
-        XCTAssertEqual(reply.clientRequestId, "req_chat_01JTEST")
-        XCTAssertEqual(reply.conversationId, "conversation_01JTEST")
-        XCTAssertEqual(reply.messageId, "resp_01")
-        XCTAssertEqual(reply.serverRequestId, "req_http_chat_01")
+        var reply: ChatReply?
+        for try await event in stream {
+            if case let .completed(value) = event { reply = value }
+        }
+        XCTAssertEqual(reply?.clientRequestId, "req_chat_01JTEST")
+        XCTAssertEqual(reply?.conversationId, "conversation_01JTEST")
+        XCTAssertEqual(reply?.messageId, "resp_01")
+        XCTAssertEqual(reply?.serverRequestId, "req_http_chat_01")
     }
 
     func testRemoteChatRejectsMismatchedClientRequestID() async throws {
         VisionURLProtocolStub.handler = { request in
             let response = HTTPURLResponse(
-                url: try XCTUnwrap(request.url), statusCode: 201, httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "text/event-stream"]
             )!
             return (response, Data("""
-            {"request_id":"req_http","data":{"client_request_id":"req_other","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"回复","avatar_asset":"AvatarAI2","status":"completed"}}
+            event: message.accepted
+            data: {"type":"message.accepted","request_id":"req_other","conversation_id":"conversation_01JTEST","message_id":"resp_01"}
+
             """.utf8))
         }
 
         do {
-            _ = try await RemoteAIAgentService(client: makeAuthenticatedClient()).send(
+            for try await _ in RemoteAIAgentService(client: makeAuthenticatedClient()).stream(
                 ChatSendRequest(requestId: "req_chat_01JTEST", conversationId: "conversation_01JTEST", message: "测试")
-            )
+            ) {}
             XCTFail("Mismatched client request ID must be rejected")
         } catch is ChatContractError {
             // Expected.
@@ -508,10 +523,13 @@ final class ChatContractTests: XCTestCase {
 
         let firstConversation = try firstStore.load().1
         _ = try secondStore.load()
-        try await firstStore.sendNew(text: "第一账号消息")
+        let request = try firstStore.prepareNew(text: "第一账号消息")
+        XCTAssertEqual(try firstStore.messages().map(\.deliveryStatus), [.sending, .streaming])
+        try await firstStore.perform(request) {}
 
         XCTAssertNotEqual(firstConversation, try secondStore.load().1)
         XCTAssertEqual(try firstStore.messages().count, 2)
+        XCTAssertEqual(try firstStore.messages().last?.text, "远端回复")
         XCTAssertTrue(try secondStore.messages().isEmpty)
     }
 
@@ -535,7 +553,22 @@ final class ChatContractTests: XCTestCase {
 }
 
 private struct ChatReplyStub: AIAgentServicing {
-    func send(_ request: ChatSendRequest) async throws -> ChatReply {
-        ChatReply(clientRequestId: request.requestId, conversationId: request.conversationId, messageId: "resp_\(request.requestId)", message: "远端回复", avatarAsset: "AvatarAI2", status: "completed", serverRequestId: "server_\(request.requestId)")
+    func stream(_ request: ChatSendRequest) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let messageId = "resp_\(request.requestId)"
+            continuation.yield(.accepted(messageId: messageId))
+            continuation.yield(.assistantDelta("远端"))
+            continuation.yield(.assistantDelta("回复"))
+            continuation.yield(.completed(ChatReply(
+                clientRequestId: request.requestId,
+                conversationId: request.conversationId,
+                messageId: messageId,
+                message: "远端回复",
+                avatarAsset: "AvatarAI2",
+                status: "completed",
+                serverRequestId: "server_\(request.requestId)"
+            )))
+            continuation.finish()
+        }
     }
 }

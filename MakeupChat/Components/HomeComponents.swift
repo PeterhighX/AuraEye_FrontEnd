@@ -81,13 +81,14 @@ struct HomeTeachingCard: View {
                 .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
                 .frame(height: 148)
 
-            Image(systemName: weather.symbolName)
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 68))
-                .frame(width: 120, height: 90)
+            AnimatedWeatherSymbol(
+                symbolName: weather.symbolName,
+                size: 68,
+                frameWidth: 120,
+                frameHeight: 90
+            )
                 .padding(.leading, 18)
                 .offset(y: -20)
-                .contentTransition(.symbolEffect(.replace))
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text("上妆教学")
@@ -121,17 +122,21 @@ struct HomeTeachingCard: View {
 
                     Spacer()
 
-                    Text(weather.district)
-                        .font(.system(size: 12, weight: .light))
-                        .tracking(0)
-                        .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
-                        .padding(.horizontal, 6)
-                        .frame(height: 18)
-                        .background(
-                            Color(red: 225 / 255, green: 244 / 255, blue: 253 / 255)
-                                .opacity(0.45)
-                        )
-                        .clipShape(Capsule())
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(weather.district)
+                            .font(.system(size: 12, weight: .light))
+                            .tracking(0)
+                            .padding(.horizontal, 6)
+                            .frame(height: 18)
+                            .background(
+                                Color(red: 225 / 255, green: 244 / 255, blue: 253 / 255)
+                                    .opacity(0.45)
+                            )
+                            .clipShape(Capsule())
+                        Link("Open-Meteo", destination: LiveWeatherSnapshot.dataSourceURL)
+                            .font(.system(size: 8, weight: .light))
+                    }
+                    .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
                 }
                 .frame(width: 140)
 

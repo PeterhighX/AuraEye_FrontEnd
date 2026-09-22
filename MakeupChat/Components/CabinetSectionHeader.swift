@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CabinetSectionHeader: View {
     let category: CosmeticCategory
-
+w#ww#Rww
     var body: some View {
         HStack {
             HStack(spacing: 6) {

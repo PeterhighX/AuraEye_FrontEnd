@@ -64,6 +64,16 @@ struct HomeView: View {
             viewModel.reload()
             presentRequestedProfileCaptureIfNeeded()
         }
+        .task {
+            while !Task.isCancelled {
+                weatherProvider.start()
+                do {
+                    try await Task.sleep(for: .seconds(30 * 60))
+                } catch {
+                    break
+                }
+            }
+        }
         .onChange(of: session.shouldRequestProfileCapture) { _, requested in
             if requested {
                 presentRequestedProfileCaptureIfNeeded()
@@ -283,7 +293,7 @@ struct HomeView: View {
 
     private var teachingSection: some View {
         VStack(spacing: 12) {
-            HomeTeachingCard(weather: LiveWeatherSnapshot()) {
+            HomeTeachingCard(weather: weatherProvider.snapshot) {
                 path.append(session.routeForQuickStart())
             }
 

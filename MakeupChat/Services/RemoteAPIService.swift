@@ -191,6 +191,12 @@ struct APIBinaryResponse {
     let metadata: APIResponseMetadata
 }
 
+struct ServerSentEvent: Sendable, Equatable {
+    let id: String?
+    let name: String?
+    let data: String
+}
+
 enum APIClientError: LocalizedError {
     case networkUnavailable
     case invalidResponse
@@ -363,6 +369,29 @@ actor APIClient {
         return try await perform(request, expectedStatusCode: expectedStatusCode)
     }
 
+    func eventStream<Body: Encodable>(
+        path: String,
+        body: Body,
+        idempotencyKey: String? = nil
+    ) throws -> AsyncThrowingStream<ServerSentEvent, Error> {
+        var request = try makeRequest(path: path, method: .post, idempotencyKey: idempotencyKey)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.httpBody = try encoder.encode(body)
+
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await self.consumeEventStream(request, continuation: continuation)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: self.normalizedStreamError(error))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     func sendMultipartResponse<Response: Decodable>(
         path: String,
         fields: [String: String],
@@ -523,6 +552,96 @@ actor APIClient {
             fallback: envelope.requestId
         )
         return APIResponse(value: envelope.data, metadata: metadata)
+    }
+
+    private func consumeEventStream(
+        _ initialRequest: URLRequest,
+        continuation: AsyncThrowingStream<ServerSentEvent, Error>.Continuation
+    ) async throws {
+        var request = initialRequest
+        var permitsAuthorizationRefresh = true
+
+        while true {
+            let (bytes, response) = try await session.bytes(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIClientError.invalidResponse
+            }
+
+            if httpResponse.statusCode == 401,
+               permitsAuthorizationRefresh,
+               request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true {
+                permitsAuthorizationRefresh = false
+                request = try await requestWithRefreshedAuthorization(from: request)
+                continue
+            }
+
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                var data = Data()
+                for try await byte in bytes { data.append(byte) }
+                try validate(httpResponse, data: data, expectedStatusCode: nil)
+                throw APIClientError.invalidServerResponse(
+                    statusCode: httpResponse.statusCode,
+                    requestID: responseMetadata(from: httpResponse).serverRequestID
+                )
+            }
+
+            guard normalizedContentType(httpResponse.value(forHTTPHeaderField: "Content-Type")) == "text/event-stream" else {
+                throw APIClientError.invalidServerResponse(
+                    statusCode: httpResponse.statusCode,
+                    requestID: responseMetadata(from: httpResponse).serverRequestID
+                )
+            }
+
+            var eventID: String?
+            var eventName: String?
+            var dataLines: [String] = []
+
+            func emit() {
+                guard !dataLines.isEmpty else {
+                    eventID = nil
+                    eventName = nil
+                    return
+                }
+                continuation.yield(ServerSentEvent(
+                    id: eventID,
+                    name: eventName,
+                    data: dataLines.joined(separator: "\n")
+                ))
+                eventID = nil
+                eventName = nil
+                dataLines.removeAll(keepingCapacity: true)
+            }
+
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                if line.isEmpty {
+                    emit()
+                    continue
+                }
+                if line.hasPrefix(":") { continue }
+
+                let pieces = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+                let field = String(pieces[0])
+                var value = pieces.count == 2 ? String(pieces[1]) : ""
+                if value.hasPrefix(" ") { value.removeFirst() }
+                switch field {
+                case "id": eventID = value
+                case "event": eventName = value
+                case "data": dataLines.append(value)
+                default: break
+                }
+            }
+            emit()
+            return
+        }
+    }
+
+    private func normalizedStreamError(_ error: Error) -> Error {
+        if error is CancellationError { return CancellationError() }
+        if let error = error as? URLError {
+            return error.code == .cancelled ? CancellationError() : APIClientError.networkUnavailable
+        }
+        return error
     }
 
     private func requestWithRefreshedAuthorization(from request: URLRequest) async throws -> URLRequest {
@@ -794,21 +913,31 @@ private actor AuthorizationRefreshCoordinator {
 
 // MARK: - 1. Negative-one-screen chat
 
-private struct RemoteChatResponse: Decodable {
-    let clientRequestId: String
-    let conversationId: String
-    let messageId: String
-    let message: String
-    let avatarAsset: String
-    let status: String
+private struct RemoteChatStreamPayload: Decodable {
+    let type: String?
+    let requestId: String?
+    let conversationId: String?
+    let messageId: String?
+    let delta: String?
+    let message: String?
+    let code: String?
+    let detail: String?
+    let retryable: Bool?
+    let serverRequestId: String?
+    let httpStatus: Int?
+    let toolCallId: String?
+    let name: String?
+    let status: String?
 
     enum CodingKeys: String, CodingKey {
-        case clientRequestId = "client_request_id"
+        case type
+        case requestId = "request_id"
         case conversationId = "conversation_id"
         case messageId = "message_id"
-        case message
-        case avatarAsset = "avatar_asset"
-        case status
+        case delta, message, code, detail, retryable, name, status
+        case serverRequestId = "server_request_id"
+        case httpStatus = "http_status"
+        case toolCallId = "tool_call_id"
     }
 }
 
@@ -819,35 +948,99 @@ final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
         self.client = client
     }
 
-    func send(_ request: ChatSendRequest) async throws -> ChatReply {
-        try validate(request)
-        let response: APIResponse<RemoteChatResponse> = try await client.sendResponse(
-            path: APIEndpoint.chatMessages,
-            method: .post,
-            body: request,
-            expectedStatusCode: 201
-        )
-        let value = response.value
-        guard !value.clientRequestId.isEmpty,
-              !value.conversationId.isEmpty,
-              !value.messageId.isEmpty,
-              !value.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              value.status == "completed" else {
-            throw ChatContractError.invalidResponse
+    func stream(_ request: ChatSendRequest) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        do {
+            try validate(request)
+        } catch {
+            return AsyncThrowingStream { $0.finish(throwing: error) }
         }
-        guard value.clientRequestId == request.requestId,
-              value.conversationId == request.conversationId else {
-            throw ChatContractError.mismatchedResponse
+
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let events = try await client.eventStream(
+                        path: APIEndpoint.chatMessages,
+                        body: request,
+                        idempotencyKey: request.requestId
+                    )
+                    let decoder = JSONDecoder()
+
+                    for try await event in events {
+                        guard let data = event.data.data(using: .utf8),
+                              let payload = try? decoder.decode(RemoteChatStreamPayload.self, from: data) else {
+                            throw ChatContractError.invalidResponse
+                        }
+                        try validateIdentity(payload, request: request)
+                        if let eventType = event.name,
+                           let payloadType = payload.type,
+                           eventType != payloadType {
+                            throw ChatContractError.invalidResponse
+                        }
+                        let type = event.name ?? payload.type
+                        switch type {
+                        case "message.accepted":
+                            guard let messageId = payload.messageId, !messageId.isEmpty else {
+                                throw ChatContractError.invalidResponse
+                            }
+                            continuation.yield(.accepted(messageId: messageId))
+                        case "assistant.started":
+                            guard let messageId = payload.messageId, !messageId.isEmpty else {
+                                throw ChatContractError.invalidResponse
+                            }
+                            continuation.yield(.assistantStarted(messageId: messageId))
+                        case "assistant.delta":
+                            if let delta = payload.delta, !delta.isEmpty {
+                                continuation.yield(.assistantDelta(delta))
+                            }
+                        case "tool.started":
+                            guard let id = payload.toolCallId, let name = payload.name else {
+                                throw ChatContractError.invalidResponse
+                            }
+                            continuation.yield(.toolStarted(id: id, name: name))
+                        case "tool.completed":
+                            guard let id = payload.toolCallId, let name = payload.name else {
+                                throw ChatContractError.invalidResponse
+                            }
+                            continuation.yield(.toolCompleted(id: id, name: name, status: payload.status ?? "completed"))
+                        case "message.completed":
+                            guard let messageId = payload.messageId,
+                                  let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  !messageId.isEmpty, !message.isEmpty else {
+                                throw ChatContractError.invalidResponse
+                            }
+                            continuation.yield(.completed(ChatReply(
+                                clientRequestId: request.requestId,
+                                conversationId: request.conversationId,
+                                messageId: messageId,
+                                message: message,
+                                avatarAsset: "AvatarAI2",
+                                status: "completed",
+                                serverRequestId: payload.serverRequestId
+                            )))
+                            continuation.finish()
+                            return
+                        case "error":
+                            continuation.yield(.failed(ChatStreamFailure(
+                                code: payload.code ?? "CHAT_STREAM_FAILED",
+                                detail: payload.detail ?? "对话生成失败。",
+                                retryable: payload.retryable ?? false,
+                                serverRequestId: payload.serverRequestId,
+                                httpStatus: payload.httpStatus
+                            )))
+                            continuation.finish()
+                            return
+                        default:
+                            continue
+                        }
+                    }
+
+                    throw ChatContractError.invalidResponse
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
         }
-        return ChatReply(
-            clientRequestId: value.clientRequestId,
-            conversationId: value.conversationId,
-            messageId: value.messageId,
-            message: value.message,
-            avatarAsset: value.avatarAsset,
-            status: value.status,
-            serverRequestId: response.metadata.serverRequestID
-        )
     }
 
     private func validate(_ request: ChatSendRequest) throws {
@@ -858,6 +1051,16 @@ final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
               message.count <= 4000,
               !message.isEmpty else {
             throw ChatContractError.invalidRequest
+        }
+    }
+
+    private func validateIdentity(
+        _ payload: RemoteChatStreamPayload,
+        request: ChatSendRequest
+    ) throws {
+        guard payload.requestId == request.requestId,
+              payload.conversationId == request.conversationId else {
+            throw ChatContractError.mismatchedResponse
         }
     }
 }

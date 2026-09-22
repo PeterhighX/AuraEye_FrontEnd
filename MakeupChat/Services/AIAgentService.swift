@@ -1,7 +1,7 @@
 import Foundation
 
 protocol AIAgentServicing: Sendable {
-    func send(_ request: ChatSendRequest) async throws -> ChatReply
+    func stream(_ request: ChatSendRequest) -> AsyncThrowingStream<ChatStreamEvent, Error>
 }
 
 struct ChatSendRequest: Encodable, Sendable {
@@ -24,6 +24,24 @@ struct ChatReply: Sendable, Equatable {
     let avatarAsset: String
     let status: String
     let serverRequestId: String?
+}
+
+enum ChatStreamEvent: Sendable, Equatable {
+    case accepted(messageId: String)
+    case assistantStarted(messageId: String)
+    case assistantDelta(String)
+    case toolStarted(id: String, name: String)
+    case toolCompleted(id: String, name: String, status: String)
+    case completed(ChatReply)
+    case failed(ChatStreamFailure)
+}
+
+struct ChatStreamFailure: Error, Sendable, Equatable {
+    let code: String
+    let detail: String
+    let retryable: Bool
+    let serverRequestId: String?
+    let httpStatus: Int?
 }
 
 enum ChatContractError: LocalizedError {

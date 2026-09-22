@@ -1,7 +1,6 @@
+import Combine
 import CoreLocation
 import Foundation
-import SwiftUI
-import WeatherKit
 
 struct LiveWeatherSnapshot: Equatable {
     var temperature = 26
@@ -9,6 +8,8 @@ struct LiveWeatherSnapshot: Equatable {
     var symbolName = "cloud.sun.fill"
     var uvIndex = 3
     var district = "福田区"
+
+    static let dataSourceURL = URL(string: "https://open-meteo.com/")!
 
     var uvDescription: String {
         switch uvIndex {
@@ -31,7 +32,7 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     @Published private(set) var isLive = false
 
     private let locationManager = CLLocationManager()
-    private var hasRequestedWeather = false
+    private var isLoading = false
 
     override init() {
         super.init()
@@ -40,13 +41,8 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     }
 
     func start() {
-#if targetEnvironment(simulator)
-        // WeatherKit's JWT service is not reliable in some beta simulator
-        // runtimes. Keep the screen usable with the design fallback; a real
-        // device still receives live WeatherKit and location updates.
-        isLive = false
-        return
-#else
+        guard !isLoading else { return }
+
         switch locationManager.authorizationStatus {
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
@@ -55,7 +51,6 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
         default:
             break
         }
-#endif
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -65,36 +60,58 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last, !hasRequestedWeather else { return }
-        hasRequestedWeather = true
+        guard let location = locations.last, !isLoading else { return }
+        isLoading = true
         Task { await loadWeather(at: location) }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        isLoading = false
         isLive = false
     }
 
     private func loadWeather(at location: CLLocation) async {
+        defer { isLoading = false }
+
         do {
-            let response = try await WeatherService.shared.weather(for: location)
-            let current = response.currentWeather
-            let uvIndex = response.dailyForecast.first?.uvIndex.value ?? snapshot.uvIndex
+            let response = try await fetchWeather(at: location)
+            let condition = Self.condition(for: response.current.weatherCode, isDay: response.current.isDay == 1)
 
             snapshot = LiveWeatherSnapshot(
-                temperature: Int(current.temperature.converted(to: .celsius).value.rounded()),
-                conditionText: Self.conditionText(for: current.symbolName),
-                symbolName: current.symbolName,
-                uvIndex: uvIndex,
+                temperature: Int(response.current.temperature.rounded()),
+                conditionText: condition.text,
+                symbolName: condition.symbolName,
+                uvIndex: max(0, Int(response.current.uvIndex.rounded())),
                 district: snapshot.district
             )
             isLive = true
 
             await loadDistrict(at: location)
         } catch {
-            // WeatherKit entitlement, network and simulator-location failures use
-            // the high-fidelity fallback snapshot instead of blanking the card.
+            // Keep the design fallback visible and allow a later start() to retry.
             isLive = false
         }
+    }
+
+    private func fetchWeather(at location: CLLocation) async throws -> OpenMeteoResponse {
+        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        components?.queryItems = [
+            URLQueryItem(name: "latitude", value: String(location.coordinate.latitude)),
+            URLQueryItem(name: "longitude", value: String(location.coordinate.longitude)),
+            URLQueryItem(name: "current", value: "temperature_2m,weather_code,is_day,uv_index"),
+            URLQueryItem(name: "timezone", value: "auto")
+        ]
+
+        guard let url = components?.url else { throw OpenMeteoError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 12
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw OpenMeteoError.invalidResponse
+        }
+        return try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
     }
 
     private func loadDistrict(at location: CLLocation) async {
@@ -107,14 +124,55 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
         }
     }
 
-    private static func conditionText(for symbolName: String) -> String {
-        let value = symbolName.lowercased()
-        if value.contains("thunder") { return "雷雨" }
-        if value.contains("snow") || value.contains("sleet") { return "雪" }
-        if value.contains("rain") || value.contains("drizzle") { return "雨" }
-        if value.contains("fog") || value.contains("haze") { return "雾" }
-        if value.contains("cloud.sun") || value.contains("cloud.moon") { return "多云" }
-        if value.contains("cloud") { return "阴" }
-        return "晴"
+    private static func condition(for code: Int, isDay: Bool) -> (text: String, symbolName: String) {
+        switch code {
+        case 0:
+            return ("晴", isDay ? "sun.max.fill" : "moon.stars.fill")
+        case 1:
+            return ("晴间多云", isDay ? "sun.max.fill" : "moon.stars.fill")
+        case 2:
+            return ("多云", isDay ? "cloud.sun.fill" : "cloud.moon.fill")
+        case 3:
+            return ("阴", "cloud.fill")
+        case 45, 48:
+            return ("雾", "cloud.fog.fill")
+        case 51, 53, 55, 56, 57:
+            return ("毛毛雨", "cloud.drizzle.fill")
+        case 61, 63, 65, 66, 67:
+            return ("雨", "cloud.rain.fill")
+        case 71, 73, 75, 77:
+            return ("雪", "cloud.snow.fill")
+        case 80, 81, 82:
+            return ("阵雨", "cloud.heavyrain.fill")
+        case 85, 86:
+            return ("阵雪", "cloud.snow.fill")
+        case 95, 96, 99:
+            return ("雷雨", "cloud.bolt.rain.fill")
+        default:
+            return ("多云", "cloud.fill")
+        }
     }
+}
+
+private struct OpenMeteoResponse: Decodable {
+    let current: CurrentWeather
+
+    struct CurrentWeather: Decodable {
+        let temperature: Double
+        let weatherCode: Int
+        let isDay: Int
+        let uvIndex: Double
+
+        enum CodingKeys: String, CodingKey {
+            case temperature = "temperature_2m"
+            case weatherCode = "weather_code"
+            case isDay = "is_day"
+            case uvIndex = "uv_index"
+        }
+    }
+}
+
+private enum OpenMeteoError: Error {
+    case invalidURL
+    case invalidResponse
 }

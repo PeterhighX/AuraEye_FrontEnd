@@ -33,6 +33,7 @@ enum ChatSender: String {
 
 enum ChatDeliveryStatus: String {
     case sending
+    case streaming
     case completed
     case failedRetryable = "failed_retryable"
     case failedPermanent = "failed_permanent"

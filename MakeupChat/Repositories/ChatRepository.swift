@@ -43,20 +43,53 @@ final class ChatRepository {
         }
     }
 
-    func insertSendingUserMessage(userId: String, conversationId: String, requestId: String, text: String) throws {
+    func insertSendingExchange(userId: String, conversationId: String, requestId: String, text: String) throws {
         try db.perform { db in
-            let now = Date().timeIntervalSince1970
-            try execute(db, sql: """
-            INSERT INTO chat_messages (
-                id, user_id, conversation_id, sender, text, ai_avatar_name,
-                client_request_id, delivery_status, created_at, updated_at
-            ) VALUES (?, ?, ?, 'user', ?, 'AvatarUser', ?, 'sending', ?, ?);
-            """, bindings: [UUID().uuidString, userId, conversationId, text, requestId, now, now])
-            try touchConversation(db, userId: userId, at: now)
+            guard executeRaw("BEGIN IMMEDIATE;", in: db) else { throw DatabaseError.executionFailed }
+            do {
+                let now = Date().timeIntervalSince1970
+                try execute(db, sql: """
+                INSERT INTO chat_messages (
+                    id, user_id, conversation_id, sender, text, ai_avatar_name,
+                    client_request_id, delivery_status, created_at, updated_at
+                ) VALUES (?, ?, ?, 'user', ?, 'AvatarUser', ?, 'sending', ?, ?);
+                """, bindings: [UUID().uuidString, userId, conversationId, text, requestId, now, now])
+                try execute(db, sql: """
+                INSERT INTO chat_messages (
+                    id, user_id, conversation_id, sender, text, ai_avatar_name,
+                    client_request_id, delivery_status, created_at, updated_at
+                ) VALUES (?, ?, ?, 'ai', '', 'AvatarAI2', ?, 'streaming', ?, ?);
+                """, bindings: ["assistant_\(UUID().uuidString)", userId, conversationId, requestId, now + 0.000_001, now])
+                try touchConversation(db, userId: userId, at: now)
+                guard executeRaw("COMMIT;", in: db) else { throw DatabaseError.executionFailed }
+            } catch {
+                _ = executeRaw("ROLLBACK;", in: db)
+                throw error
+            }
         }
     }
 
-    func complete(userId: String, conversationId: String, reply: ChatReply) throws {
+    func bindAssistantMessageID(userId: String, conversationId: String, requestId: String, messageId: String) throws {
+        try db.perform { db in
+            try execute(db, sql: """
+            UPDATE chat_messages SET server_message_id = ?, updated_at = ?
+            WHERE user_id = ? AND conversation_id = ? AND sender = 'ai' AND client_request_id = ?;
+            """, bindings: [messageId, Date().timeIntervalSince1970, userId, conversationId, requestId])
+            guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
+        }
+    }
+
+    func replaceStreamingAssistantText(userId: String, conversationId: String, requestId: String, text: String) throws {
+        try db.perform { db in
+            try execute(db, sql: """
+            UPDATE chat_messages SET text = ?, delivery_status = 'streaming', updated_at = ?
+            WHERE user_id = ? AND conversation_id = ? AND sender = 'ai' AND client_request_id = ?;
+            """, bindings: [text, Date().timeIntervalSince1970, userId, conversationId, requestId])
+            guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
+        }
+    }
+
+    func completeStreaming(userId: String, conversationId: String, reply: ChatReply) throws {
         try db.perform { db in
             guard executeRaw("BEGIN IMMEDIATE;", in: db) else { throw DatabaseError.executionFailed }
             do {
@@ -69,18 +102,29 @@ final class ChatRepository {
                 """, bindings: [reply.serverRequestId, now, userId, conversationId, reply.clientRequestId])
                 guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
                 try execute(db, sql: """
-                INSERT OR IGNORE INTO chat_messages (
-                    id, user_id, conversation_id, sender, text, ai_avatar_name,
-                    client_request_id, server_message_id, server_request_id,
-                    delivery_status, created_at, updated_at
-                ) VALUES (?, ?, ?, 'ai', ?, ?, ?, ?, ?, 'completed', ?, ?);
-                """, bindings: [UUID().uuidString, userId, conversationId, reply.message, reply.avatarAsset, reply.clientRequestId, reply.messageId, reply.serverRequestId, now, now])
+                UPDATE chat_messages
+                SET text = ?, ai_avatar_name = ?, server_message_id = ?, server_request_id = ?,
+                    delivery_status = 'completed', error_code = NULL, error_detail = NULL,
+                    http_status = NULL, updated_at = ?
+                WHERE user_id = ? AND conversation_id = ? AND sender = 'ai' AND client_request_id = ?;
+                """, bindings: [reply.message, reply.avatarAsset, reply.messageId, reply.serverRequestId, now, userId, conversationId, reply.clientRequestId])
+                guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
                 try touchConversation(db, userId: userId, at: now)
                 guard executeRaw("COMMIT;", in: db) else { throw DatabaseError.executionFailed }
             } catch {
                 _ = executeRaw("ROLLBACK;", in: db)
                 throw error
             }
+        }
+    }
+
+    func discardStreamingAssistant(userId: String, conversationId: String, requestId: String) throws {
+        try db.perform { db in
+            try execute(db, sql: """
+            DELETE FROM chat_messages
+            WHERE user_id = ? AND conversation_id = ? AND sender = 'ai'
+              AND client_request_id = ? AND delivery_status = 'streaming';
+            """, bindings: [userId, conversationId, requestId])
         }
     }
 
@@ -118,12 +162,26 @@ final class ChatRepository {
 
     func markRetrying(userId: String, conversationId: String, requestId: String) throws {
         try db.perform { db in
-            try execute(db, sql: """
-            UPDATE chat_messages
-            SET delivery_status = 'sending', error_code = NULL, error_detail = NULL, http_status = NULL, updated_at = ?
-            WHERE user_id = ? AND conversation_id = ? AND sender = 'user' AND client_request_id = ?;
-            """, bindings: [Date().timeIntervalSince1970, userId, conversationId, requestId])
-            guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
+            guard executeRaw("BEGIN IMMEDIATE;", in: db) else { throw DatabaseError.executionFailed }
+            do {
+                let now = Date().timeIntervalSince1970
+                try execute(db, sql: """
+                UPDATE chat_messages
+                SET delivery_status = 'sending', error_code = NULL, error_detail = NULL, http_status = NULL, updated_at = ?
+                WHERE user_id = ? AND conversation_id = ? AND sender = 'user' AND client_request_id = ?;
+                """, bindings: [now, userId, conversationId, requestId])
+                guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
+                try execute(db, sql: """
+                INSERT OR IGNORE INTO chat_messages (
+                    id, user_id, conversation_id, sender, text, ai_avatar_name,
+                    client_request_id, delivery_status, created_at, updated_at
+                ) VALUES (?, ?, ?, 'ai', '', 'AvatarAI2', ?, 'streaming', ?, ?);
+                """, bindings: ["assistant_\(UUID().uuidString)", userId, conversationId, requestId, now + 0.000_001, now])
+                guard executeRaw("COMMIT;", in: db) else { throw DatabaseError.executionFailed }
+            } catch {
+                _ = executeRaw("ROLLBACK;", in: db)
+                throw error
+            }
         }
     }
 

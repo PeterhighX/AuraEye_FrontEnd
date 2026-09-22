@@ -2,10 +2,11 @@ import SwiftUI
 
 struct MakeupInputBar: View {
     @Binding var text: String
-    var focusBinding: FocusState<Bool>.Binding
     var onSend: () -> Void
     var isSending = false
-    var isKeyboardPresented = false
+    var initialFocus = false
+
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 0) {
@@ -14,14 +15,14 @@ struct MakeupInputBar: View {
                 .padding(.leading, 4)
 
             TextField("来探寻今日的妆容灵感", text: $text)
+                .focused($isFocused)
                 .font(.system(size: 12, weight: .light))
                 .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4))
                 .keyboardType(.default)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
-                .focused(focusBinding)
                 .submitLabel(.send)
-                .onSubmit(onSend)
+                .onSubmit(sendIfPossible)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .contentShape(Capsule())
@@ -32,17 +33,10 @@ struct MakeupInputBar: View {
                 .clipShape(Capsule())
                 .frame(width: 260, height: 36)
                 .padding(.horizontal, 8)
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        DispatchQueue.main.async {
-                            focusBinding.wrappedValue = true
-                        }
-                    }
-                )
                 .accessibilityLabel("对话输入框")
                 .accessibilityHint("轻点后使用系统键盘输入消息")
 
-            Button(action: onSend) {
+            Button(action: sendIfPossible) {
                 Image(systemName: "arrow.up.circle")
                     .font(.system(size: 28, weight: .regular))
                     .foregroundStyle(Color(red: 0.3, green: 0.3, blue: 0.3))
@@ -52,8 +46,15 @@ struct MakeupInputBar: View {
             .disabled(isSending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal, 16)
-        .padding(.top, isKeyboardPresented ? 0 : 8)
-        .padding(.bottom, isKeyboardPresented ? 0 : 8)
+        .padding(.vertical, 8)
+        .onAppear {
+            if initialFocus { isFocused = true }
+        }
+    }
+
+    private func sendIfPossible() {
+        guard !isSending, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        onSend()
     }
 
     private func iconButton(_ systemName: String, size: CGFloat) -> some View {

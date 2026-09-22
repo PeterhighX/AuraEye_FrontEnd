@@ -8,6 +8,15 @@ struct ChatRequestFailure: Sendable {
     let serverRequestId: String?
 
     static func capture(_ error: Error) -> ChatRequestFailure {
+        if let error = error as? ChatStreamFailure {
+            return ChatRequestFailure(
+                code: error.code,
+                detail: error.detail,
+                httpStatus: error.httpStatus,
+                retryable: error.retryable,
+                serverRequestId: error.serverRequestId
+            )
+        }
         if let error = error as? ChatContractError {
             return ChatRequestFailure(code: "CHAT_INVALID_RESPONSE", detail: error.localizedDescription, httpStatus: nil, retryable: false, serverRequestId: nil)
         }
@@ -66,19 +75,24 @@ final class AccountScopedChatStore {
         return (user, conversationId, try chatRepository.fetchMessages(userId: context.userId, conversationId: conversationId))
     }
 
-    func sendNew(text: String) async throws {
+    func prepareNew(text: String) throws -> ChatSendRequest {
         let request = try requireRequest(text: text, requestId: Self.makeRequestID())
-        try chatRepository.insertSendingUserMessage(userId: context.userId, conversationId: request.conversationId, requestId: request.requestId, text: request.message)
-        try await perform(request)
+        try chatRepository.insertSendingExchange(
+            userId: context.userId,
+            conversationId: request.conversationId,
+            requestId: request.requestId,
+            text: request.message
+        )
+        return request
     }
 
-    func retry(localMessageId: String) async throws {
+    func prepareRetry(localMessageId: String) throws -> ChatSendRequest {
         let conversationId = try requireConversationID()
         guard let request = try chatRepository.retryPayload(userId: context.userId, conversationId: conversationId, localMessageId: localMessageId) else {
             throw ChatStorageError.messageNotFound
         }
         try chatRepository.markRetrying(userId: context.userId, conversationId: conversationId, requestId: request.requestId)
-        try await perform(request)
+        return request
     }
 
     func messages() throws -> [ChatMessage] {
@@ -86,15 +100,100 @@ final class AccountScopedChatStore {
         return try chatRepository.fetchMessages(userId: context.userId, conversationId: conversationId)
     }
 
-    private func perform(_ request: ChatSendRequest) async throws {
+    func perform(
+        _ request: ChatSendRequest,
+        onMessagesChanged: @MainActor () -> Void
+    ) async throws {
+        var accumulatedText = ""
+        var lastFlush = Date.distantPast
+        var failureWasPersisted = false
+
         do {
-            let reply = try await agentService.send(request)
-            try chatRepository.complete(userId: context.userId, conversationId: request.conversationId, reply: reply)
+            for try await event in agentService.stream(request) {
+                switch event {
+                case let .accepted(messageId), let .assistantStarted(messageId):
+                    try chatRepository.bindAssistantMessageID(
+                        userId: context.userId,
+                        conversationId: request.conversationId,
+                        requestId: request.requestId,
+                        messageId: messageId
+                    )
+                    onMessagesChanged()
+                case let .assistantDelta(delta):
+                    accumulatedText += delta
+                    if Date().timeIntervalSince(lastFlush) >= 0.05 {
+                        try chatRepository.replaceStreamingAssistantText(
+                            userId: context.userId,
+                            conversationId: request.conversationId,
+                            requestId: request.requestId,
+                            text: accumulatedText
+                        )
+                        lastFlush = .now
+                        onMessagesChanged()
+                    }
+                case .toolStarted, .toolCompleted:
+                    break
+                case let .completed(reply):
+                    try chatRepository.completeStreaming(
+                        userId: context.userId,
+                        conversationId: request.conversationId,
+                        reply: reply
+                    )
+                    onMessagesChanged()
+                    return
+                case let .failed(failure):
+                    failureWasPersisted = true
+                    try chatRepository.discardStreamingAssistant(
+                        userId: context.userId,
+                        conversationId: request.conversationId,
+                        requestId: request.requestId
+                    )
+                    try chatRepository.markFailed(
+                        userId: context.userId,
+                        conversationId: request.conversationId,
+                        requestId: request.requestId,
+                        failure: .capture(failure)
+                    )
+                    onMessagesChanged()
+                    throw failure
+                }
+            }
+            throw ChatContractError.invalidResponse
         } catch is CancellationError {
+            try? chatRepository.discardStreamingAssistant(
+                userId: context.userId,
+                conversationId: request.conversationId,
+                requestId: request.requestId
+            )
+            try? chatRepository.markFailed(
+                userId: context.userId,
+                conversationId: request.conversationId,
+                requestId: request.requestId,
+                failure: ChatRequestFailure(
+                    code: "CHAT_CANCELLED",
+                    detail: "发送已取消。",
+                    httpStatus: nil,
+                    retryable: true,
+                    serverRequestId: nil
+                )
+            )
             throw CancellationError()
         } catch {
-            let failure = ChatRequestFailure.capture(error)
-            try chatRepository.markFailed(userId: context.userId, conversationId: request.conversationId, requestId: request.requestId, failure: failure)
+            if !failureWasPersisted {
+                let failure = ChatRequestFailure.capture(error)
+                try chatRepository.discardStreamingAssistant(
+                    userId: context.userId,
+                    conversationId: request.conversationId,
+                    requestId: request.requestId
+                )
+                try chatRepository.markFailed(
+                    userId: context.userId,
+                    conversationId: request.conversationId,
+                    requestId: request.requestId,
+                    failure: failure
+                )
+                onMessagesChanged()
+            }
             throw error
         }
     }

@@ -1,5 +1,22 @@
 import SwiftUI
 
+struct AnimatedWeatherSymbol: View {
+    let symbolName: String
+    let size: CGFloat
+    let frameWidth: CGFloat
+    let frameHeight: CGFloat
+
+    var body: some View {
+        Image(systemName: symbolName)
+            .symbolRenderingMode(.multicolor)
+            .font(.system(size: size))
+            .frame(width: frameWidth, height: frameHeight)
+            .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.pulse.byLayer, options: .repeating)
+            .accessibilityHidden(true)
+    }
+}
+
 struct WeatherSummaryCard: View {
     var aiMessage: String
     var showFirstTimeHint: Bool = false
@@ -14,11 +31,12 @@ struct WeatherSummaryCard: View {
                 .offset(y: 19)
 
             HStack(alignment: .bottom) {
-                Image(systemName: weather.symbolName)
-                    .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 68))
-                    .frame(width: 124, height: 81)
-                    .contentTransition(.symbolEffect(.replace))
+                AnimatedWeatherSymbol(
+                    symbolName: weather.symbolName,
+                    size: 68,
+                    frameWidth: 124,
+                    frameHeight: 81
+                )
 
                 Spacer()
 
@@ -39,13 +57,17 @@ struct WeatherSummaryCard: View {
 
                         Spacer()
 
-                        Text(weather.district)
-                            .font(.system(size: 12, weight: .light))
-                            .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
-                            .padding(.horizontal, 6)
-                            .frame(height: 18)
-                            .background(Color.white.opacity(0.45))
-                            .clipShape(Capsule())
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(weather.district)
+                                .font(.system(size: 12, weight: .light))
+                                .padding(.horizontal, 6)
+                                .frame(height: 18)
+                                .background(Color.white.opacity(0.45))
+                                .clipShape(Capsule())
+                            Link("Open-Meteo", destination: LiveWeatherSnapshot.dataSourceURL)
+                                .font(.system(size: 8, weight: .light))
+                        }
+                        .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
                     }
 
                     ZStack(alignment: .leading) {

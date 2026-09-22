@@ -7,7 +7,6 @@ final class ChatViewModel {
     private(set) var user: UserProfile?
     private(set) var messages: [ChatMessage] = []
     private(set) var conversationId: String?
-    var inputText = ""
     private(set) var isSending = false
     private(set) var configurationError: String?
 
@@ -30,16 +29,30 @@ final class ChatViewModel {
         }
     }
 
-    func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
-        inputText = ""
-        startSend { try await self.store.sendNew(text: text) }
+    @discardableResult
+    func send(text: String) -> Bool {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isSending else { return false }
+        do {
+            let request = try store.prepareNew(text: text)
+            messages = try store.messages()
+            startSend(request)
+            return true
+        } catch {
+            configurationError = error.localizedDescription
+            return false
+        }
     }
 
     func retry(message: ChatMessage) {
         guard message.sender == .user, message.deliveryStatus.isRetryable, !isSending else { return }
-        startSend { try await self.store.retry(localMessageId: message.id) }
+        do {
+            let request = try store.prepareRetry(localMessageId: message.id)
+            messages = try store.messages()
+            startSend(request)
+        } catch {
+            configurationError = error.localizedDescription
+        }
     }
 
     func cancelPendingSend() {
@@ -49,7 +62,11 @@ final class ChatViewModel {
         ChatSendRegistry.shared.unregister(userId: store.context.userId)
     }
 
-    private func startSend(_ operation: @escaping @MainActor () async throws -> Void) {
+    func message(id: String) -> ChatMessage? {
+        messages.first { $0.id == id }
+    }
+
+    private func startSend(_ request: ChatSendRequest) {
         isSending = true
         sendTask = Task { [weak self] in
             guard let self else { return }
@@ -62,7 +79,11 @@ final class ChatViewModel {
                 self.sendTask = nil
             }
             do {
-                try await operation()
+                try await self.store.perform(request) { [weak self] in
+                    guard let self,
+                          SessionManager.shared.context?.userId == self.store.context.userId else { return }
+                    self.messages = (try? self.store.messages()) ?? self.messages
+                }
                 guard SessionManager.shared.context?.userId == self.store.context.userId else { return }
                 self.messages = (try? self.store.messages()) ?? self.messages
             } catch is CancellationError {
@@ -72,6 +93,5 @@ final class ChatViewModel {
                 self.messages = (try? self.store.messages()) ?? self.messages
             }
         }
-        messages = (try? store.messages()) ?? messages
     }
 }
