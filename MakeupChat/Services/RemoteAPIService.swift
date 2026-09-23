@@ -277,6 +277,71 @@ enum APIClientError: LocalizedError {
     }
 }
 
+struct ServerSentEventParser {
+    private static let maximumLineByteCount = 1_048_576
+
+    private var lineBytes: [UInt8] = []
+    private var eventID: String?
+    private var eventName: String?
+    private var dataLines: [String] = []
+
+    mutating func append(_ byte: UInt8) throws -> ServerSentEvent? {
+        guard byte == 0x0A else {
+            guard lineBytes.count < Self.maximumLineByteCount else {
+                throw APIClientError.invalidResponse
+            }
+            lineBytes.append(byte)
+            return nil
+        }
+        return try consumeBufferedLine()
+    }
+
+    mutating func finish() throws -> ServerSentEvent? {
+        if !lineBytes.isEmpty {
+            _ = try consumeBufferedLine()
+        }
+        return dispatchEvent()
+    }
+
+    private mutating func consumeBufferedLine() throws -> ServerSentEvent? {
+        if lineBytes.last == 0x0D { lineBytes.removeLast() }
+        guard let line = String(bytes: lineBytes, encoding: .utf8) else {
+            throw APIClientError.invalidResponse
+        }
+        lineBytes.removeAll(keepingCapacity: true)
+
+        if line.isEmpty { return dispatchEvent() }
+        if line.hasPrefix(":") { return nil }
+
+        let separator = line.firstIndex(of: ":")
+        let field = separator.map { String(line[..<$0]) } ?? line
+        var value = separator.map { String(line[line.index(after: $0)...]) } ?? ""
+        if value.hasPrefix(" ") { value.removeFirst() }
+
+        switch field {
+        case "id": eventID = value
+        case "event": eventName = value
+        case "data": dataLines.append(value)
+        default: break
+        }
+        return nil
+    }
+
+    private mutating func dispatchEvent() -> ServerSentEvent? {
+        defer {
+            eventID = nil
+            eventName = nil
+            dataLines.removeAll(keepingCapacity: true)
+        }
+        guard !dataLines.isEmpty else { return nil }
+        return ServerSentEvent(
+            id: eventID,
+            name: eventName,
+            data: dataLines.joined(separator: "\n")
+        )
+    }
+}
+
 actor APIClient {
     private static let authorizationRefreshCoordinator = AuthorizationRefreshCoordinator()
     private static let transportLogger = Logger(
@@ -592,46 +657,16 @@ actor APIClient {
                 )
             }
 
-            var eventID: String?
-            var eventName: String?
-            var dataLines: [String] = []
-
-            func emit() {
-                guard !dataLines.isEmpty else {
-                    eventID = nil
-                    eventName = nil
-                    return
-                }
-                continuation.yield(ServerSentEvent(
-                    id: eventID,
-                    name: eventName,
-                    data: dataLines.joined(separator: "\n")
-                ))
-                eventID = nil
-                eventName = nil
-                dataLines.removeAll(keepingCapacity: true)
-            }
-
-            for try await line in bytes.lines {
+            var parser = ServerSentEventParser()
+            for try await byte in bytes {
                 try Task.checkCancellation()
-                if line.isEmpty {
-                    emit()
-                    continue
-                }
-                if line.hasPrefix(":") { continue }
-
-                let pieces = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-                let field = String(pieces[0])
-                var value = pieces.count == 2 ? String(pieces[1]) : ""
-                if value.hasPrefix(" ") { value.removeFirst() }
-                switch field {
-                case "id": eventID = value
-                case "event": eventName = value
-                case "data": dataLines.append(value)
-                default: break
+                if let event = try parser.append(byte) {
+                    continuation.yield(event)
                 }
             }
-            emit()
+            if let event = try parser.finish() {
+                continuation.yield(event)
+            }
             return
         }
     }

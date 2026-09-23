@@ -447,6 +447,45 @@ final class ChatContractTests: XCTestCase {
         XCTAssertNil(object["display_name"])
     }
 
+    func testSSEParserPreservesEventBoundariesForLFAndCRLF() throws {
+        let payload = """
+        id: 1
+        event: message.accepted
+        data: {"type":"message.accepted","message_id":"resp_01"}
+
+        : keepalive\r
+        \r
+        id: 2\r
+        event: assistant.delta\r
+        data: {"type":"assistant.delta","delta":"已为你整理"}\r
+        \r
+        """
+        var parser = ServerSentEventParser()
+        var events: [ServerSentEvent] = []
+
+        for byte in payload.utf8 {
+            if let event = try parser.append(byte) {
+                events.append(event)
+            }
+        }
+        if let event = try parser.finish() {
+            events.append(event)
+        }
+
+        XCTAssertEqual(events, [
+            ServerSentEvent(
+                id: "1",
+                name: "message.accepted",
+                data: #"{"type":"message.accepted","message_id":"resp_01"}"#
+            ),
+            ServerSentEvent(
+                id: "2",
+                name: "assistant.delta",
+                data: #"{"type":"assistant.delta","delta":"已为你整理"}"#
+            )
+        ])
+    }
+
     func testRemoteChatUsesBearerAndConsumesSSE() async throws {
         VisionURLProtocolStub.handler = { request in
             XCTAssertEqual(request.url?.path, "/v1/chat/messages")

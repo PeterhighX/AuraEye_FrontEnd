@@ -28,10 +28,11 @@ struct ChatBubbleView: View {
                     ProgressView().controlSize(.small)
                     Text("正在思考…")
                 }
+                .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(.secondary)
             } else {
                 Text(message.text)
-                    .font(.system(size: 14, weight: .thin))
+                    .font(.system(size: 16, weight: .thin))
                     .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
                     .lineSpacing(4)
             }
@@ -49,24 +50,27 @@ struct ChatBubbleView: View {
 
     @ViewBuilder
     private var deliveryStatus: some View {
-        switch message.deliveryStatus {
-        case .sending:
-            Label("发送中", systemImage: "clock")
-                .foregroundStyle(.secondary)
-        case .streaming:
-            EmptyView()
-        case .completed:
-            EmptyView()
-        case .failedRetryable, .failedPermanent:
-            VStack(alignment: .leading, spacing: 3) {
-                Text(diagnosticText)
-                if message.deliveryStatus.isRetryable, let onRetry {
-                    Button("重试", action: onRetry)
-                        .buttonStyle(.borderless)
+        Group {
+            switch message.deliveryStatus {
+            case .sending:
+                Label("发送中", systemImage: "clock")
+                    .foregroundStyle(.secondary)
+            case .streaming:
+                EmptyView()
+            case .completed:
+                EmptyView()
+            case .failedRetryable, .failedPermanent:
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(diagnosticText)
+                    if message.deliveryStatus.isRetryable, let onRetry {
+                        Button("重试", action: onRetry)
+                            .buttonStyle(.borderless)
+                    }
                 }
+                .foregroundStyle(Color.red.opacity(0.8))
             }
-            .foregroundStyle(Color.red.opacity(0.8))
         }
+        .font(.system(size: 11, weight: .regular))
     }
 
     private var diagnosticText: String {
@@ -86,7 +90,7 @@ struct ChatBubbleView: View {
     private func avatarImage(_ name: String) -> some View {
         let image = UIImage(named: name)
             ?? (name.hasPrefix("AvatarAI") ? UIImage(named: "AvatarAI2") : nil)
-        ZStack {
+        return ZStack {
             Circle().fill(Color.white.opacity(0.9))
             if let image {
                 Image(uiImage: image)

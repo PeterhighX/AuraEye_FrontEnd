@@ -27,6 +27,7 @@ struct ChatConversationView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
                 } else {
                     parameters.defaultMessageView()
                 }
