@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 主页面统一用户信息栏。
 /// 头像、姓名和心情状态在首页、陈列柜与“我的”页始终使用同一坐标与尺寸。
@@ -9,16 +10,16 @@ struct UserIdentityHeaderView<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             Group {
-                if let portrait = user.userPortraitPath {
-                    LocalImageView(
-                        storedPath: portrait,
-                        systemImage: "person.crop.circle.fill"
-                    )
-                    .scaledToFill()
-                } else {
-                    Image("AvatarUser")
+                if let data = BusinessStore.shared.avatarData,
+                   let image = UIImage(data: data) {
+                    Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable()
+                        .scaledToFill()
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(width: 44, height: 44)
@@ -68,7 +69,7 @@ struct ProfileHeaderView: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.yellow)
-                    Text("\(user.credits)")
+                    Text(BusinessStore.shared.growth.map { "\($0.wallet.availablePoints)" } ?? "--")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                 }

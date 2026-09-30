@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Figma 20:1512 — 叠在「我的」页上的任务弹层
 struct MyTasksSheet: View {
-    let tasks: [UserTaskItem]
+    let tasks: [GrowthTaskDTO]
     let onClose: () -> Void
 
     var body: some View {
@@ -22,7 +22,7 @@ struct MyTasksSheet: View {
                     .font(.system(size: 16, weight: .regular, design: .rounded))
                     .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
 
-                Text("完成任务可获得闪闪的奖励哦，用户等级越高获得积分越多哦")
+                Text("完成任务可获得积分和经验，具体奖励以当前任务为准。")
                     .font(.system(size: 12, weight: .light))
                     .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
                     .multilineTextAlignment(.center)
@@ -46,8 +46,15 @@ struct MyTasksSheet: View {
     private var taskList: some View {
         ScrollView {
             VStack(spacing: 8) {
-                ForEach(tasks) { task in
-                    taskRow(task)
+                if tasks.isEmpty {
+                    Text("任务尚未同步")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 24)
+                } else {
+                    ForEach(tasks) { task in
+                        taskRow(task)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -55,30 +62,36 @@ struct MyTasksSheet: View {
         }
     }
 
-    private func taskRow(_ task: UserTaskItem) -> some View {
+    private func taskRow(_ task: GrowthTaskDTO) -> some View {
         HStack(spacing: 16) {
             Circle()
-                .fill(task.isCompleted ? AppTheme.ColorToken.accentOrange : Color.clear)
+                .fill(task.isRewarded ? AppTheme.ColorToken.accentOrange : Color.clear)
                 .overlay {
                     Circle()
                         .stroke(
-                            task.isCompleted ? AppTheme.ColorToken.accentOrange : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.25),
-                            lineWidth: task.isCompleted ? 0 : 1.5
+                            task.isRewarded ? AppTheme.ColorToken.accentOrange : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.25),
+                            lineWidth: task.isRewarded ? 0 : 1.5
                         )
                 }
                 .frame(width: 12, height: 12)
 
-            Text(task.title)
-                .font(.system(size: 14, weight: .light))
-                .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.title)
+                    .font(.system(size: 14, weight: .light))
+                    .lineLimit(2)
+                if task.status == "unavailable" {
+                    Text(task.unavailableMessage ?? "当前暂不可用")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.ColorToken.accentOrange)
-                Text("\(task.reward)")
+                Text("\(task.rewardPoints)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
             }
@@ -101,5 +114,5 @@ struct MyTasksSheet: View {
 }
 
 #Preview {
-    MyTasksSheet(tasks: ProfileViewModel.defaultTasks, onClose: {})
+    MyTasksSheet(tasks: [], onClose: {})
 }

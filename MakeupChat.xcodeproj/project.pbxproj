@@ -15,16 +15,13 @@
 		FB0000000000000000000009 /* AuthenticationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB000000000000000000000A /* AuthenticationServiceTests.swift */; };
 		00AA29009FFF48569B711095 /* ProfileHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */; };
 		02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */; };
-		0C51702F98FE4BD5A9116621 /* CosmeticItemDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */; };
 		1022CE4C77584DB7B4719786 /* NegativeOneScreen02View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5167CF2B2DB44014B0E56A44 /* NegativeOneScreen02View.swift */; };
 		1145699A7B7B4299A6D05654 /* MakeupChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1A31DB3CA5451B80EBD6CE /* MakeupChatApp.swift */; };
 		1758DD65105A44E5912808DE /* ChatConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D59D7C7ACFD4F46B44A7FBC /* ChatConversationView.swift */; };
 		190FA228BCBD414C81A6EFE7 /* GradientBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */; };
-		1E7783F7E44843B9B2482169 /* DatabaseSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BABBD7DC5CF4CD696BC78A1 /* DatabaseSeeder.swift */; };
 		1F6D0886E0FC41ADBAE39918 /* CosmeticImagePlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */; };
 		1FE96C860D4C47E9805DE1C1 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1BA1A902504A43A819BEE6 /* AppRoute.swift */; };
 		33004651F1F945289F520AFD /* UserRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97E76971D064523B4D89FAC /* UserRepository.swift */; };
-		40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8F842357654825A117FBDB /* SyncService.swift */; };
 		421A78BFF89F43C49C2F1CAE /* LocalImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D9292628274DAA81F9707A /* LocalImageView.swift */; };
 		44F8CF83FFB04535A2B8852A /* HomeComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65E8B42F5E34163A60327F0 /* HomeComponents.swift */; };
 		4512A532E1624202915935F6 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */; };
@@ -45,10 +42,8 @@
 		8822AE718B7D44629D66BD32 /* MakeupStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */; };
 		8CB06EBBCA9C48C2A05C2E4A /* OnboardingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B5C938F7524C4EA6C828A9 /* OnboardingRepository.swift */; };
 		8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */; };
-		9130B1E37EA4446BBB42ADFC /* MakeupPreviewThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */; };
 		91717E57C3C24C8EA59017D2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D923C6A2AE4830BA53CFAC /* ContentView.swift */; };
 		91C6F9D125DA48E1BCA58197 /* ChatRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */; };
-		95F3076D013949FD94FFA844 /* MakeupCatalogRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E207F777F7144CB98D76AED /* MakeupCatalogRepository.swift */; };
 		96B832B95FDA4EA4AE95942F /* ProfileComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2D36A90F0F47F895C8E493 /* ProfileComponents.swift */; };
 		9700981FA36B432197B1EB9E /* ChatSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE39EBC169214B0FA1CD0789 /* ChatSessionService.swift */; };
 		99CCA6634F3C4FD383E00AA5 /* NegativeOneScreen01View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2C6DC6C2754055AFA27A8D /* NegativeOneScreen01View.swift */; };
@@ -62,7 +57,6 @@
 		B20000000000000000000003 /* UserProfileSetupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* UserProfileSetupViewModel.swift */; };
 		B20000000000000000000005 /* UserProfileSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* UserProfileSetupView.swift */; };
 		B30000000000000000000001 /* AIAgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000002 /* AIAgentService.swift */; };
-		B30000000000000000000003 /* MakeupExplanationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000004 /* MakeupExplanationService.swift */; };
 		B404C19562B24943A09E7098 /* CosmeticCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */; };
 		B5A5C745B13B429F8BAC98E2 /* WeatherSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1BDC37469D47A4A6737DCC /* WeatherSummaryCard.swift */; };
 		B959416B14CC41ADA1F7EC7E /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */; };
@@ -71,12 +65,10 @@
 		C945D6CEBBF5496EBEFC2E0C /* ChatBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E413FB9F8DBF4A4C92AF37EE /* ChatBubbleView.swift */; };
 		CACC9235D5DE4CCF90775BD6 /* CosmeticProductCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EAA981411D4150821F0026 /* CosmeticProductCard.swift */; };
 		CC62D26E1BFD4CD0977BE5FE /* FirstTimeUseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */; };
-		CF41D675A99C49A59499296C /* CosmeticsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */; };
 		D06D071735694F6CB4BC9E47 /* OnboardingStepPreviewPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F5495661EED411488631B67 /* OnboardingStepPreviewPlaceholder.swift */; };
 		D50000000000000000000001 /* RemoteAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50000000000000000000002 /* RemoteAPIService.swift */; };
-		DFE07800092E4D9BB0DEB5D8 /* EyeStyleRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */; };
+		D90000000000000000000001 /* BusinessDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D90000000000000000000002 /* BusinessDataService.swift */; };
 		E55D52EE7D7048E9B90D0BA0 /* DisplayCabinetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */; };
-		E59ECDE30CA44AADA5DC3BF6 /* TipLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD26DA534B784B35BAEA4192 /* TipLibrary.swift */; };
 		E5BBBA9CB80147FF8423B986 /* MakeupFlowHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */; };
 		E60000000000000000000001 /* AuthenticationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000002 /* AuthenticationService.swift */; };
 		E60000000000000000000003 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000004 /* LoginViewModel.swift */; };
@@ -95,7 +87,6 @@
 		FA0000000000000000000007 /* VisionJobPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000008 /* VisionJobPersistence.swift */; };
 		FA0000000000000000000009 /* DemoFixtures in Resources */ = {isa = PBXBuildFile; fileRef = FA000000000000000000000A /* DemoFixtures */; };
 		F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D27055640E4E4BAF83ADD9 /* AppSession.swift */; };
-		F24644F0D7BA42009F39002F /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0683978D3E420C8AA42807 /* ProfileModels.swift */; };
 		F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */; };
 		F4AE45A40A484409AA22212C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBC6A33E5A54F29A9A14162 /* AppTheme.swift */; };
 		FD200DEA3B3E41D8BD0BD0BF /* UserProfileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCF3251D2B34B1AA460A9BB /* UserProfileDetailView.swift */; };
@@ -128,13 +119,9 @@
 		15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayCabinetViewModel.swift; sourceTree = "<group>"; };
 		1705A27A568D41119610D082 /* FirstTimeUseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstTimeUseViewModel.swift; sourceTree = "<group>"; };
 		1D2C6DC6C2754055AFA27A8D /* NegativeOneScreen01View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NegativeOneScreen01View.swift; sourceTree = "<group>"; };
-		1F8F842357654825A117FBDB /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
 		23D8571DA4EB4F4AB8DB21EB /* AppRouteDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouteDestination.swift; sourceTree = "<group>"; };
 		2592F2B2A7A44ADC8155C62A /* StepPreviewThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StepPreviewThumbnail.swift; sourceTree = "<group>"; };
-		2E207F777F7144CB98D76AED /* MakeupCatalogRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupCatalogRepository.swift; sourceTree = "<group>"; };
 		2F1BDC37469D47A4A6737DCC /* WeatherSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherSummaryCard.swift; sourceTree = "<group>"; };
-		36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EyeStyleRepository.swift; sourceTree = "<group>"; };
-		3BABBD7DC5CF4CD696BC78A1 /* DatabaseSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseSeeder.swift; sourceTree = "<group>"; };
 		3C84B6AAD5824EA2BBDCE0A5 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
 		3F5495661EED411488631B67 /* OnboardingStepPreviewPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepPreviewPlaceholder.swift; sourceTree = "<group>"; };
 		4142021CE6F84D92A72AFBA6 /* MakeupFlowHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupFlowHeaderView.swift; sourceTree = "<group>"; };
@@ -147,28 +134,22 @@
 		66C96A82BD5F4C9B8E3D3759 /* GradientBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradientBackgroundView.swift; sourceTree = "<group>"; };
 		6B775AF9ECF74516B2ED2A9A /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		6C944130539C44F3B528B2F8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupPreviewThumbnailRenderer.swift; sourceTree = "<group>"; };
 		7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CosmeticCategory.swift; sourceTree = "<group>"; };
 		8819141714564BF69C1C2EBD /* MyTasksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyTasksSheet.swift; sourceTree = "<group>"; };
 		88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceScanService.swift; sourceTree = "<group>"; };
 		8B6B2400931C404BAF3DA5EB /* FirstTimeUseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstTimeUseView.swift; sourceTree = "<group>"; };
 		8D5CC419665F41C69594A3D8 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CosmeticItemDisplay.swift; sourceTree = "<group>"; };
 		91C7815764CD40259792E9F5 /* DisplayCabinetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayCabinetView.swift; sourceTree = "<group>"; };
 		95AEE21700EF49A8A4A42950 /* OnboardingStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStep.swift; sourceTree = "<group>"; };
 		95D27055640E4E4BAF83ADD9 /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		A1000000000000000000000E /* MakeupChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MakeupChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CosmeticsRepository.swift; sourceTree = "<group>"; };
-		AA0683978D3E420C8AA42807 /* ProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileModels.swift; sourceTree = "<group>"; };
 		AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupCompleteView.swift; sourceTree = "<group>"; };
 		AC703D65CFAD48CC8E9E262F /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
-		AD26DA534B784B35BAEA4192 /* TipLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipLibrary.swift; sourceTree = "<group>"; };
 		B19DBAFCAF444FEC86F8725C /* MediaPathMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPathMigrator.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* FaceAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceAnalysisService.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* UserProfileSetupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileSetupViewModel.swift; sourceTree = "<group>"; };
 		B20000000000000000000006 /* UserProfileSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileSetupView.swift; sourceTree = "<group>"; };
 		B30000000000000000000002 /* AIAgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAgentService.swift; sourceTree = "<group>"; };
-		B30000000000000000000004 /* MakeupExplanationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupExplanationService.swift; sourceTree = "<group>"; };
 		B4B5C938F7524C4EA6C828A9 /* OnboardingRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingRepository.swift; sourceTree = "<group>"; };
 		B97E76971D064523B4D89FAC /* UserRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRepository.swift; sourceTree = "<group>"; };
 		BF82E8B7851D4C798305E0D3 /* CabinetSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CabinetSectionHeader.swift; sourceTree = "<group>"; };
@@ -181,6 +162,7 @@
 		CCDFF56C0C8E47EB9C54B46E /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		CF1BA1A902504A43A819BEE6 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		D50000000000000000000002 /* RemoteAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAPIService.swift; sourceTree = "<group>"; };
+		D90000000000000000000002 /* BusinessDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusinessDataService.swift; sourceTree = "<group>"; };
 		DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
 		E1CB1A810A544545917E00E5 /* MakeupInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupInputBar.swift; sourceTree = "<group>"; };
 		E413FB9F8DBF4A4C92AF37EE /* ChatBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBubbleView.swift; sourceTree = "<group>"; };
@@ -236,11 +218,8 @@
 				95D27055640E4E4BAF83ADD9 /* AppSession.swift */,
 				0B905280BC9546369F252175 /* ChatMessage.swift */,
 				7F565AC090E547E1906F1EAC /* CosmeticCategory.swift */,
-				8F491B76C57240F5A6863DAE /* CosmeticItemDisplay.swift */,
 				C40000000000000000000004 /* MakeupLookCatalog.swift */,
 				95AEE21700EF49A8A4A42950 /* OnboardingStep.swift */,
-				AA0683978D3E420C8AA42807 /* ProfileModels.swift */,
-				AD26DA534B784B35BAEA4192 /* TipLibrary.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -249,7 +228,6 @@
 			isa = PBXGroup;
 			children = (
 				6B775AF9ECF74516B2ED2A9A /* DatabaseManager.swift */,
-				3BABBD7DC5CF4CD696BC78A1 /* DatabaseSeeder.swift */,
 				56D88721A8CC4A599A7DB4EC /* Schema.swift */,
 			);
 			path = Database;
@@ -264,16 +242,14 @@
 				F10000000000000000000006 /* VisualProfilePipeline.swift */,
 				F10000000000000000000008 /* ItemRecognitionPipeline.swift */,
 				B30000000000000000000002 /* AIAgentService.swift */,
-				B30000000000000000000004 /* MakeupExplanationService.swift */,
 				EE39EBC169214B0FA1CD0789 /* ChatSessionService.swift */,
 				BF916EAB37534E859967D546 /* CosmeticsRecognitionService.swift */,
 				88A1F1E169EA4A9C844ECA5C /* FaceScanService.swift */,
 				B20000000000000000000002 /* FaceAnalysisService.swift */,
 				C40000000000000000000002 /* LiveWeatherProvider.swift */,
-				76427BA17DCA4E4888533E4B /* MakeupPreviewThumbnailRenderer.swift */,
 				DA3CAC1AD95E4DB5941CEF81 /* OnboardingService.swift */,
 				D50000000000000000000002 /* RemoteAPIService.swift */,
-				1F8F842357654825A117FBDB /* SyncService.swift */,
+				D90000000000000000000002 /* BusinessDataService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -392,9 +368,6 @@
 			children = (
 				FA0000000000000000000008 /* VisionJobPersistence.swift */,
 				4A5A209F49F04F10A4069FA3 /* ChatRepository.swift */,
-				A1D7B09D145B4C37A4AAD9CA /* CosmeticsRepository.swift */,
-				36DA5FC331D642B983A59121 /* EyeStyleRepository.swift */,
-				2E207F777F7144CB98D76AED /* MakeupCatalogRepository.swift */,
 				B4B5C938F7524C4EA6C828A9 /* OnboardingRepository.swift */,
 				B97E76971D064523B4D89FAC /* UserRepository.swift */,
 			);
@@ -609,7 +582,6 @@
 				B5A5C745B13B429F8BAC98E2 /* WeatherSummaryCard.swift in Sources */,
 				91717E57C3C24C8EA59017D2 /* ContentView.swift in Sources */,
 				6889DE6DAA444FACAD0ED4FA /* DatabaseManager.swift in Sources */,
-				1E7783F7E44843B9B2482169 /* DatabaseSeeder.swift in Sources */,
 				652D9AF2B4D14773B67ED202 /* Schema.swift in Sources */,
 				F4AE45A40A484409AA22212C /* AppTheme.swift in Sources */,
 				1145699A7B7B4299A6D05654 /* MakeupChatApp.swift in Sources */,
@@ -617,28 +589,21 @@
 				F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */,
 				64978A80C6B7488C8A5FE582 /* ChatMessage.swift in Sources */,
 				B404C19562B24943A09E7098 /* CosmeticCategory.swift in Sources */,
-				0C51702F98FE4BD5A9116621 /* CosmeticItemDisplay.swift in Sources */,
 				AE0C417244FA4D7F98C2A0C5 /* OnboardingStep.swift in Sources */,
-				F24644F0D7BA42009F39002F /* ProfileModels.swift in Sources */,
-				E59ECDE30CA44AADA5DC3BF6 /* TipLibrary.swift in Sources */,
 				76700A8E693A47FFAE17AB36 /* AppRouteDestination.swift in Sources */,
 				91C6F9D125DA48E1BCA58197 /* ChatRepository.swift in Sources */,
-				CF41D675A99C49A59499296C /* CosmeticsRepository.swift in Sources */,
-				DFE07800092E4D9BB0DEB5D8 /* EyeStyleRepository.swift in Sources */,
-				95F3076D013949FD94FFA844 /* MakeupCatalogRepository.swift in Sources */,
 				8CB06EBBCA9C48C2A05C2E4A /* OnboardingRepository.swift in Sources */,
 				33004651F1F945289F520AFD /* UserRepository.swift in Sources */,
 				9700981FA36B432197B1EB9E /* ChatSessionService.swift in Sources */,
 				B30000000000000000000001 /* AIAgentService.swift in Sources */,
-				B30000000000000000000003 /* MakeupExplanationService.swift in Sources */,
 				5D84D88B95CB499BAD34CE15 /* CosmeticsRecognitionService.swift in Sources */,
 				C40000000000000000000001 /* LiveWeatherProvider.swift in Sources */,
 				C40000000000000000000003 /* MakeupLookCatalog.swift in Sources */,
 				68A7A170EFE048FFAB8E9E52 /* FaceScanService.swift in Sources */,
 				B20000000000000000000001 /* FaceAnalysisService.swift in Sources */,
-				9130B1E37EA4446BBB42ADFC /* MakeupPreviewThumbnailRenderer.swift in Sources */,
 				4512A532E1624202915935F6 /* OnboardingService.swift in Sources */,
 				D50000000000000000000001 /* RemoteAPIService.swift in Sources */,
+				D90000000000000000000001 /* BusinessDataService.swift in Sources */,
 				E60000000000000000000001 /* AuthenticationService.swift in Sources */,
 				F10000000000000000000001 /* SessionContext.swift in Sources */,
 				F10000000000000000000003 /* VisionInfrastructure.swift in Sources */,
@@ -648,7 +613,6 @@
 				FA0000000000000000000003 /* OfficialGalleryViewModel.swift in Sources */,
 				FA0000000000000000000005 /* OfficialGalleryView.swift in Sources */,
 				FA0000000000000000000007 /* VisionJobPersistence.swift in Sources */,
-				40AEB4260BFF4664BF34F2AA /* SyncService.swift in Sources */,
 				A43425BDA5374801BF35A2D6 /* LocalMediaStore.swift in Sources */,
 				8F520E8492A94E33995056DB /* MediaPathMigrator.swift in Sources */,
 				AAE7BAC217714EDFAB9EEC6A /* ChatViewModel.swift in Sources */,

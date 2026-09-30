@@ -14,7 +14,7 @@ struct ChatBubbleView: View {
             } else {
                 Color.clear.frame(width: 36, height: 36)
                 bubbleContent
-                avatarImage("AvatarUser")
+                userAvatar
             }
         }
     }
@@ -105,6 +105,20 @@ struct ChatBubbleView: View {
         .clipShape(Circle())
         .overlay(Circle().stroke(Color.white.opacity(0.95), lineWidth: 1.5))
         .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+    }
+
+    private var userAvatar: some View {
+        Group {
+            if let data = BusinessStore.shared.avatarData,
+               let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .resizable().scaledToFill().foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 36, height: 36)
+        .clipShape(Circle())
     }
 }
 

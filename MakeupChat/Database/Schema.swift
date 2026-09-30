@@ -6,7 +6,6 @@ enum Schema {
         user_id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT '开心',
-        credits INTEGER NOT NULL DEFAULT 50,
         user_file TEXT,
         user_portrait TEXT,
         user_update_photo TEXT,
@@ -47,32 +46,6 @@ enum Schema {
     );
     """
 
-    static let createEyeStyles = """
-    CREATE TABLE IF NOT EXISTS eye_styles (
-        eye_style_name TEXT PRIMARY KEY,
-        eye_svg TEXT,
-        eyeliner_name TEXT,
-        eyeliner_svg TEXT,
-        eye_color_main TEXT,
-        eye_color_sub TEXT,
-        scene TEXT
-    );
-    """
-
-    static let createCosmetics = """
-    CREATE TABLE IF NOT EXISTS cosmetics (
-        sku TEXT PRIMARY KEY,
-        user_id TEXT,
-        makeup_cat TEXT NOT NULL,
-        makeup_tab TEXT,
-        makeup_colors TEXT,
-        brush_json TEXT,
-        preview_asset TEXT,
-        preview_path TEXT,
-        scanned_at REAL
-    );
-    """
-
     static let createOnboardingSteps = """
     CREATE TABLE IF NOT EXISTS onboarding_steps (
         id TEXT PRIMARY KEY,
@@ -110,8 +83,6 @@ enum Schema {
         createUsers,
         createChatMessages,
         createChatConversations,
-        createEyeStyles,
-        createCosmetics,
         createOnboardingSteps,
         createVisionPendingJobs,
         "CREATE INDEX IF NOT EXISTS idx_onboarding_user ON onboarding_steps(user_id, step_index);",

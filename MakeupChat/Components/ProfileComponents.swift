@@ -1,35 +1,33 @@
 import SwiftUI
 
 struct MakeupHistoryCard: View {
-    let item: MakeupHistoryItem
+    let item: MakeupHistoryDTO
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(item.imageAssetName)
+                Image(systemName: "paintbrush.pointed.fill")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
+                    .padding(36)
+                    .foregroundStyle(AppTheme.ColorToken.accentOrange)
                     .frame(width: 120, height: 120)
                     .scaleEffect(1.1)
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: Color.black.opacity(0.08), radius: 2)
 
-                VStack(spacing: 10) {
-                    ForEach(item.swatchColors, id: \.self) { color in
-                        Circle()
-                            .fill(color)
-                            .frame(width: 20, height: 20)
-                    }
-                }
-                .frame(height: 102)
+                Text(item.styleTitle)
+                    .font(.caption)
+                    .lineLimit(2)
+                    .frame(width: 36, height: 102)
             }
 
-            Text("\(item.makeupCount)上妆")
+            Text(item.ordinal.map { "第 \($0) 次上妆" } ?? "上妆进行中")
                 .font(.system(size: 16, weight: .light))
                 .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
 
-            Text(item.makeupTime)
+            Text(item.completedAt ?? "尚未完成")
             .font(.system(size: 10, weight: .light))
             .foregroundStyle(.secondary)
         }

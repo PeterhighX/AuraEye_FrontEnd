@@ -8,15 +8,20 @@ final class UserRepository {
         self.db = db
     }
 
+    @MainActor
     func currentUser() throws -> UserProfile {
-        try db.perform { db in
-            let sql = "SELECT * FROM users ORDER BY updated_at DESC LIMIT 1;"
+        guard let userID = SessionManager.shared.context?.userId else {
+            throw DatabaseError.executionFailed
+        }
+        return try db.perform { db in
+            let sql = "SELECT user_id, display_name, status, user_file, user_portrait, user_update_photo, eye_preview, eye_steps FROM users WHERE user_id = ? LIMIT 1;"
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
 
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
                 throw DatabaseError.prepareFailed
             }
+            sqlite3_bind_text(statement, 1, userID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
             guard sqlite3_step(statement) == SQLITE_ROW else {
                 throw DatabaseError.executionFailed
             }
@@ -26,7 +31,7 @@ final class UserRepository {
 
     func fetch(userId: String) throws -> UserProfile? {
         try db.perform { db in
-            let sql = "SELECT * FROM users WHERE user_id = ? LIMIT 1;"
+            let sql = "SELECT user_id, display_name, status, user_file, user_portrait, user_update_photo, eye_preview, eye_steps FROM users WHERE user_id = ? LIMIT 1;"
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -43,8 +48,8 @@ final class UserRepository {
         let now = Date().timeIntervalSince1970
         try db.perform { db in
             let sql = """
-            INSERT INTO users (user_id, display_name, status, credits, updated_at)
-            VALUES (?, ?, '开心', 0, ?)
+            INSERT INTO users (user_id, display_name, status, updated_at)
+            VALUES (?, ?, '开心', ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 display_name = excluded.display_name,
                 updated_at = excluded.updated_at;
@@ -59,13 +64,13 @@ final class UserRepository {
         try db.perform { db in
             let sql = """
             UPDATE users SET
-                display_name = ?, status = ?, credits = ?, user_file = ?,
+                display_name = ?, status = ?, user_file = ?,
                 user_portrait = ?, user_update_photo = ?, eye_preview = ?,
                 eye_steps = ?, updated_at = ?
             WHERE user_id = ?;
             """
             try exec(db, sql: sql, bindings: [
-                user.displayName, user.status, user.credits, user.userFileJSON,
+                user.displayName, user.status, user.userFileJSON,
                 LocalMediaStore.normalizeForStorage(user.userPortraitPath),
                 LocalMediaStore.normalizeForStorage(user.uploadedPhotoPath),
                 LocalMediaStore.normalizeForStorage(user.eyePreviewPath),
@@ -95,12 +100,11 @@ final class UserRepository {
             userId: columnText(statement, 0) ?? "",
             displayName: columnText(statement, 1) ?? "User",
             status: columnText(statement, 2) ?? "开心",
-            credits: Int(sqlite3_column_int(statement, 3)),
-            userFileJSON: columnText(statement, 4),
-            userPortraitPath: columnText(statement, 5),
-            uploadedPhotoPath: columnText(statement, 6),
-            eyePreviewPath: columnText(statement, 7),
-            eyeStepsJSON: columnText(statement, 8)
+            userFileJSON: columnText(statement, 3),
+            userPortraitPath: columnText(statement, 4),
+            uploadedPhotoPath: columnText(statement, 5),
+            eyePreviewPath: columnText(statement, 6),
+            eyeStepsJSON: columnText(statement, 7)
         )
     }
 

@@ -20,7 +20,7 @@ struct VisualProfileSnapshotDTO: Codable, Equatable, Sendable {
     let face: [String: JSONValue]
     let eyes: [String: JSONValue]
     let brows: [String: JSONValue]
-    let skin: [String: JSONValue]
+    let skin: [String: JSONValue]?
     let provenance: [JSONValue]
 }
 
@@ -37,12 +37,16 @@ struct VisualProfileNarrativeDTO: Codable, Equatable, Sendable {
 }
 
 struct VisualProfileResultDTO: Codable, Equatable, Sendable {
+    let schemaVersion: String
+    let resultSource: String
     let profileSnapshot: VisualProfileSnapshotDTO
     let narrative: VisualProfileNarrativeDTO?
     let narrativeStatus: String?
     let warnings: [String]
 
     enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case resultSource = "result_source"
         case profileSnapshot = "profile_snapshot"
         case narrative
         case narrativeStatus = "narrative_status"
@@ -141,6 +145,10 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
                     ))
                 }
             )
+            guard dto.schemaVersion == "1.0",
+                  ["remote_provider", "demo_seed", "demo_fallback"].contains(dto.resultSource) else {
+                throw VisionAPIError.resultInvalid
+            }
             try persistence.removePendingJob(accountID: input.userID, capability: capability)
             let portraitPath: String
             if let originalData = input.originalData, let contentType = input.contentType {

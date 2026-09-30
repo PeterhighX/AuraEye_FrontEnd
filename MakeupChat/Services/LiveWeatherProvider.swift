@@ -8,10 +8,10 @@ struct LiveWeatherSnapshot: Equatable {
     var symbolName: String? = "cloud.fill"
     var uvIndex: Int? = 3
     var district = "默认天气"
+    var observedAt: Date?
 
     static let dataSourceURL = URL(string: "https://open-meteo.com/")!
     static let fallback = LiveWeatherSnapshot()
-
     var uvDescription: String {
         guard let uvIndex else { return "加载中" }
         switch uvIndex {
@@ -36,6 +36,8 @@ struct LiveWeatherSnapshot: Equatable {
 
 @MainActor
 final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
+    static let shared = LiveWeatherProvider()
+
     @Published private(set) var snapshot = LiveWeatherSnapshot.fallback
     @Published private(set) var isLive = false
 
@@ -117,7 +119,8 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
                 conditionText: condition.text,
                 symbolName: condition.symbolName,
                 uvIndex: max(0, Int(response.current.uvIndex.rounded())),
-                district: snapshot.district
+                district: snapshot.district,
+                observedAt: Date(timeIntervalSince1970: response.current.time)
             )
             isLive = true
 
@@ -140,6 +143,7 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
             URLQueryItem(name: "latitude", value: String(location.coordinate.latitude)),
             URLQueryItem(name: "longitude", value: String(location.coordinate.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,weather_code,is_day,uv_index"),
+            URLQueryItem(name: "timeformat", value: "unixtime"),
             URLQueryItem(name: "timezone", value: "auto")
         ]
 
@@ -205,12 +209,14 @@ private struct OpenMeteoResponse: Decodable {
     let current: CurrentWeather
 
     struct CurrentWeather: Decodable {
+        let time: TimeInterval
         let temperature: Double
         let weatherCode: Int
         let isDay: Int
         let uvIndex: Double
 
         enum CodingKeys: String, CodingKey {
+            case time
             case temperature = "temperature_2m"
             case weatherCode = "weather_code"
             case isDay = "is_day"

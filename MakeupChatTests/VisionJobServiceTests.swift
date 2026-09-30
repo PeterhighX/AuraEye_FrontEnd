@@ -85,15 +85,7 @@ final class VisionJobServiceTests: XCTestCase {
             requestID: "request-item",
             idempotencyKey: "request-item"
         )
-        _ = try await service.create(
-            input: input,
-            capability: .makeupRender,
-            options: .makeupRender(.init()),
-            requestID: "request-makeup",
-            idempotencyKey: "request-makeup"
-        )
-
-        XCTAssertEqual(VisionURLProtocolStub.requests.count, 3)
+        XCTAssertEqual(VisionURLProtocolStub.requests.count, 2)
         for request in VisionURLProtocolStub.requests {
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.path, "/v1/vision/jobs")
@@ -107,10 +99,6 @@ final class VisionJobServiceTests: XCTestCase {
         XCTAssertEqual(
             Self.multipartValue(named: "options", request: VisionURLProtocolStub.requests[1]),
             #"{"recognition_scope":{"allowed_categories":["makeup_brush","eyeliner","eyeshadow_palette"],"max_items":3}}"#
-        )
-        XCTAssertEqual(
-            Self.multipartValue(named: "options", request: VisionURLProtocolStub.requests[2]),
-            #"{"recipe_id":"perfect-live-1785130914911"}"#
         )
     }
 
@@ -212,7 +200,7 @@ final class VisionJobServiceTests: XCTestCase {
             )!
             return (
                 response,
-                Data(#"{"request_id":"server-req","data":{"job_id":"job-face","request_id":"client-req","job_type":"face_analysis","status":"succeeded","progress":null,"result":{"profile_snapshot":{"face":{},"eyes":{},"brows":{},"skin":{},"provenance":[]},"narrative":{"overall_contour":"overall","brow_eye_detail":"eyes","style_recommendation":"style"},"narrative_status":"ready","warnings":[]},"error":null}}"#.utf8)
+                Data(#"{"request_id":"server-req","data":{"job_id":"job-face","request_id":"client-req","job_type":"face_analysis","status":"succeeded","progress":null,"result":{"schema_version":"1.0","result_source":"remote_provider","profile_snapshot":{"face":{},"eyes":{},"brows":{},"skin":{},"provenance":[]},"narrative":{"overall_contour":"overall","brow_eye_detail":"eyes","style_recommendation":"style"},"narrative_status":"completed","warnings":[]},"error":null}}"#.utf8)
             )
         }
 
@@ -720,7 +708,7 @@ final class VisionJobServiceTests: XCTestCase {
     }
 
     private static func successfulProfileJobData(jobID: String) -> Data {
-        Data(#"{"request_id":"server-success","data":{"job_id":"\#(jobID)","request_id":"client-success","status":"succeeded","progress":null,"result":{"profile_snapshot":{"face":{},"eyes":{},"brows":{},"skin":{},"provenance":[]},"narrative":null,"narrative_status":null,"warnings":[]},"error":null}}"#.utf8)
+        Data(#"{"request_id":"server-success","data":{"job_id":"\#(jobID)","request_id":"client-success","status":"succeeded","progress":null,"result":{"schema_version":"1.0","result_source":"remote_provider","profile_snapshot":{"face":{},"eyes":{},"brows":{},"skin":{},"provenance":[]},"narrative":null,"narrative_status":null,"warnings":[]},"error":null}}"#.utf8)
     }
 
     static func multipartValue(named name: String, request: URLRequest) -> String? {

@@ -1,341 +1,379 @@
 import SwiftUI
+import UIKit
 
-/// Figma 20:1113 / 20:1178 — 带阻力的整页卡片式上妆步骤
+/// 手势保留原卡片阻力；当前步骤、完成进度和解释以服务端会话为准。
 struct MakeupStepsView: View {
     @Bindable var session: AppSession
     @Binding var path: NavigationPath
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
-    @State private var currentStep = 0
     @State private var horizontalDrag: CGFloat = 0
     @State private var needsExplanation = false
-    @State private var explanationText: String?
-    @State private var isLoadingExplanation = false
-    @State private var isPaging = false
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+    @State private var portraitImage: UIImage?
+    @State private var visibleStartedAt = Date.now
+    @State private var isForegroundVisible = true
+    @State private var completeRequestID: String?
+    @State private var pendingSwipeSignature: String?
+    @State private var pendingSwipeEventID: String?
+    @State private var pendingExplainStepID: String?
+    @State private var pendingExplainEventID: String?
 
-    private let explanationService: any MakeupExplanationServicing = LocalMakeupExplanationService()
-
-    private var plan: MakeupLookPlan {
-        MakeupLookCatalog.plan(id: session.selectedLookID)
-    }
-
-    private var activeStep: MakeupInstructionStep {
-        plan.steps[currentStep]
-    }
+    private var plan: MakeupPlanDTO? { session.business.activePlan }
+    private var practice: MakeupSessionDTO? { session.business.activeSession }
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                MakeupFlowHeaderView(title: "上妆步骤", usesPreviewAssets: true) {
-                    dismiss()
-                }
-                .padding(.top, 8)
+        VStack(spacing: 0) {
+            MakeupFlowHeaderView(title: "上妆步骤", usesPreviewAssets: true) {
+                dismiss()
+            }
+            .padding(.top, 8)
 
-                progressCard
-                    .padding(.top, 24)
-
-                stepPreview
-                    .padding(.top, 24)
-
-                resistantPager
-                    .id("practice-pager-\(plan.id)")
-                    .frame(height: 422)
-                    .padding(.top, 20)
-
-                assistantTip
-                    .padding(.top, 4)
-
-                Spacer(minLength: 8)
+            if let plan, let practice,
+               let stepID = practice.currentStepID,
+               let step = plan.steps.first(where: { $0.id == stepID }) {
+                practiceContent(plan: plan, practice: practice, step: step)
+            } else {
+                ContentUnavailableView(
+                    "上妆会话未就绪",
+                    systemImage: "paintbrush.pointed",
+                    description: Text("请从妆容预览生成计划并开始上妆。")
+                )
+                .frame(maxHeight: .infinity)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .animation(AppTheme.Motion.stepSpring, value: currentStep)
+        .task(id: plan?.portrait?.portraitID) {
+            if let plan { await loadPortrait(for: plan) }
+        }
+        .onAppear {
+            visibleStartedAt = .now
+            isForegroundVisible = scenePhase == .active
+        }
+        .onDisappear {
+            if isForegroundVisible {
+                reportStepExit()
+                isForegroundVisible = false
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                visibleStartedAt = .now
+                isForegroundVisible = true
+            } else if isForegroundVisible {
+                reportStepExit()
+                isForegroundVisible = false
+            }
+        }
+        .alert("步骤暂未更新", isPresented: Binding(
+            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "请稍后重试。")
+        }
     }
 
-    private var progressCard: some View {
+    private func practiceContent(
+        plan: MakeupPlanDTO, practice: MakeupSessionDTO, step: MakeupPlanStepDTO
+    ) -> some View {
+        let currentIndex = plan.steps.firstIndex(where: { $0.id == step.id }) ?? 0
+        return VStack(spacing: 0) {
+            progressCard(plan: plan, practice: practice, step: step, index: currentIndex)
+                .padding(.top, 24)
+
+            HStack {
+                Image(systemName: "eye")
+                Text("\(step.title) · \(step.toolName ?? "按教程操作")")
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 90)
+            .background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 24))
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+
+            resistantPager(plan: plan, practice: practice, currentIndex: currentIndex)
+                .frame(height: 422)
+                .padding(.top, 20)
+
+            if let tip = step.tip, !tip.isEmpty {
+                Text("小提示：\(tip)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+            }
+            KnowledgeTipBar(surface: "makeup_step", planID: plan.planID, stepID: step.id)
+                .padding(.top, 8)
+            Spacer(minLength: 8)
+        }
+    }
+
+    private func progressCard(
+        plan: MakeupPlanDTO, practice: MakeupSessionDTO,
+        step: MakeupPlanStepDTO, index: Int
+    ) -> some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Step \(currentStep + 1)")
+                    Text("Step \(index + 1)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 92, height: 32)
-                        .background(
-                            AppTheme.ColorToken.textPrimary,
-                            in: RoundedRectangle(cornerRadius: 12)
-                        )
-
-                    Text(activeStep.title)
-                        .font(.title3)
-                        .fontDesign(.rounded)
+                        .background(AppTheme.ColorToken.textPrimary,
+                                    in: RoundedRectangle(cornerRadius: 12))
+                    Text(step.title).font(.title3).fontDesign(.rounded)
                 }
 
                 ProgressView(
-                    value: Double(currentStep + 1),
-                    total: Double(plan.steps.count)
+                    value: Double(practice.completedStepCount),
+                    total: Double(max(practice.totalStepCount, 1))
                 )
                 .tint(AppTheme.ColorToken.accentCoral)
 
-                HStack {
-                    Text("\((currentStep + 1) * 20)%")
-                    Spacer()
-                    Text(currentStep == plan.steps.count - 1 ? "完成后继续左划" : "加油哦")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("\(Int(Double(practice.completedStepCount) / Double(max(practice.totalStepCount, 1)) * 100))%")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            Image("AvatarUser")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 88, height: 116)
-                .offset(y: 10)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("用户头像")
+            Spacer(minLength: 0)
+            Group {
+                if let portraitImage {
+                    Image(uiImage: portraitImage).resizable().scaledToFit()
+                } else {
+                    Image(systemName: "person.crop.rectangle")
+                        .resizable().scaledToFit().padding(16)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 88, height: 116)
+            .offset(y: 10)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityLabel("本次计划的人物效果预览")
         }
         .padding(.horizontal, 16)
         .frame(height: 103)
-        .background(
-            Color(red: 1, green: 237 / 255, blue: 232 / 255).opacity(0.4),
-            in: RoundedRectangle(cornerRadius: 24)
-        )
+        .background(Color(red: 1, green: 237 / 255, blue: 232 / 255).opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.08), radius: 3, y: 2)
         .padding(.horizontal, 16)
     }
 
-    private var stepPreview: some View {
-        Image(activeStep.previewAsset)
-            .resizable()
-            .scaledToFill()
-            .frame(width: 320, height: 90)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .contentTransition(.opacity)
-            .accessibilityLabel("第 \(currentStep + 1) 步眼部线条预览")
-    }
-
-    private var resistantPager: some View {
+    private func resistantPager(
+        plan: MakeupPlanDTO, practice: MakeupSessionDTO, currentIndex: Int
+    ) -> some View {
         GeometryReader { proxy in
             let cardWidth = min(CGFloat(270), proxy.size.width - 96)
             let pageStride = cardWidth + 24
-
             HStack(spacing: 24) {
                 ForEach(Array(plan.steps.enumerated()), id: \.element.id) { index, step in
-                    tutorialCard(for: step)
+                    tutorialCard(step: step, isCurrent: index == currentIndex,
+                                 explanation: practice.explanation)
                         .frame(width: cardWidth)
-                        .scaleEffect(index == currentStep ? 1 : 0.94)
-                        .blur(radius: index == currentStep ? 0 : 7)
-                        .opacity(index == currentStep ? 1 : 0.42)
-                        .accessibilityHidden(index != currentStep)
+                        .scaleEffect(index == currentIndex ? 1 : 0.94)
+                        .blur(radius: index == currentIndex ? 0 : 7)
+                        .opacity(index == currentIndex ? 1 : 0.42)
+                        .accessibilityHidden(index != currentIndex)
                 }
             }
-            .offset(
-                x: (proxy.size.width - cardWidth) / 2
-                    - CGFloat(currentStep) * pageStride
-                    + horizontalDrag
-            )
+            .offset(x: (proxy.size.width - cardWidth) / 2
+                    - CGFloat(currentIndex) * pageStride + horizontalDrag)
             .contentShape(Rectangle())
-            .gesture(pagerGesture)
-            .animation(
-                .spring(response: 0.52, dampingFraction: 0.88),
-                value: currentStep
-            )
+            .gesture(pagerGesture(plan: plan, practice: practice,
+                                  step: plan.steps[currentIndex]))
+            .animation(.spring(response: 0.52, dampingFraction: 0.88), value: currentIndex)
         }
         .clipped()
     }
 
-    private var pagerGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                guard !isPaging else { return }
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                // Deliberate resistance: the card moves less than the finger.
-                horizontalDrag = value.translation.width * 0.38
+    private func tutorialCard(
+        step: MakeupPlanStepDTO, isCurrent: Bool, explanation: String?
+    ) -> some View {
+        VStack(spacing: 22) {
+            HStack {
+                Text("当前工具").font(.headline).foregroundStyle(.secondary)
+                Spacer()
+                Text(step.toolName ?? "按教程操作").font(.headline).underline()
             }
-            .onEnded { value in
-                guard !isPaging else { return }
-                if abs(value.translation.height) > abs(value.translation.width) {
-                    if value.translation.height < -60 {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            needsExplanation = true
-                        }
-                    } else if value.translation.height > 60 {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            resetExplanation()
-                        }
-                    }
-                    horizontalDrag = 0
-                    return
-                }
 
-                // 必须把手指确实拖到接近整张卡片的尽头；快速轻扫不提交。
-                // 未达到阈值时通过弹簧动画回到当前卡片。
-                let committedLeft = value.translation.width < -230
-                let committedRight = value.translation.width > 230
+            Image(systemName: "paintbrush.pointed.fill")
+                .resizable().scaledToFit()
+                .frame(width: 92, height: 92)
+                .foregroundStyle(AppTheme.ColorToken.accentOrange)
 
-                if committedLeft {
-                    commitPage(direction: 1)
-                } else if committedRight, currentStep > 0 {
-                    commitPage(direction: -1)
+            styledMakeupInstruction(step.instruction)
+                .font(.callout)
+                .fontWeight(.light)
+                .foregroundStyle(AppTheme.ColorToken.textSecondary)
+                .lineSpacing(5)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            if isCurrent, needsExplanation {
+                if let explanation, !explanation.isEmpty {
+                    Text(explanation).font(.caption).foregroundStyle(.secondary)
                 } else {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) {
-                        horizontalDrag = 0
+                    Button(isSubmitting ? "讲解生成中…" : "需要讲解") {
+                        requestExplanation(step)
                     }
+                    .disabled(isSubmitting)
                 }
             }
-
-    }
-
-    private func tutorialCard(for step: MakeupInstructionStep) -> some View {
-        let showsExplanation = needsExplanation && step.id == activeStep.id
-
-        return VStack(spacing: 0) {
-            VStack(spacing: 22) {
-                HStack {
-                    Text("当前工具")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(step.tool)
-                        .font(.headline)
-                        .underline()
-                }
-
-                Image("EyelinerProductIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 112, height: 112)
-                    .accessibilityLabel(step.tool)
-
-                styledMakeupInstruction(step.instruction)
-                    .font(.callout)
-                    .fontWeight(.light)
-                    .foregroundStyle(AppTheme.ColorToken.textSecondary)
-                    .tracking(1)
-                    .lineSpacing(5)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 22)
-            .frame(height: 360, alignment: .top)
-            .blur(radius: showsExplanation ? 1.8 : 0)
-
-            if showsExplanation {
-                explanationFooter(for: step)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            Spacer(minLength: 0)
         }
-        .frame(height: showsExplanation ? 410 : 360, alignment: .top)
+        .padding(18)
+        .frame(height: 380, alignment: .top)
         .background(.white.opacity(0.58))
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
     }
 
-    private func explanationFooter(for step: MakeupInstructionStep) -> some View {
-        Group {
-            if let explanationText {
-                Text(explanationText)
-                    .font(.caption)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-            } else {
-                Button {
-                    requestExplanation(for: step)
-                } label: {
-                    if isLoadingExplanation {
-                        ProgressView().tint(.white)
-                    } else {
-                        Text("需要讲解")
-                    }
+    private func pagerGesture(
+        plan: MakeupPlanDTO, practice: MakeupSessionDTO, step: MakeupPlanStepDTO
+    ) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard !isSubmitting, abs(value.translation.width) > abs(value.translation.height) else { return }
+                horizontalDrag = value.translation.width * 0.38
+            }
+            .onEnded { value in
+                guard !isSubmitting else { return }
+                if abs(value.translation.height) > abs(value.translation.width) {
+                    if value.translation.height < -60 { needsExplanation = true }
+                    sendSwipe("up", committed: value.translation.height < -60,
+                              step: step, practice: practice, plan: plan)
+                } else {
+                    let direction = value.translation.width < 0 ? "left" : "right"
+                    let committed = abs(value.translation.width) > 230
+                    sendSwipe(direction, committed: committed,
+                              step: step, practice: practice, plan: plan)
                 }
-                .font(.callout)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) {
+                    horizontalDrag = 0
+                }
+            }
+    }
+
+    private func sendSwipe(
+        _ direction: String, committed: Bool, step: MakeupPlanStepDTO,
+        practice: MakeupSessionDTO, plan: MakeupPlanDTO
+    ) {
+        isSubmitting = true
+        let visibleMS = visibleDurationMS()
+        let signature = "\(practice.sessionID):\(step.id):\(direction):\(committed)"
+        let eventID = pendingSwipeSignature == signature
+            ? (pendingSwipeEventID ?? UUID().uuidString) : UUID().uuidString
+        pendingSwipeSignature = signature
+        pendingSwipeEventID = eventID
+        Task {
+            defer { isSubmitting = false }
+            do {
+                let updated = try await BusinessDataService.shared.action(
+                    sessionID: practice.sessionID, eventID: eventID,
+                    stepID: step.id, planVersion: practice.planVersion,
+                    kind: "swipe", direction: direction, committed: committed,
+                    visibleMS: visibleMS
+                )
+                session.business.install(session: updated)
+                pendingSwipeSignature = nil
+                pendingSwipeEventID = nil
+                visibleStartedAt = .now
+                if updated.currentStepID != step.id { needsExplanation = false }
+                if direction == "left", committed,
+                   step.id == plan.steps.last?.id {
+                    try await finishPractice(sessionID: updated.sessionID)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
             }
         }
-        .frame(height: 50)
-        .background(Color(red: 1.0, green: 92 / 255, blue: 92 / 255).opacity(0.72))
     }
 
-    private var assistantTip: some View {
-        HStack(spacing: 10) {
-            Image("FirstTimeAssistant")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 36, height: 36)
-                .clipShape(Circle())
-
-            Text("小提示：\(activeStep.tip)")
-                .font(.system(size: 12, weight: .thin))
-                .fontWeight(.thin)
-                .foregroundStyle(Color(red: 51 / 255, green: 51 / 255, blue: 51 / 255))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(2)
-                .minimumScaleFactor(0.88)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 7)
-                .background(.white.opacity(0.75))
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 0,
-                        bottomLeadingRadius: 13,
-                        bottomTrailingRadius: 13,
-                        topTrailingRadius: 13
-                    )
+    private func requestExplanation(_ step: MakeupPlanStepDTO) {
+        guard let practice, !isSubmitting else { return }
+        isSubmitting = true
+        let eventID = pendingExplainStepID == step.id
+            ? (pendingExplainEventID ?? UUID().uuidString) : UUID().uuidString
+        pendingExplainStepID = step.id
+        pendingExplainEventID = eventID
+        Task {
+            defer { isSubmitting = false }
+            do {
+                let updated = try await BusinessDataService.shared.action(
+                    sessionID: practice.sessionID, eventID: eventID,
+                    stepID: step.id, planVersion: practice.planVersion,
+                    kind: "explain", direction: nil, committed: nil,
+                    visibleMS: visibleDurationMS()
                 )
+                session.business.install(session: updated)
+                pendingExplainStepID = nil
+                pendingExplainEventID = nil
+                visibleStartedAt = .now
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
-        .padding(.horizontal, 16)
     }
 
-    private func requestExplanation(for step: MakeupInstructionStep) {
-        guard !isLoadingExplanation else { return }
-        isLoadingExplanation = true
-        Task { @MainActor in
-            defer { isLoadingExplanation = false }
-            explanationText = try? await explanationService.explain(
-                stepTitle: step.title,
-                instruction: step.instruction
+    private func finishPractice(sessionID: String) async throws {
+        let requestID = completeRequestID ?? UUID().uuidString
+        completeRequestID = requestID
+        let result = try await BusinessDataService.shared.complete(
+            sessionID: sessionID, requestID: requestID
+        )
+        guard result.growthDelta.levelAfter == result.growthOverview.level else {
+            throw APIClientError.invalidResponse
+        }
+        session.business.install(completion: result)
+        path.append(AppRoute.makeupComplete)
+    }
+
+    private func visibleDurationMS() -> Int {
+        Int(max(0, min(Date.now.timeIntervalSince(visibleStartedAt) * 1000, 300_000)))
+    }
+
+    private func reportStepExit() {
+        guard session.business.completion == nil,
+              let practice, let stepID = practice.currentStepID,
+              practice.status == "in_progress" else { return }
+        let visibleMS = visibleDurationMS()
+        Task {
+            _ = try? await BusinessDataService.shared.action(
+                sessionID: practice.sessionID, eventID: UUID().uuidString,
+                stepID: stepID, planVersion: practice.planVersion,
+                kind: "step_exit", direction: nil, committed: nil,
+                visibleMS: visibleMS
             )
         }
     }
 
-    private func resetExplanation() {
-        needsExplanation = false
-        explanationText = nil
-        isLoadingExplanation = false
-    }
-
-    private func commitPage(direction: Int) {
-        guard !isPaging else { return }
-        isPaging = true
-        let screenWidth = UIScreen.main.bounds.width
-        let exitOffset = direction > 0 ? -screenWidth : screenWidth
-
-        withAnimation(.easeIn(duration: 0.24)) {
-            horizontalDrag = exitOffset
+    private func loadPortrait(for plan: MakeupPlanDTO) async {
+        guard let portrait = plan.portrait,
+              portrait.status == "succeeded", portrait.hasAlpha else { return }
+        if let data = try? await BusinessDataService.shared.portraitImage(
+            id: portrait.portraitID, variant: "full"
+        ) {
+            portraitImage = UIImage(data: data)
         }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
-
-            if direction > 0, currentStep == plan.steps.count - 1 {
-                horizontalDrag = 0
-                isPaging = false
-                path.append(AppRoute.makeupComplete)
+        for _ in 0..<30 {
+            guard !Task.isCancelled else { return }
+            guard let updated = try? await BusinessDataService.shared.plan(id: plan.planID) else { return }
+            if updated.render.status == "succeeded", let jobID = updated.render.jobID {
+                if let result = try? await BusinessDataService.shared.renderResult(jobID: jobID),
+                   result.portraitPreview?.status == "succeeded",
+                   result.portraitPreview?.sourcePortraitID == portrait.portraitID,
+                   let data = try? await BusinessDataService.shared.portraitPreviewImage(jobID: jobID),
+                   let image = UIImage(data: data) {
+                    portraitImage = image
+                }
                 return
             }
-
-            currentStep += direction
-            resetExplanation()
-            horizontalDrag = direction > 0 ? screenWidth : -screenWidth
-
-            withAnimation(.spring(response: 0.48, dampingFraction: 0.9)) {
-                horizontalDrag = 0
-            }
-
-            try? await Task.sleep(for: .milliseconds(480))
-            isPaging = false
+            if updated.render.status == "failed" || updated.render.status == "skipped" { return }
+            try? await Task.sleep(for: .seconds(2))
         }
     }
 }

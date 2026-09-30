@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct CosmeticProductCard: View {
-    let item: CosmeticItem
+    let item: CosmeticDTO
     let category: CosmeticCategory
+    @State private var productImageData: Data?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -14,11 +16,11 @@ struct CosmeticProductCard: View {
                 .lineLimit(1)
 
             if category == .eyeshadow {
-                tagPill(item.colorFamilyText)
+                tagPill(item.shade ?? item.tags.first ?? "色系待补充")
                 CosmeticColorSwatches(hexes: item.colorHexes)
             } else {
-                tagPill(item.materialText)
-                Text(item.summaryText)
+                tagPill(item.material ?? "材质待补充")
+                Text(item.summary ?? "商品信息待补充")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -28,21 +30,25 @@ struct CosmeticProductCard: View {
         .frame(width: 156)
         .background(Color(red: 0.98, green: 0.98, blue: 0.98))
         .clipShape(RoundedRectangle(cornerRadius: 18))
+        .task(id: "\(SessionManager.shared.context?.userId ?? ""):\(item.id)") {
+            productImageData = nil
+            guard item.hasImage, let accountID = SessionManager.shared.context?.userId else { return }
+            let data = try? await BusinessDataService.shared.cosmeticImage(id: item.id)
+            guard SessionManager.shared.context?.userId == accountID else { return }
+            productImageData = data
+        }
     }
 
     private var productImage: some View {
         Group {
-            if item.previewPath != nil {
-                LocalImageView(
-                    storedPath: item.previewPath,
-                    systemImage: category.placeholderSymbol
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let data = productImageData, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 CosmeticImagePlaceholder(category: category)
             }
         }
         .frame(width: 140, height: 140)
+        .clipped()
         .background(Color(red: 0.89, green: 0.89, blue: 0.88))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
@@ -55,6 +61,28 @@ struct CosmeticProductCard: View {
             .padding(.vertical, 2)
             .background(Color.white)
             .clipShape(Capsule())
+    }
+}
+
+private extension CosmeticDTO {
+    var tags: [String] {
+        guard case .array(let values)? = attributes?["tags"] else { return [] }
+        return values.compactMap { if case .string(let text) = $0 { return text }; return nil }
+    }
+
+    var colorHexes: [String] {
+        guard case .array(let values)? = attributes?["color_hexes"] else { return [] }
+        return values.compactMap { if case .string(let text) = $0 { return text }; return nil }
+    }
+
+    var material: String? {
+        guard case .string(let text)? = attributes?["material"] else { return nil }
+        return text
+    }
+
+    var summary: String? {
+        guard case .string(let text)? = attributes?["summary"] else { return nil }
+        return text
     }
 }
 

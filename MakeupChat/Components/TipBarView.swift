@@ -1,20 +1,9 @@
 import SwiftUI
 
-/// 小知识横条 — 从 `TipLibrary` 轮播，默认每 5 秒切换一条
+/// 小知识横条的显示组件；业务页面由 KnowledgeTipBar 获取后端内容。
 struct TipBarView: View {
-    let tips: [String]
-    let interval: TimeInterval
-
-    @State private var currentIndex = 0
-
-    init(tips: [String] = TipLibrary.allTips, interval: TimeInterval = 5) {
-        self.tips = tips.isEmpty ? TipLibrary.allTips : tips
-        self.interval = interval
-    }
-
-    private var currentTip: String {
-        tips[currentIndex % tips.count]
-    }
+    let text: String
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -27,7 +16,7 @@ struct TipBarView: View {
                 .background(Color(red: 0.15, green: 0.15, blue: 0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
-            Text(currentTip)
+            Text(text)
                 .font(.system(size: 12, weight: .thin))
                 .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15))
                 .tracking(1)
@@ -37,16 +26,61 @@ struct TipBarView: View {
                 .padding(.vertical, 4)
                 .background(Color(red: 0.89, green: 0.88, blue: 0.88).opacity(0.24))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-                .animation(AppTheme.Motion.statusFade, value: currentIndex)
-                .id(currentIndex)
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("关闭小知识")
+            }
         }
         .padding(.horizontal, 16)
-        .task {
-            guard tips.count > 1 else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
-                currentIndex = (currentIndex + 1) % tips.count
+    }
+}
+
+struct KnowledgeTipBar: View {
+    let surface: String
+    var planID: String?
+    var stepID: String?
+
+    @State private var item: KnowledgeTipDTO.Item?
+    @State private var reportedID: String?
+    @State private var dismissedID: String?
+
+    private var requestKey: String { "\(surface):\(planID ?? ""):\(stepID ?? "")" }
+
+    var body: some View {
+        Group {
+            if let item, dismissedID != item.id {
+                TipBarView(text: item.text) {
+                    dismissedID = item.id
+                    Task {
+                        try? await BusinessDataService.shared.recordTipEvent(
+                            item, surface: surface, type: "tip_dismissed"
+                        )
+                    }
+                }
+                    .onAppear {
+                        guard reportedID != item.id else { return }
+                        reportedID = item.id
+                        Task {
+                            try? await BusinessDataService.shared.recordTipEvent(
+                                item, surface: surface, type: "tip_shown"
+                            )
+                        }
+                    }
             }
+        }
+        .task(id: requestKey) {
+            item = nil
+            reportedID = nil
+            dismissedID = nil
+            guard SessionManager.shared.context != nil else { return }
+            item = try? await BusinessDataService.shared.tip(
+                surface: surface, planID: planID, stepID: stepID
+            )
         }
     }
 }
@@ -54,7 +88,7 @@ struct TipBarView: View {
 /// 视觉任务的统一转场层：固定 75pt 矢量标记、低速匀速旋转，并展示知识卡片。
 struct OperationTransitionOverlay: View {
     let message: String
-    let tips: [String]
+    let surface: String
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animationStartedAt = Date.now
@@ -77,7 +111,7 @@ struct OperationTransitionOverlay: View {
                         .accessibilityHidden(true)
                 }
 
-                TipBarView(tips: tips, interval: 4.5)
+                KnowledgeTipBar(surface: surface)
                     .frame(maxWidth: 390)
 
                 Text(message)
@@ -104,5 +138,5 @@ struct OperationTransitionOverlay: View {
 }
 
 #Preview {
-    TipBarView()
+    TipBarView(text: "轻握刷尾可帮助控制晕染力度。")
 }

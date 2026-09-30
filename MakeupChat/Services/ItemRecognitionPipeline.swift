@@ -233,7 +233,7 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
                 }
             )
             try persistence.removePendingJob(accountID: input.userID, capability: capability)
-            return try Self.map(dto: dto, previewImage: input.image)
+            return try Self.map(dto: dto, previewImage: input.image, sourceJobID: jobID)
         } catch let failure as VisionRequestFailure {
             if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
                 .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
@@ -253,7 +253,8 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
 
     static func map(
         dto: ItemRecognitionResultDTO,
-        previewImage: UIImage
+        previewImage: UIImage,
+        sourceJobID: String
     ) throws -> CosmeticsRecognitionResult {
         guard let item = dto.items.first,
               let category = CosmeticCategory.from(raw: item.category) else {
@@ -281,7 +282,7 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
             material: material,
             summary: summary,
             previewPath: storedPath,
-            recognitionID: nil,
+            recognitionID: sourceJobID,
             needsConfirmation: item.needsConfirmation,
             resultSource: "vision_job"
         )

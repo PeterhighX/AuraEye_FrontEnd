@@ -46,6 +46,7 @@ final class UserProfileSetupViewModel {
             user.userFileJSON = result.profileJSON
             try userRepository.update(user)
             session.markFaceScanned(imagePath: result.portraitPath)
+            await session.business.refreshProfile()
             analysisState = .succeeded(result)
             return true
         } catch is CancellationError {

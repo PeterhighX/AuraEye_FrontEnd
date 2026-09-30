@@ -10,7 +10,6 @@ final class DatabaseManager {
     private init() {
         openDatabase()
         migrate()
-        seedIfNeeded()
     }
 
     deinit {
@@ -48,10 +47,6 @@ final class DatabaseManager {
                 }
             }
         }
-        ensureColumn("user_id", definition: "TEXT", in: "cosmetics", database: db)
-        ensureColumn("preview_asset", definition: "TEXT", in: "cosmetics", database: db)
-        ensureColumn("preview_path", definition: "TEXT", in: "cosmetics", database: db)
-        ensureColumn("scanned_at", definition: "REAL", in: "cosmetics", database: db)
         applyVisionAPIV11Migration(database: db)
         applyUnifiedVisionJobMigration(database: db)
         applyChatHermesMigration(database: db)
@@ -195,14 +190,6 @@ final class DatabaseManager {
         let result = sqlite3_exec(database, sql, nil, nil, &error)
         if let error { sqlite3_free(error) }
         return result == SQLITE_OK
-    }
-
-    private func seedIfNeeded() {
-        guard let db else { return }
-        let count = scalarInt(db, sql: "SELECT COUNT(*) FROM users;") ?? 0
-        guard count == 0 else { return }
-
-        DatabaseSeeder.seed(into: db)
     }
 
     private func scalarInt(_ db: OpaquePointer, sql: String) -> Int? {

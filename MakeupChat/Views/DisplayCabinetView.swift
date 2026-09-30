@@ -20,6 +20,9 @@ struct DisplayCabinetView: View {
     @State private var successMessage: String?
     @State private var guideHandPressed = false
     @State private var isAddingProduct = false
+    @State private var editingProduct: CosmeticDTO?
+    @State private var editedProductName = ""
+    @State private var deletingProduct: CosmeticDTO?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +37,12 @@ struct DisplayCabinetView: View {
 
             ScrollView {
                 VStack(spacing: 32) {
+                    if let error = viewModel.loadErrorMessage {
+                        Text("化妆品柜暂不可用：\(error)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 16)
+                    }
                     ForEach(visibleSections) { section in
                         cabinetSection(section)
                     }
@@ -58,8 +67,9 @@ struct DisplayCabinetView: View {
                     }
                 }
         )
-        .onAppear {
-            viewModel.reload()
+        .task {
+            await viewModel.reload()
+            if viewModel.loadErrorMessage == nil { session.syncCosmeticCategoriesFromServer() }
             showPendingSuccessFeedback()
             startAddGuideAnimation()
         }
@@ -91,6 +101,36 @@ struct DisplayCabinetView: View {
         } message: {
             Text(topAddGuidance)
         }
+        .alert("修改商品名称", isPresented: Binding(
+            get: { editingProduct != nil },
+            set: { if !$0 { editingProduct = nil } }
+        )) {
+            TextField("商品名称", text: $editedProductName)
+            Button("取消", role: .cancel) { editingProduct = nil }
+            Button("保存") {
+                guard let id = editingProduct?.id else { return }
+                editingProduct = nil
+                Task {
+                    await viewModel.renameProduct(id: id, displayName: editedProductName)
+                    if viewModel.loadErrorMessage == nil { session.syncCosmeticCategoriesFromServer() }
+                }
+            }
+        } message: {
+            Text("名称会保存到当前账号的化妆品库。")
+        }
+        .confirmationDialog("删除这件化妆品？", isPresented: Binding(
+            get: { deletingProduct != nil },
+            set: { if !$0 { deletingProduct = nil } }
+        )) {
+            Button("删除", role: .destructive) {
+                guard let id = deletingProduct?.id else { return }
+                deletingProduct = nil
+                Task {
+                    await viewModel.deleteProduct(id: id)
+                    if viewModel.loadErrorMessage == nil { session.syncCosmeticCategoriesFromServer() }
+                }
+            }
+        }
         .alert(
             "未识别到产品类型",
             isPresented: Binding(
@@ -112,7 +152,7 @@ struct DisplayCabinetView: View {
             if isAddingProduct {
                 OperationTransitionOverlay(
                     message: "正在添加到你的陈列柜…",
-                    tips: TipLibrary.cosmeticsTips
+                    surface: "onboarding"
                 )
             } else if showImageSourcePicker {
                 MediaSourceDialog(
@@ -133,7 +173,7 @@ struct DisplayCabinetView: View {
             } else if viewModel.isRecognizing {
                 OperationTransitionOverlay(
                     message: "正在识别化妆品…",
-                    tips: TipLibrary.cosmeticsTips
+                    surface: "onboarding"
                 )
             }
         }
@@ -268,6 +308,15 @@ struct DisplayCabinetView: View {
                 HStack(spacing: section.category == .eyeshadow ? 12 : 14) {
                     ForEach(section.items) { item in
                         CosmeticProductCard(item: item, category: section.category)
+                            .contextMenu {
+                                Button("修改名称") {
+                                    editedProductName = item.displayName
+                                    editingProduct = item
+                                }
+                                Button("删除商品", role: .destructive) {
+                                    deletingProduct = item
+                                }
+                            }
                     }
 
                     addProductButton(for: section.category)
@@ -352,10 +401,11 @@ struct DisplayCabinetView: View {
         isAddingProduct = true
 
         Task { @MainActor in
-            // 先让确认卡平滑切换到转场层，再执行本地入库。
+            // 确认后才提交服务端。
             await Task.yield()
-            let succeeded = viewModel.confirmPendingProduct()
+            let succeeded = await viewModel.confirmPendingProduct()
             if succeeded {
+                session.syncCosmeticCategoriesFromServer()
                 session.markCosmeticsAdded()
                 session.reportCosmeticAdded(category: product.category)
                 try? await Task.sleep(for: .milliseconds(650))

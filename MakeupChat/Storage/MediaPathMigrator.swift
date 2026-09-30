@@ -5,7 +5,6 @@ import SQLite3
 enum MediaPathMigrator {
     static func migrateIfNeeded(in db: OpaquePointer) {
         migrateUsers(db)
-        migrateCosmetics(db)
         migrateOnboarding(db)
     }
 
@@ -13,10 +12,6 @@ enum MediaPathMigrator {
         for column in ["user_portrait", "user_update_photo", "eye_preview"] {
             rewriteColumn(db, table: "users", column: column, idColumn: "user_id")
         }
-    }
-
-    private static func migrateCosmetics(_ db: OpaquePointer) {
-        rewriteColumn(db, table: "cosmetics", column: "preview_path", idColumn: "sku")
     }
 
     private static func migrateOnboarding(_ db: OpaquePointer) {

@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 
+@MainActor
 struct UserProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: AppSession
@@ -14,6 +15,10 @@ struct UserProfileDetailView: View {
     @State private var isAnalyzing = false
     @State private var analysisErrorMessage: String?
     @State private var showsProfileMenu = false
+    @State private var showsPortraitConsent = false
+    @State private var isGeneratingPortrait = false
+    @State private var portraitRequestID: String?
+    @State private var quickStartMessage: String?
 
     private let userRepository = UserRepository()
     private let faceAnalysisService: any FaceAnalysisServicing = AccountAwareFaceAnalysisService()
@@ -60,6 +65,18 @@ struct UserProfileDetailView: View {
             }
             Button("取消", role: .cancel) {}
         }
+        .confirmationDialog(
+            "生成透明头像",
+            isPresented: $showsPortraitConsent,
+            titleVisibility: .visible
+        ) {
+            Button("同意使用本次照片生成头像与教程人物图") {
+                requestPortrait()
+            }
+            Button("暂不生成", role: .cancel) {}
+        } message: {
+            Text("将本次面部分析使用的照片去除背景，生成仅本账号可读取的透明肖像。")
+        }
         .alert(
             "分析未完成",
             isPresented: Binding(
@@ -76,6 +93,14 @@ struct UserProfileDetailView: View {
             }
         } message: {
             Text(analysisErrorMessage ?? "面部分析暂时未完成，请重新选择照片。")
+        }
+        .alert("上妆记录未就绪", isPresented: Binding(
+            get: { quickStartMessage != nil },
+            set: { if !$0 { quickStartMessage = nil } }
+        )) {
+            Button("重试") { Task { await session.business.refreshGrowth() } }
+        } message: {
+            Text(quickStartMessage ?? "请稍后重试。")
         }
         .overlay {
             if showsSourcePicker {
@@ -95,6 +120,15 @@ struct UserProfileDetailView: View {
             }
         }
         .onAppear { loadUser() }
+        .task {
+            await session.business.refreshProfile()
+            if session.shouldOfferPortraitConsent,
+               session.business.visualProfile?.resultSource == "remote_provider",
+               session.business.visualProfile?.portrait == nil {
+                session.shouldOfferPortraitConsent = false
+                showsPortraitConsent = true
+            }
+        }
     }
 
     // MARK: - Fixed top bar
@@ -141,7 +175,7 @@ struct UserProfileDetailView: View {
                 .offset(y: -16)
 
             VStack(alignment: .trailing, spacing: 0) {
-                Text("Anna Chen")
+                Text(session.authenticatedAccount?.displayName ?? "用户")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppTheme.ColorToken.textPrimary)
                     .lineLimit(1)
@@ -149,7 +183,7 @@ struct UserProfileDetailView: View {
                 Text("整体评价")
                     .padding(.top, 4)
 
-                Text("干净素颜感 · 原生温柔淡颜系")
+                Text(session.business.visualProfile?.narrative?.overall ?? "分析报告尚未生成")
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
@@ -166,6 +200,20 @@ struct UserProfileDetailView: View {
                         runAnalysis()
                     }
                     .disabled(isAnalyzing)
+                }
+
+                if let profile = session.business.visualProfile {
+                    Text(portraitStatus(profile.portrait))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if profile.resultSource == "remote_provider",
+                       (profile.portrait == nil || profile.portrait?.status == "failed") {
+                        Button(isGeneratingPortrait ? "生成中…" : "生成透明头像") {
+                            showsPortraitConsent = true
+                        }
+                        .font(.caption)
+                        .disabled(isGeneratingPortrait)
+                    }
                 }
             }
             .font(.system(size: 14, weight: .thin))
@@ -185,20 +233,16 @@ struct UserProfileDetailView: View {
 
     private var portraitImage: some View {
         Group {
-            if let capturedPortrait {
-                Image(uiImage: capturedPortrait)
+            if let data = session.business.avatarData,
+               let image = UIImage(data: data) {
+                Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-            } else if let path = user?.userPortraitPath {
-                LocalImageView(
-                    storedPath: path,
-                    assetName: "AvatarUser",
-                    systemImage: "person.crop.circle.fill"
-                )
             } else {
-                Image("AvatarUser")
+                Image(systemName: "person.crop.circle.fill")
                     .resizable()
                     .scaledToFill()
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -224,29 +268,15 @@ struct UserProfileDetailView: View {
 
     private var analysisSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let profile = session.business.visualProfile {
+                Text(profile.resultSource == "remote_provider" ? "真实面部分析" : "演示分析结果")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             analysisText
                 .font(.system(size: 14, weight: .thin))
                 .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
                 .lineSpacing(6)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Label("色彩标签", systemImage: "circle.fill")
-                    .labelStyle(ProfileBulletLabelStyle())
-
-                Text("肤色")
-                colorSwatches([
-                    Color(red: 0.96, green: 0.83, blue: 0.76),
-                    Color(red: 0.91, green: 0.73, blue: 0.62)
-                ])
-
-                Text("瞳色")
-                colorSwatches([
-                    Color(red: 0.22, green: 0.15, blue: 0.10),
-                    Color(red: 0.18, green: 0.12, blue: 0.10)
-                ])
-            }
-            .font(.system(size: 14, weight: .thin))
-            .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
@@ -256,23 +286,18 @@ struct UserProfileDetailView: View {
     }
 
     private var analysisText: Text {
-        Text("✨ 整体轮廓分析\n")
-        + Text("整体为鹅蛋脸，脸型线条流畅柔和，下颌角圆润无棱角，长宽比例均衡。面部留白适中，肤色属于粉皮（偏白），观感干净清爽。\n")
-        + Text("✨ 眉眼细节诊断\n")
-        + Text("推荐一字眉，毛流感自然，贴合素颜感。眉眼间距适中，眼型是杏眼，眼尾平缓上扬。眼皮为双眼皮，自然卧蚕适中，微笑卧蚕较深。虽黑眼圈较重且上眼睑轻微浮肿，但记得贴双眼皮贴哦，能瞬间放大双眼。\n")
-        + Text("✨ 风格明星推荐\n")
-        + Text("眼距标准，五官呈小量感，适合少女型、少年型、自然型妆容，可参考周冬雨、陈都灵、IU的清透风格。")
-    }
-
-    private func colorSwatches(_ colors: [Color]) -> some View {
-        HStack(spacing: 14) {
-            ForEach(Array(colors.enumerated()), id: \.offset) { _, color in
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(color)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 23)
-            }
+        guard let profile = session.business.visualProfile else {
+            return Text(session.business.profileError.map { "档案暂不可用：\($0)" } ?? "尚无面部分析报告。")
         }
+        guard let narrative = profile.narrative else {
+            return Text(profile.narrativeStatus == "pending" ? "分析已完成，文字报告生成中。" : "暂无文字报告。")
+        }
+        return Text("✨ 整体轮廓分析\n")
+            + Text("\(narrative.overall ?? "暂无描述")\n")
+            + Text("✨ 眉眼细节诊断\n")
+            + Text("\(narrative.eyeDetails ?? "暂无描述")\n")
+            + Text("✨ 风格推荐\n")
+            + Text(narrative.styleRecommendation ?? "暂无推荐")
     }
 
     // MARK: - Bottom actions
@@ -288,7 +313,11 @@ struct UserProfileDetailView: View {
             .disabled(isAnalyzing)
 
             Button {
-                path.append(session.routeForQuickStart())
+                if let route = session.routeForQuickStart() {
+                    path.append(route)
+                } else {
+                    quickStartMessage = session.business.growthError ?? "正在读取上妆记录，请稍后重试。"
+                }
             } label: {
                 bottomButtonLabel("继续上妆")
                     .foregroundStyle(.white)
@@ -309,6 +338,44 @@ struct UserProfileDetailView: View {
 
     private func loadUser() {
         user = try? userRepository.currentUser()
+    }
+
+    private func portraitStatus(_ portrait: UserPortraitDTO?) -> String {
+        guard let portrait else { return "尚未生成透明头像" }
+        switch portrait.status {
+        case "queued", "running": return "透明头像生成中"
+        case "succeeded": return portrait.hasAlpha ? "透明头像已更新" : "头像结果未通过透明度校验"
+        case "failed": return portrait.error?.message ?? "透明头像生成失败"
+        default: return "透明头像状态待同步"
+        }
+    }
+
+    private func requestPortrait() {
+        guard let version = session.business.visualProfile?.profileVersion,
+              session.business.visualProfile?.resultSource == "remote_provider",
+              !isGeneratingPortrait else { return }
+        if session.business.visualProfile?.portrait?.status == "failed" {
+            portraitRequestID = nil
+        }
+        let requestID = portraitRequestID ?? UUID().uuidString
+        portraitRequestID = requestID
+        isGeneratingPortrait = true
+        Task {
+            defer { isGeneratingPortrait = false }
+            do {
+                let ticket = try await BusinessDataService.shared.generatePortrait(
+                    requestID: requestID, profileVersion: version
+                )
+                for _ in 0..<30 {
+                    await session.business.refreshProfile()
+                    guard let portrait = session.business.visualProfile?.portrait else { return }
+                    if portrait.status == "succeeded" || portrait.status == "failed" { return }
+                    try await Task.sleep(for: .milliseconds(max(500, min(ticket.pollAfterMS, 10_000))))
+                }
+            } catch {
+                analysisErrorMessage = error.localizedDescription
+            }
+        }
     }
 
     private var usesFixedDemoGallery: Bool {
@@ -367,6 +434,11 @@ struct UserProfileDetailView: View {
                 try userRepository.update(profile)
                 capturedPortrait = nil
                 user = profile
+                await session.business.refreshProfile()
+                if session.business.visualProfile?.resultSource == "remote_provider",
+                   session.business.visualProfile?.portrait == nil {
+                    showsPortraitConsent = true
+                }
             } catch is CancellationError {
                 isAnalyzing = false
                 analysisErrorMessage = nil
@@ -398,6 +470,11 @@ struct UserProfileDetailView: View {
             try userRepository.update(profile)
             capturedPortrait = nil
             user = profile
+            await session.business.refreshProfile()
+            if session.business.visualProfile?.resultSource == "remote_provider",
+               session.business.visualProfile?.portrait == nil {
+                showsPortraitConsent = true
+            }
         } catch is CancellationError {
             isAnalyzing = false
             analysisErrorMessage = nil
@@ -408,16 +485,6 @@ struct UserProfileDetailView: View {
             return
         } catch {
             analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
-        }
-    }
-}
-
-private struct ProfileBulletLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 9) {
-            configuration.icon
-                .font(.system(size: 4))
-            configuration.title
         }
     }
 }

@@ -34,7 +34,16 @@ struct FirstTimeUseView: View {
                             showFirstTimeHint: true
                         )
 
-                        TipBarView(tips: ["眼周油脂盖住之后后续颜色更容易显色。"])
+                        KnowledgeTipBar(surface: "onboarding")
+
+                        if let error = viewModel.loadErrorMessage {
+                            VStack(spacing: 8) {
+                                Text("用户数据暂不可用：\(error)")
+                                    .font(.callout).foregroundStyle(.secondary)
+                                Button("重试") { Task { await viewModel.reload() } }
+                            }
+                            .padding(.horizontal, 16)
+                        }
 
                         ForEach(viewModel.steps) { step in
                             OnboardingStepRow(
@@ -67,8 +76,8 @@ struct FirstTimeUseView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear {
-            viewModel.reload()
+        .task {
+            await viewModel.reload()
         }
         .onChange(of: viewModel.pendingNavigation) { _, navigation in
             switch navigation {
@@ -136,12 +145,12 @@ struct FirstTimeUseView: View {
             } else if viewModel.processingStage == .cosmetics {
                 OperationTransitionOverlay(
                     message: "正在识别并添加化妆品…",
-                    tips: TipLibrary.cosmeticsTips
+                    surface: "onboarding"
                 )
             } else if viewModel.processingStage == .makeup {
                 OperationTransitionOverlay(
                     message: "正在生成专属妆容…",
-                    tips: TipLibrary.makeupTips
+                    surface: "onboarding"
                 )
             }
         }

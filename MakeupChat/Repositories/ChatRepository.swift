@@ -52,7 +52,7 @@ final class ChatRepository {
                 INSERT INTO chat_messages (
                     id, user_id, conversation_id, sender, text, ai_avatar_name,
                     client_request_id, delivery_status, created_at, updated_at
-                ) VALUES (?, ?, ?, 'user', ?, 'AvatarUser', ?, 'sending', ?, ?);
+                ) VALUES (?, ?, ?, 'user', ?, NULL, ?, 'sending', ?, ?);
                 """, bindings: [UUID().uuidString, userId, conversationId, text, requestId, now, now])
                 try execute(db, sql: """
                 INSERT INTO chat_messages (

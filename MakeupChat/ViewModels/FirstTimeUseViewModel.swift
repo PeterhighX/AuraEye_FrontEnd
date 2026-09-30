@@ -30,10 +30,12 @@ final class FirstTimeUseViewModel {
     private(set) var preparationProgress = 0.0
     private(set) var profileAnalysisProgress = 0.0
     private(set) var pendingProduct: CosmeticsRecognitionResult?
+    private var pendingCosmeticRequestID: String?
     private(set) var pendingNavigation: PendingNavigation = .none
     private(set) var processingStage: OnboardingProcessingStage = .none
     private(set) var recognitionErrorTitle = "未识别到化妆品"
     private(set) var recognitionErrorMessage: String?
+    private(set) var loadErrorMessage: String?
 
     var showsCaptureProgress: Bool {
         isProcessing && processingStage == .profile
@@ -57,13 +59,25 @@ final class FirstTimeUseViewModel {
         }
     }
 
-    func reload() {
+    func reload() async {
+        loadErrorMessage = nil
         do {
+            await session.business.refreshProfile()
+            if let error = session.business.profileError {
+                throw NSError(domain: "AuraEyeVisualProfile", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+            session.syncProfileAvailability()
+            await session.business.refreshCosmetics()
+            if let error = session.business.cosmeticsError {
+                throw NSError(domain: "AuraEyeCosmetics", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+            }
             _ = try service.loadSteps()
             steps = completeThreeStepSet(from: try service.resumeExistingInputs(
                 faceImagePath: session.scannedFaceImagePath,
-                hasCosmetics: session.hasCompletedOnboardingCosmeticsStep
+                hasVisualProfile: session.business.visualProfile != nil,
+                cosmetics: session.business.cosmetics
             ))
+            session.syncCosmeticCategoriesFromServer()
             if session.hasScannedFace || session.hasAddedCosmetics {
                 hasStartedProgress = true
                 let cosmeticsProgress = Double(session.onboardingCosmeticCategories.count)
@@ -75,11 +89,12 @@ final class FirstTimeUseViewModel {
             syncSessionFromSteps()
             updateStatusText()
         } catch {
-            // 数据库临时不可用时仍保证首次使用页面固定呈现完整三步骤。
+            loadErrorMessage = error.localizedDescription
+            // 固定三步只是页面骨架；接口失败时不把本地进度当作服务端事实。
             steps = OnboardingStepKey.allCases.map { key in
                 OnboardingStep(
                     id: "fallback_\(key.rawValue)",
-                    userId: "mrs_zhang",
+                    userId: SessionManager.shared.context?.userId ?? "",
                     stepKey: key,
                     status: key == .userProfile ? .inProgress : .pending,
                     subtitle: key.defaultSubtitle,
@@ -101,7 +116,7 @@ final class FirstTimeUseViewModel {
             }
             return OnboardingStep(
                 id: "fallback_\(key.rawValue)",
-                userId: "mrs_zhang",
+                userId: SessionManager.shared.context?.userId ?? "",
                 stepKey: key,
                 status: key == .userProfile ? .inProgress : .pending,
                 subtitle: key.defaultSubtitle,
@@ -138,6 +153,7 @@ final class FirstTimeUseViewModel {
                     await animateProfileProgress(to: 0.78, duration: 0.65)
                     try await Task.sleep(for: .milliseconds(650))
                     steps = completeThreeStepSet(from: try await completeFaceScan(input))
+                    await session.business.refreshProfile()
                     session.markFaceScanned(imagePath: steps.first(where: { $0.stepKey == .userProfile })?.previewPath ?? "")
                     await animateProfileProgress(to: 1, duration: 0.42)
                     statusText = "用户档案已创建完成"
@@ -145,7 +161,8 @@ final class FirstTimeUseViewModel {
                     if session.hasCompletedOnboardingCosmeticsStep {
                         steps = completeThreeStepSet(from: try service.resumeExistingInputs(
                             faceImagePath: session.scannedFaceImagePath,
-                            hasCosmetics: true
+                            hasVisualProfile: session.business.visualProfile != nil,
+                            cosmetics: session.business.cosmetics
                         ))
                         preparationProgress = 1
                     } else {
@@ -155,6 +172,7 @@ final class FirstTimeUseViewModel {
                     statusText = "扫描化妆品，建立化妆品库中……"
                     await animateProgress(to: 0.72, duration: 0.55)
                     pendingProduct = try await service.recognizeCosmetics(input: input)
+                    pendingCosmeticRequestID = UUID().uuidString
                     preparationProgress = max(preparationProgress, 0.72)
                     statusText = "已识别化妆品，请确认添加"
                 }
@@ -242,7 +260,12 @@ final class FirstTimeUseViewModel {
                 processingStage = .none
             }
             do {
-                steps = completeThreeStepSet(from: try service.completeCosmeticsScan(result: product))
+                let requestID = pendingCosmeticRequestID ?? UUID().uuidString
+                pendingCosmeticRequestID = requestID
+                steps = completeThreeStepSet(from: try await service.completeCosmeticsScan(
+                    result: product, requestID: requestID
+                ))
+                pendingCosmeticRequestID = nil
                 session.reportCosmeticAdded(category: product.category)
                 session.markOnboardingCosmeticsStepCompleted()
                 let categoryProgress = Double(session.onboardingCosmeticCategories.count) / 3
@@ -263,6 +286,7 @@ final class FirstTimeUseViewModel {
 
     func rejectPendingProduct() {
         pendingProduct = nil
+        pendingCosmeticRequestID = nil
         statusText = "未添加商品，请重新扫描"
     }
 
@@ -289,24 +313,8 @@ final class FirstTimeUseViewModel {
 
     func generateMakeup() {
         guard !isProcessing, preparationProgress >= 1 else { return }
-        isProcessing = true
-        processingStage = .makeup
-        statusText = "正在生成专属妆容方案……"
-
-        Task { @MainActor in
-            defer {
-                isProcessing = false
-                processingStage = .none
-            }
-            do {
-                steps = completeThreeStepSet(from: try await service.generateMakeup())
-                session.markMakeupGenerated()
-                updateStatusText()
-                checkAllStepsCompleted()
-            } catch {
-                statusText = "生成失败，请重试"
-            }
-        }
+        // 这里仅进入风格选择。真正生成由 /makeup/plans 在用户确认风格后执行。
+        pendingNavigation = .makeupPreview
     }
 
     func clearNavigation() {
@@ -314,6 +322,7 @@ final class FirstTimeUseViewModel {
     }
 
     func canTap(_ step: OnboardingStep) -> Bool {
+        guard loadErrorMessage == nil else { return false }
         guard step.isActive, !step.isCompleted, !isProcessing else { return false }
         if step.stepKey == .makeupGenerate {
             return preparationProgress >= 1
@@ -328,7 +337,7 @@ final class FirstTimeUseViewModel {
 
     private func syncSessionFromSteps() {
         if let profile = steps.first(where: { $0.stepKey == .userProfile }), profile.isCompleted {
-            session.markFaceScanned(imagePath: profile.previewPath ?? "")
+            session.syncProfileAvailability()
         }
         if let cosmetics = steps.first(where: { $0.stepKey == .cosmetics }), cosmetics.isCompleted {
             session.markOnboardingCosmeticsStepCompleted()

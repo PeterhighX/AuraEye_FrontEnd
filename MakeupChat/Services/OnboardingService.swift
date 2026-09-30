@@ -1,27 +1,22 @@
 import Foundation
 import UIKit
 
-/// 第一次使用流程 — 本地 Repository 编排（无云端）
+/// 第一次使用的页面进度暂存；档案和已确认商品以服务端为准。
+@MainActor
 final class OnboardingService {
     private let userRepository: UserRepository
     private let onboardingRepository: OnboardingRepository
-    private let eyeStyleRepository: EyeStyleRepository
-    private let cosmeticsRepository: CosmeticsRepository
     private let recognitionService: any CosmeticsRecognitionServicing
     private let faceAnalysisService: any FaceAnalysisServicing
 
     init(
         userRepository: UserRepository = UserRepository(),
         onboardingRepository: OnboardingRepository = OnboardingRepository(),
-        eyeStyleRepository: EyeStyleRepository = EyeStyleRepository(),
-        cosmeticsRepository: CosmeticsRepository = CosmeticsRepository(),
         recognitionService: any CosmeticsRecognitionServicing = AccountAwareCosmeticsRecognitionService(),
         faceAnalysisService: any FaceAnalysisServicing = AccountAwareFaceAnalysisService()
     ) {
         self.userRepository = userRepository
         self.onboardingRepository = onboardingRepository
-        self.eyeStyleRepository = eyeStyleRepository
-        self.cosmeticsRepository = cosmeticsRepository
         self.recognitionService = recognitionService
         self.faceAnalysisService = faceAnalysisService
     }
@@ -36,11 +31,12 @@ final class OnboardingService {
     /// 将本次启动中从其他入口已经完成的建档/入柜结果同步到引导流程。
     func resumeExistingInputs(
         faceImagePath: String?,
-        hasCosmetics: Bool
+        hasVisualProfile: Bool,
+        cosmetics: [CosmeticDTO]
     ) throws -> [OnboardingStep] {
         let user = try userRepository.currentUser()
 
-        if let faceImagePath, !faceImagePath.isEmpty {
+        if hasVisualProfile {
             try onboardingRepository.updateStep(
                 userId: user.userId,
                 key: .userProfile,
@@ -49,32 +45,38 @@ final class OnboardingService {
                 previewPath: faceImagePath
             )
             try onboardingRepository.activateNextStep(after: .userProfile, userId: user.userId)
+        } else {
+            try onboardingRepository.updateStep(
+                userId: user.userId, key: .userProfile, status: .inProgress,
+                subtitle: OnboardingStepKey.userProfile.defaultSubtitle
+            )
+            try onboardingRepository.updateStep(
+                userId: user.userId, key: .makeupGenerate, status: .pending
+            )
         }
 
-        let userCosmetics = try cosmeticsRepository.fetchUserOwned(userId: user.userId)
-        let categorySet = Set(userCosmetics.compactMap {
-            CosmeticCategory.from(raw: $0.makeupCategory)
+        let categorySet = Set(cosmetics.compactMap {
+            CosmeticCategory.from(raw: $0.category)
         })
         let hasAllRequiredCosmetics = categorySet.isSuperset(of: Set(CosmeticCategory.allCases))
 
-        if hasCosmetics, hasAllRequiredCosmetics,
-           let product = userCosmetics.first {
+        if hasAllRequiredCosmetics {
             try onboardingRepository.updateStep(
                 userId: user.userId,
                 key: .cosmetics,
                 status: .completed,
                 subtitle: OnboardingStepKey.cosmetics.completedSubtitle,
-                previewPath: product.previewPath
+                previewPath: nil
             )
             // 化妆品可以先于档案添加；只有脸部也已完成时才开放 Step 3。
-            if faceImagePath?.isEmpty == false {
+            if hasVisualProfile {
                 try onboardingRepository.activateNextStep(after: .cosmetics, userId: user.userId)
             }
         } else if !hasAllRequiredCosmetics {
             try onboardingRepository.updateStep(
                 userId: user.userId,
                 key: .cosmetics,
-                status: faceImagePath?.isEmpty == false ? .inProgress : .pending,
+                status: hasVisualProfile ? .inProgress : .pending,
                 subtitle: OnboardingStepKey.cosmetics.defaultSubtitle
             )
             try onboardingRepository.updateStep(
@@ -130,13 +132,16 @@ final class OnboardingService {
         return result
     }
 
-    func completeCosmeticsScan(result: CosmeticsRecognitionResult) throws -> [OnboardingStep] {
+    func completeCosmeticsScan(result: CosmeticsRecognitionResult, requestID: String) async throws -> [OnboardingStep] {
         let user = try userRepository.currentUser()
-        try cosmeticsRepository.insertRecognized(userId: user.userId, result: result)
+        _ = try await BusinessDataService.shared.addCosmetic(result, requestID: requestID)
+        await BusinessStore.shared.refreshCosmetics()
+        if let error = BusinessStore.shared.cosmeticsError {
+            throw NSError(domain: "AuraEyeCosmetics", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+        }
 
         let categories = Set(
-            try cosmeticsRepository.fetchUserOwned(userId: user.userId)
-                .compactMap { CosmeticCategory.from(raw: $0.makeupCategory) }
+            BusinessStore.shared.cosmetics.compactMap { CosmeticCategory.from(raw: $0.category) }
         )
         let isComplete = categories.isSuperset(of: Set(CosmeticCategory.allCases))
 
@@ -162,76 +167,4 @@ final class OnboardingService {
         return try onboardingRepository.fetchSteps(userId: user.userId)
     }
 
-    func generateMakeup() async throws -> [OnboardingStep] {
-        let user = try userRepository.currentUser()
-
-        try onboardingRepository.updateStep(
-            userId: user.userId,
-            key: .makeupGenerate,
-            status: .inProgress,
-            subtitle: "✨ 专属妆容效果正在生成中……"
-        )
-
-        try await Task.sleep(for: .seconds(1.2))
-
-        let style = try eyeStyleRepository.fetch(scene: "日常")
-        let previewPath = try persistMakeupPreview(style: style, userId: user.userId)
-        let stepsJSON = "[\"step_eye.svg\",\"step_liner.svg\",\"step_blush.svg\"]"
-
-        try userRepository.updateEyePreview(
-            userId: user.userId,
-            previewPath: previewPath,
-            stepsJSON: stepsJSON
-        )
-
-        let stepPreviewPath = try makeupStepPreviewPath(
-            userId: user.userId,
-            portraitPath: user.userPortraitPath,
-            style: style
-        )
-
-        try onboardingRepository.updateStep(
-            userId: user.userId,
-            key: .makeupGenerate,
-            status: .completed,
-            subtitle: OnboardingStepKey.makeupGenerate.completedSubtitle,
-            previewPath: stepPreviewPath
-        )
-
-        return try onboardingRepository.fetchSteps(userId: user.userId)
-    }
-
-    /// 步骤卡片左侧预览图：优先复用面部扫描图，否则生成妆容预览占位图
-    private func makeupStepPreviewPath(
-        userId: String,
-        portraitPath: String?,
-        style: EyeStyle?
-    ) throws -> String {
-        if let portraitPath,
-           LocalMediaStore.loadImage(fromStoredPath: portraitPath) != nil {
-            return portraitPath
-        }
-
-        let image = MakeupPreviewThumbnailRenderer.render(style: style)
-        return try LocalMediaStore.saveImage(
-            image,
-            bucket: .makeupPreviews,
-            fileName: "makeup_step_preview_\(userId).jpg"
-        )
-    }
-
-    private func persistMakeupPreview(style: EyeStyle?, userId: String) throws -> String {
-        let name = style?.eyeStyleName ?? "default_look"
-        let content = """
-        eye_style=\(name)
-        scene=\(style?.scene ?? "日常")
-        main=\(style?.eyeColorMain ?? "#C4A484")
-        sub=\(style?.eyeColorSub ?? "#8B7355")
-        """
-        return try LocalMediaStore.saveText(
-            content,
-            bucket: .makeupPreviews,
-            fileName: "makeup_preview_\(userId)_\(name).json"
-        )
-    }
 }

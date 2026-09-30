@@ -4,11 +4,12 @@ import UIKit
 
 struct CabinetSection: Identifiable {
     let category: CosmeticCategory
-    var items: [CosmeticItem]
+    var items: [CosmeticDTO]
     var id: String { category.rawValue }
 }
 
 @Observable
+@MainActor
 final class DisplayCabinetViewModel {
     private(set) var user: UserProfile
     private(set) var sections: [CabinetSection] = []
@@ -16,39 +17,41 @@ final class DisplayCabinetViewModel {
     private(set) var pendingProduct: CosmeticsRecognitionResult?
     private(set) var recognitionErrorMessage: String?
     private(set) var analysisState: AsyncAnalysisState<CosmeticsRecognitionResult> = .idle
+    private(set) var loadErrorMessage: String?
 
     private let userRepository: UserRepository
-    private let cosmeticsRepository: CosmeticsRepository
     private let recognitionService: any CosmeticsRecognitionServicing
+    private var pendingRequestID: String?
 
     init(
         userRepository: UserRepository = UserRepository(),
-        cosmeticsRepository: CosmeticsRepository = CosmeticsRepository(),
         recognitionService: any CosmeticsRecognitionServicing = AccountAwareCosmeticsRecognitionService()
     ) {
         self.userRepository = userRepository
-        self.cosmeticsRepository = cosmeticsRepository
         self.recognitionService = recognitionService
         self.user = UserProfile(
-            userId: "mrs_zhang",
-            displayName: "Mrs.Zhang",
-            status: "开心",
-            credits: 50
+            userId: SessionManager.shared.context?.userId ?? "",
+            displayName: SessionManager.shared.context?.displayName ?? "用户",
+            status: ""
         )
-        reload()
+        groupCosmetics([])
     }
 
-    func reload() {
+    func reload() async {
         if let loaded = try? userRepository.currentUser() {
             user = loaded
         }
+        await BusinessStore.shared.refreshCosmetics()
+        loadErrorMessage = BusinessStore.shared.cosmeticsError
+        groupCosmetics(BusinessStore.shared.cosmetics)
+    }
 
-        let items = (try? cosmeticsRepository.fetchAll(userId: user.userId)) ?? []
-        var grouped: [CosmeticCategory: [CosmeticItem]] = [:]
+    private func groupCosmetics(_ items: [CosmeticDTO]) {
+        var grouped: [CosmeticCategory: [CosmeticDTO]] = [:]
 
         for item in items {
             // 不能识别的历史数据不再默认塞进眼影栏，避免分区污染。
-            guard let key = CosmeticCategory.from(raw: item.makeupCategory) else { continue }
+            guard let key = CosmeticCategory.from(raw: item.category) else { continue }
             grouped[key, default: []].append(item)
         }
 
@@ -81,6 +84,7 @@ final class DisplayCabinetViewModel {
                 throw CosmeticsRecognitionError.incompleteProductInformation
             }
             pendingProduct = result
+            pendingRequestID = UUID().uuidString
             analysisState = .succeeded(result)
         } catch let error as VisionAPIError {
             analysisState = .failed(error)
@@ -92,15 +96,15 @@ final class DisplayCabinetViewModel {
     }
 
     @discardableResult
-    func confirmPendingProduct() -> Bool {
+    func confirmPendingProduct() async -> Bool {
         guard let pendingProduct else { return false }
         do {
-            try cosmeticsRepository.insertRecognized(
-                userId: user.userId,
-                result: pendingProduct
-            )
+            let requestID = pendingRequestID ?? UUID().uuidString
+            pendingRequestID = requestID
+            _ = try await BusinessDataService.shared.addCosmetic(pendingProduct, requestID: requestID)
             self.pendingProduct = nil
-            reload()
+            pendingRequestID = nil
+            await reload()
             return true
         } catch {
             // 数据库写入失败时保留确认卡，方便用户再次尝试
@@ -111,6 +115,25 @@ final class DisplayCabinetViewModel {
 
     func rejectPendingProduct() {
         pendingProduct = nil
+        pendingRequestID = nil
+    }
+
+    func renameProduct(id: String, displayName: String) async {
+        do {
+            _ = try await BusinessDataService.shared.updateCosmetic(id: id, displayName: displayName)
+            await reload()
+        } catch {
+            recognitionErrorMessage = "商品修改失败：\(error.localizedDescription)"
+        }
+    }
+
+    func deleteProduct(id: String) async {
+        do {
+            try await BusinessDataService.shared.deleteCosmetic(id: id)
+            await reload()
+        } catch {
+            recognitionErrorMessage = "商品删除失败：\(error.localizedDescription)"
+        }
     }
 
     func dismissRecognitionError() {

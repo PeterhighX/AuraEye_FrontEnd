@@ -1,71 +1,80 @@
 import SwiftUI
+import UIKit
 
-/// Figma 20:1246 — 妆容完成
+/// 完成页只展示同一事务返回的会话结果与全局成长账户。
 struct MakeupCompleteView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var session: AppSession
     @Binding var path: NavigationPath
     @Binding var selectedTab: Int
-    @State private var hasSavedHistory = false
-    @State private var hasPlayedScrollAnimation = false
-    @State private var scrollReveal: CGFloat = 0
-    @State private var barSettled = false
+    @State private var feedbackRating: Int?
+    @State private var feedbackRequestID: String?
+    @State private var feedbackMessage: String?
+    @State private var isSubmittingFeedback = false
+
+    private var completion: MakeupCompletionDTO? { session.business.completion }
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                MakeupFlowHeaderView(title: "妆容完成") {
-                    path = NavigationPath()
-                }
-                .padding(.top, 8)
+        VStack(spacing: 0) {
+            MakeupFlowHeaderView(title: "妆容完成") {
+                path = NavigationPath()
+            }
+            .padding(.top, 8)
 
-                ScrollView {
-                    VStack(spacing: 18) {
-                        levelCard
-                        resultCard
+            ScrollView {
+                VStack(spacing: 18) {
+                    if let completion {
+                        levelCard(completion)
+                        resultCard(completion)
+                        feedbackCard
+                        if let stats = session.business.makeupStats {
+                            statsCard(stats)
+                        } else if let error = session.business.statsError {
+                            Text("统计暂不可用：\(error)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
 
                         HStack {
                             Capsule()
                                 .fill(AppTheme.ColorToken.accentOrange)
                                 .frame(width: 6, height: 22)
-                            Text("上妆记录")
-                                .font(.title2)
+                            Text("上妆记录").font(.title2)
                             Spacer()
                         }
                         .padding(.horizontal, 16)
 
-                        HStack(spacing: 12) {
-                            historyCard(
-                                plan: MakeupLookCatalog.plan(id: session.selectedLookID),
-                                time: "今天 08:42",
-                                count: "第 8 次"
-                            )
-                            historyCard(
-                                plan: MakeupLookCatalog.plan(id: "chinese_warm"),
-                                time: "7月26日 19:10",
-                                count: "第 7 次"
-                            )
+                        if session.business.makeupHistory.isEmpty {
+                            Text(session.business.historyError.map { "记录暂不可用：\($0)" } ?? "暂无其他上妆记录")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(session.business.makeupHistory.prefix(5)) { item in
+                                        MakeupHistoryCard(item: item)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
                         }
-                        .padding(.horizontal, 16)
-
+                    } else {
+                        ContentUnavailableView(
+                            "完成结果未同步",
+                            systemImage: "clock.arrow.circlepath",
+                            description: Text("请等待服务端确认上妆完成；本机不会计算等级或奖励。")
+                        )
                     }
-                    .padding(.top, 16)
-                    .padding(.bottom, 24)
                 }
+                .padding(.top, 16)
+                .padding(.bottom, 24)
             }
-
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            completionNavigationBar
-        }
-        .onAppear {
-            session.hasCompletedFirstMakeup = true
-            playResultScrollIfNeeded()
-            guard !hasSavedHistory else { return }
-            hasSavedHistory = true
-            session.recordCompletedMakeup()
+        .safeAreaInset(edge: .bottom, spacing: 0) { completionNavigationBar }
+        .task {
+            await session.business.refreshHistory()
+            await session.business.refreshStats()
+            await session.business.refreshGrowth()
         }
     }
 
@@ -90,23 +99,17 @@ struct MakeupCompleteView: View {
             selectedTab = tab.rawValue
         } label: {
             VStack(spacing: 3) {
-                Image(systemName: symbol)
-                    .font(.system(size: 21))
-                Text(title)
-                    .font(.caption)
+                Image(systemName: symbol).font(.system(size: 21))
+                Text(title).font(.caption)
             }
-            .foregroundStyle(
-                tab == .profile
-                    ? AppTheme.ColorToken.accentOrange
-                    : Color.secondary
-            )
+            .foregroundStyle(tab == .profile ? AppTheme.ColorToken.accentOrange : Color.secondary)
             .frame(maxWidth: .infinity)
             .frame(height: 48)
         }
         .buttonStyle(.plain)
     }
 
-    private var levelCard: some View {
+    private func levelCard(_ result: MakeupCompletionDTO) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 12) {
                 Text("用户等级")
@@ -116,14 +119,14 @@ struct MakeupCompleteView: View {
                     .padding(.vertical, 5)
                     .background(AppTheme.ColorToken.accentOrange, in: Capsule())
 
-                ProgressView(value: 0.4)
+                ProgressView(value: min(max(result.growthOverview.levelProgress, 0), 1))
                     .tint(AppTheme.ColorToken.accentCoral)
                     .frame(width: 185)
 
                 HStack {
-                    Text("Lv. 4")
+                    Text("Lv. \(result.growthOverview.level)")
                     Spacer()
-                    Text("+ 4684")
+                    Text("+ \(result.growthDelta.xpAwarded) XP")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -131,11 +134,18 @@ struct MakeupCompleteView: View {
 
             Spacer()
 
-            Image("AvatarUser")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 72, height: 96)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            Group {
+                if let data = session.business.avatarData,
+                   let image = UIImage(data: data) {
+                    Image(uiImage: image).resizable().scaledToFit()
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable().scaledToFit().padding(16)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 72, height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .padding(.horizontal, 16)
         .frame(height: 104)
@@ -144,124 +154,100 @@ struct MakeupCompleteView: View {
         .padding(.horizontal, 16)
     }
 
-    private var resultCard: some View {
-        GeometryReader { proxy in
-            let cardHeight = proxy.size.width * 293 / 402
-            let barHeight = cardHeight * 34 / 293
-            let sheetStart = cardHeight * 14 / 293
-            let revealHeight = max(0, cardHeight - sheetStart) * scrollReveal
-
-            ZStack(alignment: .top) {
-                // 清单主体固定在最终位置，通过向下增长的蒙版形成“从横条卷出”。
-                Image("MakeupCompletionCardRefined")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: proxy.size.width, height: cardHeight)
-                    .mask(alignment: .top) {
-                        VStack(spacing: 0) {
-                            Color.clear.frame(height: sheetStart)
-                            Rectangle()
-                                .frame(height: revealHeight)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    .shadow(
-                        color: .black.opacity(0.08 * Double(scrollReveal)),
-                        radius: 8,
-                        y: 5
-                    )
-
-                // 橙色卷轴杆始终位于最上层，主体从它的背后展开。
-                Image("MakeupCompletionCardRefined")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: proxy.size.width, height: cardHeight)
-                    .frame(height: barHeight, alignment: .top)
-                    .clipped()
-                    .scaleEffect(x: barSettled ? 1 : 0.94, y: 1, anchor: .center)
-            }
-            .frame(width: proxy.size.width, height: cardHeight, alignment: .top)
+    private func resultCard(_ result: MakeupCompletionDTO) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("第 \(result.ordinal) 次上妆完成")
+                .font(.title2.weight(.semibold))
+            Text("完成率 \(Int(result.completionRate * 100))%")
+            Text("有效上妆时长 \(result.activeDurationMS / 60_000) 分钟")
+            Text("本次经验 +\(result.growthDelta.xpAwarded) XP")
+            Text("本次积分 +\(result.growthDelta.pointsAwarded)")
         }
-        .aspectRatio(402 / 293, contentMode: .fit)
-        .padding(.horizontal, 5)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("妆容完成数据卡片")
+        .font(.callout)
+        .foregroundStyle(AppTheme.ColorToken.textPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .background(.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 24))
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 
-    private func playResultScrollIfNeeded() {
-        guard !hasPlayedScrollAnimation else { return }
-        hasPlayedScrollAnimation = true
-
-        if reduceMotion {
-            scrollReveal = 1
-            barSettled = true
-            return
-        }
-
-        scrollReveal = 0
-        barSettled = false
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.76).delay(0.16)) {
-            barSettled = true
-        }
-        withAnimation(.easeOut(duration: 1.15).delay(0.28)) {
-            scrollReveal = 1
-        }
-    }
-
-    private func historyCard(
-        plan: MakeupLookPlan,
-        time: String,
-        count: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(plan.look.imageAssetName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 120, height: 120)
-                    .scaleEffect(1.1)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                VStack(spacing: 8) {
-                    ForEach(plan.look.swatchHexes, id: \.self) { hex in
-                        Circle()
-                            .fill(Color(completionHex: hex))
-                            .frame(width: 20, height: 20)
+    private var feedbackCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("评价本次教程").font(.headline)
+            HStack(spacing: 14) {
+                ForEach(1...5, id: \.self) { value in
+                    Button {
+                        feedbackRating = value
+                        feedbackRequestID = UUID().uuidString
+                    } label: {
+                        Image(systemName: value <= (feedbackRating ?? 0) ? "star.fill" : "star")
+                            .foregroundStyle(AppTheme.ColorToken.accentOrange)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(value) 星")
                 }
             }
-
-            Text("\(count)上妆")
-                .font(.body)
-
-            Text(time)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            if let feedbackMessage {
+                Text(feedbackMessage).font(.caption).foregroundStyle(.secondary)
+            }
+            Button(isSubmittingFeedback ? "正在提交…" : "提交评价") {
+                submitFeedback()
+            }
+            .disabled(feedbackRating == nil || isSubmittingFeedback)
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.52), in: RoundedRectangle(cornerRadius: 18))
+        .padding(20)
+        .background(.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 24))
+        .padding(.horizontal, 16)
     }
 
-}
+    private func statsCard(_ stats: MakeupStatsDTO) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("上妆统计").font(.headline)
+            Text("累计完成 \(stats.completedCount) 次 · 历史完成率 \(Int(stats.completionRate * 100))%")
+            if let duration = stats.averageActiveDurationMS {
+                Text("平均有效时长 \(duration / 60_000) 分钟")
+            }
+            if let speed = stats.speedComparison {
+                Text("同风格可比记录 \(speed.comparableSessionCount) 次 · 速度提升 \(Int(speed.percentFaster))%")
+            } else {
+                Text("暂无可比上妆速度记录")
+            }
+        }
+        .font(.callout)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 24))
+        .padding(.horizontal, 16)
+    }
 
-private extension Color {
-    init(completionHex: String) {
-        let value = UInt64(completionHex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0
-        self.init(
-            red: Double((value >> 16) & 0xFF) / 255,
-            green: Double((value >> 8) & 0xFF) / 255,
-            blue: Double(value & 0xFF) / 255
-        )
+    private func submitFeedback() {
+        guard let sessionID = session.business.activeSession?.sessionID,
+              let rating = feedbackRating else { return }
+        let requestID = feedbackRequestID ?? UUID().uuidString
+        feedbackRequestID = requestID
+        isSubmittingFeedback = true
+        Task {
+            defer { isSubmittingFeedback = false }
+            do {
+                try await BusinessDataService.shared.submitFeedback(
+                    sessionID: sessionID, requestID: requestID, rating: rating
+                )
+                feedbackMessage = "评价已保存"
+                await session.business.refreshHistory()
+                await session.business.refreshStats()
+            } catch {
+                feedbackMessage = "评价暂未保存：\(error.localizedDescription)"
+            }
+        }
     }
 }
 
 #Preview {
     NavigationStack {
         MakeupCompleteView(
-            session: AppSession(),
-            path: .constant(NavigationPath()),
+            session: AppSession(), path: .constant(NavigationPath()),
             selectedTab: .constant(AppTab.home.rawValue)
         )
     }

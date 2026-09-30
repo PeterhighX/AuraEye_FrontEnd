@@ -20,11 +20,32 @@ struct AnimatedWeatherSymbol: View {
 struct LiveWeatherSummaryCard: View {
     let aiMessage: String
     var showFirstTimeHint = false
-    @StateObject private var weatherProvider = LiveWeatherProvider()
+    var surface = "quick_start_preview"
+    var styleID: String?
+    @StateObject private var weatherProvider = LiveWeatherProvider.shared
+    @State private var generatedMessage: String?
+    @State private var isCachedMessage = false
+
+    private var cacheKey: String? {
+        guard let userID = SessionManager.shared.context?.userId else { return nil }
+        return "weather-copy.\(userID).\(surface).\(styleID ?? "auto")"
+    }
+
+    private var requestKey: String {
+        let weather = weatherProvider.snapshot
+        return "\(cacheKey ?? "signed-out"):\(weather.observedAt?.timeIntervalSince1970 ?? 0):\(weather.temperature ?? -1):\(weather.conditionText ?? ""):\(weather.uvIndex ?? -1):\(weather.district)"
+    }
+
+    private var displayedMessage: String {
+        if let generatedMessage {
+            return isCachedMessage ? "上次建议：\(generatedMessage)" : generatedMessage
+        }
+        return "示意：\(aiMessage)"
+    }
 
     var body: some View {
         WeatherSummaryCard(
-            aiMessage: aiMessage,
+            aiMessage: displayedMessage,
             showFirstTimeHint: showFirstTimeHint,
             weather: weatherProvider.snapshot,
             onRefreshWeather: { weatherProvider.start() }
@@ -39,6 +60,45 @@ struct LiveWeatherSummaryCard: View {
                 }
             }
         }
+        .onAppear {
+            loadCachedMessage()
+        }
+        .onChange(of: cacheKey) { _, _ in
+            loadCachedMessage()
+        }
+        .task(id: requestKey) {
+            guard cacheKey != nil else { return }
+            let snapshot = weatherProvider.snapshot
+            let weather: WeatherContextDTO?
+            if let observedAt = snapshot.observedAt,
+               let temperature = snapshot.temperature,
+               let condition = snapshot.conditionText,
+               let uvIndex = snapshot.uvIndex {
+                weather = WeatherContextDTO(
+                    temperatureC: temperature, condition: condition,
+                    uvIndex: uvIndex, district: snapshot.district,
+                    observedAt: ISO8601DateFormatter().string(from: observedAt)
+                )
+            } else {
+                weather = nil
+            }
+            do {
+                let result = try await BusinessDataService.shared.weatherCopy(
+                    surface: surface, styleID: styleID, weather: weather
+                )
+                guard !Task.isCancelled, let cacheKey else { return }
+                generatedMessage = result.text
+                isCachedMessage = false
+                UserDefaults.standard.set(result.text, forKey: cacheKey)
+            } catch {
+                // The account-scoped last successful copy remains visible until the API recovers.
+            }
+        }
+    }
+
+    private func loadCachedMessage() {
+        generatedMessage = cacheKey.flatMap { UserDefaults.standard.string(forKey: $0) }
+        isCachedMessage = generatedMessage != nil
     }
 }
 
@@ -72,7 +132,9 @@ struct WeatherSummaryCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("刷新天气")
-            .accessibilityValue("\(weather.conditionText ?? "多云")，\(weather.temperature ?? 25)度")
+            .accessibilityValue(weather.observedAt == nil
+                ? "默认天气示意：\(weather.conditionText ?? "多云")，\(weather.temperature ?? 25)度"
+                : "\(weather.conditionText ?? "天气")，\(weather.temperature ?? 25)度")
 
             PreviewAgentOutput(
                 message: aiMessage,
@@ -136,7 +198,7 @@ private struct PreviewWeatherData: View {
                         .frame(height: 18)
                         .background(Color.white.opacity(0.45))
                         .clipShape(Capsule())
-                    Text("Open-Meteo")
+                    Text(weather.observedAt == nil ? "天气示意" : "Open-Meteo")
                         .font(.system(size: 8, weight: .light))
                 }
                 .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))

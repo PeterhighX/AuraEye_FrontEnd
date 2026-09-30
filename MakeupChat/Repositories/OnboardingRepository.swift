@@ -68,7 +68,7 @@ final class OnboardingRepository {
             let sql = """
             UPDATE onboarding_steps
             SET status = ?, subtitle = COALESCE(?, subtitle),
-                preview_path = COALESCE(?, preview_path), updated_at = ?
+                preview_path = ?, updated_at = ?
             WHERE user_id = ? AND step_key = ?;
             """
             var statement: OpaquePointer?

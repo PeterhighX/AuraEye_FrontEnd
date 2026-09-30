@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HomeRecommendedLook: Identifiable {
     let id: String
@@ -15,9 +16,19 @@ struct HomeRecommendedLookCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                Image(look.imageAssetName)
-                    .resizable()
-                    .scaledToFill()
+                Group {
+                    if UIImage(named: look.imageAssetName) != nil {
+                        Image(look.imageAssetName)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "paintpalette.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(32)
+                            .foregroundStyle(AppTheme.ColorToken.accentOrange)
+                    }
+                }
                     .frame(width: 120, height: 120)
                     // 源 SVG 自带 4pt 投影留白，放大后再裁切，避免预览出现边线。
                     .scaleEffect(1.1)
@@ -105,7 +116,9 @@ struct HomeTeachingCard: View {
             .buttonStyle(.plain)
             .padding(.leading, 18)
             .accessibilityLabel("刷新天气")
-            .accessibilityValue("\(weather.conditionText ?? "多云")，\(weather.temperature ?? 25)度")
+            .accessibilityValue(weather.observedAt == nil
+                ? "默认天气示意：\(weather.conditionText ?? "多云")，\(weather.temperature ?? 25)度"
+                : "\(weather.conditionText ?? "天气")，\(weather.temperature ?? 25)度")
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text("上妆教学")
@@ -177,7 +190,7 @@ private struct HomeWeatherDetails: View {
                                 .opacity(0.45)
                         )
                         .clipShape(Capsule())
-                    Text("Open-Meteo")
+                    Text(weather.observedAt == nil ? "天气示意" : "Open-Meteo")
                         .font(.system(size: 8, weight: .light))
                 }
                 .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))

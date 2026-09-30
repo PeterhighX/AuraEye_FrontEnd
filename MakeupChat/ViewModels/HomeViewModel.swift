@@ -2,24 +2,17 @@ import Foundation
 import Observation
 
 @Observable
+@MainActor
 final class HomeViewModel {
     private(set) var user: UserProfile
-    private(set) var recommendedScenes: [EyeStyle] = []
-
     private let userRepository: UserRepository
-    private let eyeStyleRepository: EyeStyleRepository
 
-    init(
-        userRepository: UserRepository = UserRepository(),
-        eyeStyleRepository: EyeStyleRepository = EyeStyleRepository()
-    ) {
+    init(userRepository: UserRepository = UserRepository()) {
         self.userRepository = userRepository
-        self.eyeStyleRepository = eyeStyleRepository
         self.user = UserProfile(
-            userId: "mrs_zhang",
-            displayName: "Mrs.Zhang",
-            status: "开心",
-            credits: 50
+            userId: SessionManager.shared.context?.userId ?? "",
+            displayName: SessionManager.shared.context?.displayName ?? "用户",
+            status: ""
         )
         reload()
     }
@@ -28,6 +21,5 @@ final class HomeViewModel {
         if let loaded = try? userRepository.currentUser() {
             user = loaded
         }
-        recommendedScenes = (try? eyeStyleRepository.fetchAll()) ?? []
     }
 }

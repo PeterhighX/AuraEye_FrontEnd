@@ -4,7 +4,6 @@ struct UserProfile: Identifiable {
     let userId: String
     var displayName: String
     var status: String
-    var credits: Int
     var userFileJSON: String?
     var userPortraitPath: String?
     var uploadedPhotoPath: String?
@@ -13,17 +12,6 @@ struct UserProfile: Identifiable {
 
     var id: String { userId }
 
-    var tipText: String {
-        guard
-            let userFileJSON,
-            let data = userFileJSON.data(using: .utf8),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let brush = json["brushTip"] as? String
-        else {
-            return "毛刷的作用可以柔化边缘，但是要定时清理哦！"
-        }
-        return brush
-    }
 }
 
 enum ChatSender: String {
@@ -91,27 +79,4 @@ struct ChatMessage: Identifiable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
-}
-
-struct EyeStyle: Identifiable {
-    let eyeStyleName: String
-    let eyeSVG: String?
-    let eyelinerName: String?
-    let eyelinerSVG: String?
-    let eyeColorMain: String?
-    let eyeColorSub: String?
-    let scene: String?
-
-    var id: String { eyeStyleName }
-}
-
-struct CosmeticItem: Identifiable {
-    let sku: String
-    let makeupCategory: String
-    let makeupTab: String?
-    let makeupColorsJSON: String?
-    let brushJSON: String?
-    var previewPath: String?
-
-    var id: String { sku }
 }

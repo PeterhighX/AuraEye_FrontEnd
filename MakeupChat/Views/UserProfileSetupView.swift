@@ -94,7 +94,7 @@ struct UserProfileSetupView: View {
     private var analysisOverlay: some View {
         OperationTransitionOverlay(
             message: "正在分析你的面部特征，请稍候…",
-            tips: TipLibrary.profileTips
+            surface: "onboarding"
         )
     }
 

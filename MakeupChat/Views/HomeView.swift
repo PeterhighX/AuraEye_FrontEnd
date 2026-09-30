@@ -11,10 +11,18 @@ struct HomeView: View {
     @State private var showProfileImageSourcePicker = false
     @State private var showProfileImagePicker = false
     @State private var showProfilePhotoLibrary = false
+    @State private var quickStartMessage: String?
     @State private var profileImageSource: UIImagePickerController.SourceType = .camera
-    @StateObject private var weatherProvider = LiveWeatherProvider()
+    @StateObject private var weatherProvider = LiveWeatherProvider.shared
 
-    private let recommendedLooks = MakeupLookCatalog.plans.map(\.look)
+    private var recommendedLooks: [HomeRecommendedLook] {
+        session.business.styles.map {
+            HomeRecommendedLook(
+                id: $0.id, title: $0.title, tag: $0.tag,
+                imageAssetName: $0.heroAssetKey ?? "", swatchHexes: $0.swatchHexes
+            )
+        }
+    }
 
     var body: some View {
         homeForeground
@@ -24,6 +32,10 @@ struct HomeView: View {
         .onAppear {
             viewModel.reload()
             presentRequestedProfileCaptureIfNeeded()
+        }
+        .task {
+            await session.business.refreshGrowth()
+            await session.business.refreshStyles()
         }
         .task {
             while !Task.isCancelled {
@@ -63,6 +75,14 @@ struct HomeView: View {
         } message: {
             Text(profileSetupViewModel.errorMessage ?? "")
         }
+        .alert("上妆记录未就绪", isPresented: Binding(
+            get: { quickStartMessage != nil },
+            set: { if !$0 { quickStartMessage = nil } }
+        )) {
+            Button("重试") { Task { await session.business.refreshGrowth() } }
+        } message: {
+            Text(quickStartMessage ?? "请稍后重试。")
+        }
         .overlay {
             if showProfileImageSourcePicker {
                 MediaSourceDialog(
@@ -96,7 +116,7 @@ struct HomeView: View {
                     VStack(spacing: 32) {
                         growthProgress
                         teachingSection
-                        TipBarView()
+                        KnowledgeTipBar(surface: "home")
                         recommendedSection
                     }
                     .padding(.top, 32)
@@ -137,7 +157,7 @@ struct HomeView: View {
                         .tracking(0)
                         .foregroundStyle(.white)
                     Spacer()
-                    Text("LV.04")
+                    Text(session.business.growth.map { "LV.\($0.level)" } ?? "等级待同步")
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                         .tracking(0)
                         .foregroundStyle(.white)
@@ -150,7 +170,7 @@ struct HomeView: View {
                     Capsule().fill(Color.white.opacity(0.6)).frame(height: 6)
                     Capsule()
                         .fill(Color(red: 1, green: 139 / 255, blue: 104 / 255))
-                        .frame(width: 23, height: 6)
+                        .frame(width: 165 * CGFloat(min(max(session.business.growth?.levelProgress ?? 0, 0), 1)), height: 6)
                 }
                 .frame(width: 165)
             }
@@ -166,7 +186,13 @@ struct HomeView: View {
             HomeTeachingCard(
                 weather: weatherProvider.snapshot,
                 onRefreshWeather: { weatherProvider.start() },
-                onQuickStart: { path.append(session.routeForQuickStart()) }
+                onQuickStart: {
+                    if let route = session.routeForQuickStart() {
+                        path.append(route)
+                    } else {
+                        quickStartMessage = session.business.growthError ?? "正在读取上妆记录，请稍后重试。"
+                    }
+                }
             )
 
             HStack(spacing: 8) {
@@ -197,7 +223,7 @@ struct HomeView: View {
     private var profileAnalysisOverlay: some View {
         OperationTransitionOverlay(
             message: "正在分析你的面部特征，请稍候…",
-            tips: TipLibrary.profileTips
+            surface: "onboarding"
         )
     }
 
@@ -267,13 +293,25 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(recommendedLooks) { look in
-                        HomeRecommendedLookCard(look: look)
+            if let error = session.business.stylesError {
+                Text("推荐妆容暂不可用：\(error)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+            } else if recommendedLooks.isEmpty {
+                Text("暂无可用妆容")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(recommendedLooks) { look in
+                            HomeRecommendedLookCard(look: look)
+                        }
                     }
+                    .padding(.horizontal, 12)
                 }
-                .padding(.horizontal, 12)
             }
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }

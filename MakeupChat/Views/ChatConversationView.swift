@@ -14,7 +14,7 @@ struct ChatConversationView: View {
                 if let user = viewModel.user {
                     ProfileHeaderView(user: user, onBack: onBack)
                 }
-                TipBarView()
+                KnowledgeTipBar(surface: "chat")
             }
             .padding(.top, 8)
 

@@ -18,8 +18,6 @@ enum APIEndpoint {
     static let logout = "/auth/logout"
     static let authMe = "/auth/me"
     static let chatMessages = "/chat/messages"
-    static let makeupGeneration = "/makeup/generate"
-    static let makeupRecommendations = "/makeup/recommendations"
     static let visionJobs = "/vision/jobs"
 
     static func visionJob(_ jobID: String) -> String {
@@ -167,10 +165,14 @@ struct APIProblem: Decodable, Error, Equatable, Sendable {
     let requestId: String?
     let retryable: Bool?
     let errors: [FieldProblem]?
+    let requiredPoints: Int?
+    let availablePoints: Int?
 
     enum CodingKeys: String, CodingKey {
         case type, title, status, detail, instance, code, retryable, errors
         case requestId = "request_id"
+        case requiredPoints = "required_points"
+        case availablePoints = "available_points"
     }
 }
 
@@ -264,6 +266,11 @@ enum APIClientError: LocalizedError {
         case let .invalidServerResponse(status, requestID):
             return "服务器响应格式异常（\(status)）\(requestIDSuffix(requestID))"
         case let .problem(problem, metadata):
+            if problem.code == "INSUFFICIENT_POINTS",
+               let required = problem.requiredPoints,
+               let available = problem.availablePoints {
+                return "积分不足：需要 \(required)，当前可用 \(available)。\(requestIDSuffix(metadata.serverRequestID ?? problem.requestId))"
+            }
             return "\(problem.detail ?? problem.title)\(requestIDSuffix(metadata.serverRequestID ?? problem.requestId))"
         case let .httpStatus(status, message, _, metadata):
             return "接口请求失败（\(status)）：\(message)\(requestIDSuffix(metadata.serverRequestID))"
@@ -553,7 +560,15 @@ actor APIClient {
         guard normalizedPath != "v1", !normalizedPath.hasPrefix("v1/") else {
             throw APIClientError.invalidResponse
         }
-        let url = configuration.baseURL.appendingPathComponent(normalizedPath)
+        let parts = normalizedPath.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        var components = URLComponents(
+            url: configuration.baseURL.appendingPathComponent(String(parts[0])),
+            resolvingAgainstBaseURL: false
+        )
+        if parts.count == 2 {
+            components?.percentEncodedQuery = String(parts[1])
+        }
+        guard let url = components?.url else { throw APIClientError.invalidResponse }
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.timeoutInterval = configuration.timeout
@@ -1097,102 +1112,5 @@ final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
               payload.conversationId == request.conversationId else {
             throw ChatContractError.mismatchedResponse
         }
-    }
-}
-
-// MARK: - 4/5. Makeup generation and recommendations
-
-struct MakeupGenerationContext: Encodable, Sendable {
-    let userId: String
-    let profileJSON: String?
-    let cosmeticCategories: [String]
-    let scene: String
-    let weather: String?
-
-    enum CodingKeys: String, CodingKey {
-        case userId = "user_id"
-        case profileJSON = "profile"
-        case cosmeticCategories = "cosmetic_categories"
-        case scene, weather
-    }
-}
-
-struct GeneratedMakeupStep: Codable, Identifiable, Sendable {
-    let id: Int
-    let title: String
-    let tool: String
-    let instruction: String
-    let tip: String
-    let previewAsset: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, title, tool, instruction, tip
-        case previewAsset = "preview_asset"
-    }
-}
-
-struct GeneratedMakeupPlan: Codable, Identifiable, Sendable {
-    let id: String
-    let title: String
-    let tag: String
-    let summary: String
-    let imageURL: String?
-    let colorHexes: [String]
-    let steps: [GeneratedMakeupStep]
-
-    enum CodingKeys: String, CodingKey {
-        case id, title, tag, summary, steps
-        case imageURL = "image_url"
-        case colorHexes = "color_hexes"
-    }
-}
-
-protocol MakeupGenerationServicing {
-    func generate(context: MakeupGenerationContext) async throws -> GeneratedMakeupPlan
-}
-
-protocol MakeupRecommendationServicing {
-    func recommendations(context: MakeupGenerationContext) async throws -> [GeneratedMakeupPlan]
-}
-
-final class RemoteMakeupGenerationService: MakeupGenerationServicing {
-    private let client: APIClient
-
-    init(client: APIClient) {
-        self.client = client
-    }
-
-    func generate(context: MakeupGenerationContext) async throws -> GeneratedMakeupPlan {
-        try await client.send(path: APIEndpoint.makeupGeneration, body: context)
-    }
-}
-
-final class RemoteMakeupRecommendationService: MakeupRecommendationServicing {
-    private let client: APIClient
-
-    init(client: APIClient) {
-        self.client = client
-    }
-
-    func recommendations(context: MakeupGenerationContext) async throws -> [GeneratedMakeupPlan] {
-        try await client.send(path: APIEndpoint.makeupRecommendations, body: context)
-    }
-}
-
-/// 统一创建远端服务，便于在 App 根节点或依赖容器中集中切换。
-struct RemoteServiceContainer {
-    let client: APIClient
-    let authentication: RemoteAuthenticationService
-    let chat: RemoteAIAgentService
-    let makeupGeneration: RemoteMakeupGenerationService
-    let makeupRecommendation: RemoteMakeupRecommendationService
-
-    init(configuration: APIConfiguration) {
-        let client = APIClient(configuration: configuration)
-        self.client = client
-        self.authentication = RemoteAuthenticationService(client: client)
-        self.chat = RemoteAIAgentService(client: client)
-        self.makeupGeneration = RemoteMakeupGenerationService(client: client)
-        self.makeupRecommendation = RemoteMakeupRecommendationService(client: client)
     }
 }

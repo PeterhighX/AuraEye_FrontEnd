@@ -6,30 +6,33 @@ import SwiftUI
 @MainActor
 final class AppSession {
     private(set) var authenticatedAccount: AuthenticatedAccount?
-    var hasCompletedFirstMakeup = false
+    let business = BusinessStore.shared
     var hasScannedFace = false
     var hasAddedCosmetics = false
     var hasCompletedOnboardingCosmeticsStep = false
-    var hasGeneratedMakeup = false
     var scannedFaceImagePath: String?
-    var makeupRenderPreviewPath: String?
     var shouldRequestProfileCapture = false
+    var shouldOfferPortraitConsent = false
     /// 负一屏以首页同层覆盖方式呈现时，暂停根 Tab 的横向切换手势。
     var isAIChatPresented = false
-    var selectedLookID = "clear_sweet"
-    var makeupHistory: [MakeupHistoryItem] = []
+    var selectedLookID = ""
     var pendingCosmeticSuccessMessage: String?
     var onboardingCosmeticCategories: Set<CosmeticCategory> = []
 
-    var isFirstMakeup: Bool { !hasCompletedFirstMakeup }
     var isAuthenticated: Bool { authenticatedAccount != nil }
-    var hasGeneratedUserProfile: Bool { hasScannedFace }
+    var hasGeneratedUserProfile: Bool { business.visualProfile != nil }
     var hasAllRequiredOnboardingCosmetics: Bool {
         onboardingCosmeticCategories.isSuperset(of: Set(CosmeticCategory.allCases))
     }
 
-    func routeForQuickStart() -> AppRoute {
-        isFirstMakeup ? .firstTimeUse : .makeupPreview
+    func routeForQuickStart() -> AppRoute? {
+        if business.completion == nil,
+           business.activePlan != nil,
+           business.activeSession?.status == "in_progress" {
+            return .makeupSteps
+        }
+        guard let growth = business.growth else { return nil }
+        return growth.completedMakeupCount == 0 ? .firstTimeUse : .makeupPreview
     }
 
     /// 首页与「我的」共用同一档案入口判断。
@@ -41,6 +44,7 @@ final class AppSession {
     func markFaceScanned(imagePath: String) {
         hasScannedFace = true
         scannedFaceImagePath = imagePath
+        shouldOfferPortraitConsent = true
     }
 
     func markCosmeticsAdded() {
@@ -67,35 +71,13 @@ final class AppSession {
         return pendingCosmeticSuccessMessage
     }
 
-    func markMakeupGenerated() {
-        hasGeneratedMakeup = true
-        hasCompletedFirstMakeup = true
-    }
-
-    /// 用户选定妆容并进入后续流程后，本次启动不再重复显示首次引导。
-    func markFirstUseCompleted() {
-        hasCompletedFirstMakeup = true
-    }
-
-    /// 切换推荐妆容时，旧方案生成的试妆图不能继续复用。
+    /// 切换推荐风格只更改选择；旧计划仍保持自己的不可变来源。
     func selectLook(id: String) {
-        if selectedLookID != id {
-            makeupRenderPreviewPath = nil
-        }
         selectedLookID = id
     }
 
-    func recordCompletedMakeup() {
-        hasCompletedFirstMakeup = true
-        let plan = MakeupLookCatalog.plan(id: selectedLookID)
-        let item = MakeupHistoryItem(
-            title: plan.look.title,
-            imageAssetName: plan.look.imageAssetName,
-            makeupTime: Date.now.formatted(date: .abbreviated, time: .shortened),
-            makeupCount: "第 \(makeupHistory.count + 1) 次",
-            swatchColors: plan.look.swatchHexes.map { Color(sessionHex: $0) }
-        )
-        makeupHistory.insert(item, at: 0)
+    func syncProfileAvailability() {
+        hasScannedFace = business.visualProfile != nil
     }
 
     func requestProfileCapture() {
@@ -105,40 +87,55 @@ final class AppSession {
     func completeLogin(with account: AuthenticatedAccount) {
         authenticatedAccount = account
         SessionManager.shared.establish(account: account)
+        business.reset(for: account.userId)
+        selectedLookID = ""
+        shouldRequestProfileCapture = false
+        Task {
+            await business.refreshGrowth()
+            await business.checkInToday()
+            await business.refreshProfile()
+            if business.profileError == nil {
+                hasScannedFace = business.visualProfile != nil
+            }
+            await business.refreshStyles()
+            await business.refreshCosmetics()
+            if business.cosmeticsError == nil { syncCosmeticCategoriesFromServer() }
+            await business.refreshHistory()
+            await business.restoreActivePractice()
+        }
 
         do {
             let userRepository = UserRepository()
-            let cosmeticsRepository = CosmeticsRepository()
             let user = try userRepository.upsertChatUser(
                 userId: account.userId,
                 displayName: account.displayName
             )
-            let cosmetics = try cosmeticsRepository.fetchUserOwned(userId: account.userId)
-            restorePersistedProgress(user: user, cosmetics: cosmetics)
+            restorePersistedProgress(user: user)
         } catch {
             // 登录本身已经成功；本地数据暂不可用时保持空状态，页面仍可正常重试。
-            restorePersistedProgress(user: nil, cosmetics: [])
+            restorePersistedProgress(user: nil)
         }
     }
 
-    /// 登录后以本地业务数据为唯一事实来源，恢复快速开始流程。
-    /// 不单独持久化布尔值，避免它们与用户档案或陈列柜内容失配。
-    func restorePersistedProgress(user: UserProfile?, cosmetics: [CosmeticItem]) {
+    /// 本地只恢复拍摄流程的临时图片；商品类别由服务端列表恢复。
+    func restorePersistedProgress(user: UserProfile?) {
         let portraitPath = user?.userPortraitPath?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let categories = Set(cosmetics.compactMap {
-            CosmeticCategory.from(raw: $0.makeupCategory)
-        })
-        let hasMakeupPreview = user?.eyePreviewPath?.isEmpty == false
 
         scannedFaceImagePath = portraitPath?.isEmpty == false ? portraitPath : nil
         hasScannedFace = scannedFaceImagePath != nil
-        onboardingCosmeticCategories = categories
-        hasAddedCosmetics = !categories.isEmpty
-        hasCompletedOnboardingCosmeticsStep = hasAllRequiredOnboardingCosmetics
-        hasGeneratedMakeup = hasMakeupPreview
-        hasCompletedFirstMakeup = hasMakeupPreview
-        makeupRenderPreviewPath = nil
+        onboardingCosmeticCategories = []
+        hasAddedCosmetics = false
+        hasCompletedOnboardingCosmeticsStep = false
         pendingCosmeticSuccessMessage = nil
+        shouldOfferPortraitConsent = false
+    }
+
+    func syncCosmeticCategoriesFromServer() {
+        onboardingCosmeticCategories = Set(business.cosmetics.compactMap {
+            CosmeticCategory.from(raw: $0.category)
+        })
+        hasAddedCosmetics = !onboardingCosmeticCategories.isEmpty
+        hasCompletedOnboardingCosmeticsStep = hasAllRequiredOnboardingCosmetics
     }
 
     func logout() {
@@ -147,21 +144,13 @@ final class AppSession {
         }
         authenticatedAccount = nil
         SessionManager.shared.clear()
-        restorePersistedProgress(user: nil, cosmetics: [])
+        business.reset(for: nil)
+        restorePersistedProgress(user: nil)
+        selectedLookID = ""
+        shouldRequestProfileCapture = false
     }
 
     func consumeProfileCaptureRequest() {
         shouldRequestProfileCapture = false
-    }
-}
-
-private extension Color {
-    init(sessionHex: String) {
-        let value = UInt64(sessionHex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0
-        self.init(
-            red: Double((value >> 16) & 0xFF) / 255,
-            green: Double((value >> 8) & 0xFF) / 255,
-            blue: Double(value & 0xFF) / 255
-        )
     }
 }
