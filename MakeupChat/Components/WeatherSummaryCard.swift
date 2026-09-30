@@ -31,25 +31,32 @@ struct WeatherSummaryCard: View {
                 .offset(y: 19)
 
             HStack(alignment: .bottom) {
-                AnimatedWeatherSymbol(
-                    symbolName: weather.symbolName,
-                    size: 68,
-                    frameWidth: 124,
-                    frameHeight: 81
-                )
+                Group {
+                    if let symbolName = weather.symbolName {
+                        AnimatedWeatherSymbol(
+                            symbolName: symbolName,
+                            size: 68,
+                            frameWidth: 124,
+                            frameHeight: 81
+                        )
+                    } else {
+                        ProgressView()
+                            .frame(width: 124, height: 81)
+                    }
+                }
 
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
                     HStack {
                         HStack(alignment: .top, spacing: 2) {
-                            Text("\(weather.temperature)")
+                            Text(weather.temperature.map(String.init) ?? "--")
                                 .font(.system(size: 24, weight: .semibold))
                                 .foregroundStyle(Color(red: 85 / 255, green: 85 / 255, blue: 85 / 255))
                             VStack(alignment: .leading, spacing: 0) {
                                 Text("℃")
                                     .font(.system(size: 10, design: .rounded))
-                                Text(weather.conditionText)
+                                Text(weather.conditionText ?? "加载中")
                                     .font(.system(size: 10, design: .rounded))
                             }
                             .foregroundStyle(Color(red: 157 / 255, green: 157 / 255, blue: 157 / 255))
@@ -89,7 +96,7 @@ struct WeatherSummaryCard: View {
                             Text("紫外线指数")
                                 .font(.system(size: 12))
                         }
-                        Text("\(weather.uvIndex)")
+                        Text(weather.uvIndex.map(String.init) ?? "--")
                             .font(.system(size: 12))
                         Spacer()
                         Text(weather.uvDescription)

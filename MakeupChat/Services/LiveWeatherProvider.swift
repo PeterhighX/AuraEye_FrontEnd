@@ -3,15 +3,16 @@ import CoreLocation
 import Foundation
 
 struct LiveWeatherSnapshot: Equatable {
-    var temperature = 26
-    var conditionText = "多云"
-    var symbolName = "cloud.sun.fill"
-    var uvIndex = 3
-    var district = "福田区"
+    var temperature: Int?
+    var conditionText: String?
+    var symbolName: String?
+    var uvIndex: Int?
+    var district = "定位中"
 
     static let dataSourceURL = URL(string: "https://open-meteo.com/")!
 
     var uvDescription: String {
+        guard let uvIndex else { return "加载中" }
         switch uvIndex {
         case 0...2: return "弱"
         case 3...5: return "中等"
@@ -22,7 +23,13 @@ struct LiveWeatherSnapshot: Equatable {
     }
 
     var uvProgress: Double {
-        min(max(Double(uvIndex) / 11.0, 0.08), 1)
+        guard let uvIndex else { return 0 }
+        return min(max(Double(uvIndex) / 11.0, 0.08), 1)
+    }
+
+    var uvSummary: String {
+        guard let uvIndex else { return uvDescription }
+        return "\(uvDescription) · \(uvIndex)"
     }
 }
 
@@ -48,31 +55,46 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
             locationManager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
             locationManager.requestLocation()
-        default:
-            break
+        case .denied, .restricted:
+            markLocationUnavailable(as: "未授权")
+        @unknown default:
+            markLocationUnavailable(as: "定位失败")
         }
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        guard manager.authorizationStatus == .authorizedAlways ||
-                manager.authorizationStatus == .authorizedWhenInUse else { return }
-        manager.requestLocation()
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.requestLocation()
+        case .denied, .restricted:
+            markLocationUnavailable(as: "未授权")
+        case .notDetermined:
+            break
+        @unknown default:
+            markLocationUnavailable(as: "定位失败")
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last, !isLoading else { return }
         isLoading = true
-        Task { await loadWeather(at: location) }
+        Task {
+            await loadWeather(at: location)
+            isLoading = false
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        markLocationUnavailable(as: "定位失败")
+    }
+
+    private func markLocationUnavailable(as district: String) {
         isLoading = false
         isLive = false
+        snapshot = LiveWeatherSnapshot(district: district)
     }
 
     private func loadWeather(at location: CLLocation) async {
-        defer { isLoading = false }
-
         do {
             let response = try await fetchWeather(at: location)
             let condition = Self.condition(for: response.current.weatherCode, isDay: response.current.isDay == 1)
@@ -88,8 +110,8 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
 
             await loadDistrict(at: location)
         } catch {
-            // Keep the design fallback visible and allow a later start() to retry.
             isLive = false
+            snapshot = LiveWeatherSnapshot(district: "天气不可用")
         }
     }
 
@@ -117,10 +139,16 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     private func loadDistrict(at location: CLLocation) async {
         do {
             let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
-            guard let place = placemarks.first else { return }
-            snapshot.district = place.subLocality ?? place.locality ?? snapshot.district
+            guard let place = placemarks.first,
+                  let district = place.subLocality ?? place.locality ?? place.administrativeArea,
+                  !district.isEmpty else {
+                snapshot.district = "地区不可用"
+                return
+            }
+            snapshot.district = district
         } catch {
-            // A missing placemark must never invalidate otherwise valid weather.
+            // Weather remains usable even if the network reverse-geocoding request fails.
+            snapshot.district = "地区不可用"
         }
     }
 

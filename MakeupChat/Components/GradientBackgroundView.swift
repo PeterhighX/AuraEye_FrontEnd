@@ -16,7 +16,10 @@ struct AppDynamicBackgroundView: View {
                 Rectangle()
                     .fill(Color.white)
                     .colorEffect(
-                        ShaderLibrary.sharedFluidBackground(
+                        // The shader is compiled into this app target's default.metallib.
+                        // Resolve it from the main bundle explicitly instead of relying on
+                        // SwiftUI's ambient default-library lookup.
+                        ShaderLibrary.bundle(.main).sharedFluidBackground(
                             .float2(proxy.size),
                             // Metal 的 `float` 无法保留绝对时间戳里的帧级小数精度。
                             // 使用进程内相对时间，确保每帧传入 shader 的值都真实变化。

@@ -81,14 +81,21 @@ struct HomeTeachingCard: View {
                 .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
                 .frame(height: 148)
 
-            AnimatedWeatherSymbol(
-                symbolName: weather.symbolName,
-                size: 68,
-                frameWidth: 120,
-                frameHeight: 90
-            )
-                .padding(.leading, 18)
-                .offset(y: -20)
+            Group {
+                if let symbolName = weather.symbolName {
+                    AnimatedWeatherSymbol(
+                        symbolName: symbolName,
+                        size: 68,
+                        frameWidth: 120,
+                        frameHeight: 90
+                    )
+                } else {
+                    ProgressView()
+                        .frame(width: 120, height: 90)
+                }
+            }
+            .padding(.leading, 18)
+            .offset(y: -20)
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text("上妆教学")
@@ -104,73 +111,11 @@ struct HomeTeachingCard: View {
             .padding(.trailing, 18)
             .padding(.top, 19)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .center, spacing: 0) {
-                    HStack(alignment: .top, spacing: 2) {
-                        Text("\(weather.temperature)")
-                            .font(.system(size: 24, weight: .semibold))
-                            .tracking(0)
-                            .foregroundStyle(Color(red: 85 / 255, green: 85 / 255, blue: 85 / 255))
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("℃")
-                                .font(.system(size: 10, weight: .regular, design: .rounded))
-                            Text(weather.conditionText)
-                                .font(.system(size: 10, weight: .regular, design: .rounded))
-                        }
-                        .foregroundStyle(Color(red: 157 / 255, green: 157 / 255, blue: 157 / 255))
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(weather.district)
-                            .font(.system(size: 12, weight: .light))
-                            .tracking(0)
-                            .padding(.horizontal, 6)
-                            .frame(height: 18)
-                            .background(
-                                Color(red: 225 / 255, green: 244 / 255, blue: 253 / 255)
-                                    .opacity(0.45)
-                            )
-                            .clipShape(Capsule())
-                        Link("Open-Meteo", destination: LiveWeatherSnapshot.dataSourceURL)
-                            .font(.system(size: 8, weight: .light))
-                    }
-                    .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
-                }
-                .frame(width: 140)
-
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(
-                            Color(red: 230 / 255, green: 242 / 255, blue: 248 / 255)
-                                .opacity(0.45)
-                        )
-                        .frame(height: 9)
-                    GeometryReader { proxy in
-                        Capsule()
-                            .fill(Color(red: 1, green: 139 / 255, blue: 104 / 255))
-                            .frame(width: proxy.size.width * weather.uvProgress, height: 9)
-                    }
-                }
-                .frame(width: 140)
-
-                HStack {
-                    HStack(spacing: 3) {
-                        Image(systemName: "sun.max")
-                            .font(.system(size: 12))
-                        Text("紫外线指数")
-                            .font(.system(size: 12, weight: .regular, design: .rounded))
-                    }
-                    Spacer()
-                    Text(weather.uvDescription)
-                        .font(.system(size: 12, weight: .regular, design: .rounded))
-                }
-                .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
-                .frame(width: 140)
-            }
-            .padding(.leading, 18)
-            .padding(.top, 78)
+            HomeWeatherDetails(weather: weather)
+                .frame(width: 141)
+                .padding(.leading, 18)
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
             Button(action: onQuickStart) {
                 HStack(spacing: 12) {
@@ -191,6 +136,76 @@ struct HomeTeachingCard: View {
             .padding(.trailing, 18)
             .padding(.bottom, 12)
         }
+        .frame(height: 148)
         .padding(.horizontal, 16)
+    }
+}
+
+private struct HomeWeatherDetails: View {
+    let weather: LiveWeatherSnapshot
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(alignment: .center, spacing: 0) {
+                HStack(alignment: .top, spacing: 2) {
+                    Text(weather.temperature.map(String.init) ?? "--")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(Color(red: 85 / 255, green: 85 / 255, blue: 85 / 255))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("℃")
+                        Text(weather.conditionText ?? "加载中")
+                    }
+                    .font(.system(size: 10, weight: .regular, design: .rounded))
+                    .foregroundStyle(Color(red: 157 / 255, green: 157 / 255, blue: 157 / 255))
+                }
+
+                Spacer(minLength: 4)
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(weather.district)
+                        .font(.system(size: 12, weight: .light))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.horizontal, 6)
+                        .frame(height: 18)
+                        .background(
+                            Color(red: 225 / 255, green: 244 / 255, blue: 253 / 255)
+                                .opacity(0.45)
+                        )
+                        .clipShape(Capsule())
+                    Link("Open-Meteo", destination: LiveWeatherSnapshot.dataSourceURL)
+                        .font(.system(size: 8, weight: .light))
+                }
+                .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
+            }
+            .frame(width: 141)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(
+                        Color(red: 230 / 255, green: 242 / 255, blue: 248 / 255)
+                            .opacity(0.45)
+                    )
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(Color(red: 1, green: 139 / 255, blue: 104 / 255))
+                        .frame(width: proxy.size.width * weather.uvProgress)
+                }
+            }
+            .frame(width: 140, height: 9)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("紫外线指数")
+            .accessibilityValue(weather.uvSummary)
+
+            HStack(spacing: 4) {
+                Label("紫外线指数", systemImage: "sun.max")
+                Spacer(minLength: 2)
+                Text(weather.uvSummary)
+            }
+            .font(.system(size: 12, weight: .regular, design: .rounded))
+            .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))
+            .frame(width: 141)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
