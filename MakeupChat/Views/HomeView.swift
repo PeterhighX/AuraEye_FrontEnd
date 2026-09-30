@@ -12,8 +12,6 @@ struct HomeView: View {
     @State private var showProfileImagePicker = false
     @State private var showProfilePhotoLibrary = false
     @State private var profileImageSource: UIImagePickerController.SourceType = .camera
-    @State private var logoRotation = 0.0
-    @State private var analysisTextPulse = false
     @StateObject private var weatherProvider = LiveWeatherProvider()
 
     private let recommendedLooks = MakeupLookCatalog.plans.map(\.look)
@@ -197,39 +195,10 @@ struct HomeView: View {
     }
 
     private var profileAnalysisOverlay: some View {
-        ZStack {
-            Color.white.opacity(0.94)
-                .ignoresSafeArea()
-
-            VStack(spacing: 24) {
-                Image("PracticeToolIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
-                    .rotationEffect(.degrees(logoRotation))
-                    .onAppear {
-                        withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                            logoRotation = 360
-                        }
-                    }
-
-                Text("AuraAye 沐瞳")
-                    .font(.system(size: 28, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
-
-                Text("正在分析你的面部特征，请稍候…")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .scaleEffect(analysisTextPulse ? 1.015 : 0.995)
-                    .offset(y: analysisTextPulse ? -1 : 1)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                            analysisTextPulse = true
-                        }
-                    }
-            }
-        }
-        .transition(.opacity)
+        OperationTransitionOverlay(
+            message: "正在分析你的面部特征，请稍候…",
+            tips: TipLibrary.profileTips
+        )
     }
 
     private func analyzeProfileImage(_ image: UIImage) {

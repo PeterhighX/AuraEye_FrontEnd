@@ -77,6 +77,14 @@ final class AppSession {
         hasCompletedFirstMakeup = true
     }
 
+    /// 切换推荐妆容时，旧方案生成的试妆图不能继续复用。
+    func selectLook(id: String) {
+        if selectedLookID != id {
+            makeupRenderPreviewPath = nil
+        }
+        selectedLookID = id
+    }
+
     func recordCompletedMakeup() {
         hasCompletedFirstMakeup = true
         let plan = MakeupLookCatalog.plan(id: selectedLookID)

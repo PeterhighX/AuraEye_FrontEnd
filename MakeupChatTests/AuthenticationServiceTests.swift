@@ -35,6 +35,53 @@ final class AuthenticationServiceTests: XCTestCase {
         ))
     }
 
+    @MainActor
+    func testSessionRestoresQuickStartProgressFromPersistedProfileAndCosmetics() {
+        let session = AppSession()
+        let cosmetics = CosmeticCategory.allCases.map { category in
+            CosmeticItem(
+                sku: "saved_\(category.backendValue)",
+                makeupCategory: category.rawValue,
+                makeupTab: nil,
+                makeupColorsJSON: nil,
+                brushJSON: nil,
+                previewPath: nil
+            )
+        }
+        let profile = UserProfile(
+            userId: "restored-user",
+            displayName: "Restored",
+            status: "开心",
+            credits: 50,
+            userPortraitPath: "portraits/restored.jpg"
+        )
+
+        session.restorePersistedProgress(user: profile, cosmetics: cosmetics)
+
+        XCTAssertTrue(session.hasScannedFace)
+        XCTAssertTrue(session.hasCompletedOnboardingCosmeticsStep)
+        XCTAssertEqual(session.onboardingCosmeticCategories, Set(CosmeticCategory.allCases))
+        XCTAssertEqual(session.routeForQuickStart(), .firstTimeUse)
+
+        var generatedProfile = profile
+        generatedProfile.eyePreviewPath = "makeup-previews/restored.json"
+        session.restorePersistedProgress(user: generatedProfile, cosmetics: cosmetics)
+
+        XCTAssertTrue(session.hasCompletedFirstMakeup)
+        XCTAssertEqual(session.routeForQuickStart(), .makeupPreview)
+    }
+
+    @MainActor
+    func testSwitchingRecommendedLookInvalidatesPreviousRenderedPreview() {
+        let session = AppSession()
+        session.makeupRenderPreviewPath = "makeup-previews/clear-sweet.jpg"
+
+        session.selectLook(id: "chinese_warm")
+
+        XCTAssertEqual(session.selectedLookID, "chinese_warm")
+        XCTAssertNil(session.makeupRenderPreviewPath)
+    }
+
     func testLogoutRequestEncodesRequiredRefreshTokenAndRequestID() throws {
         let request = LogoutRequest(
             refreshToken: "refresh-token-value",

@@ -51,6 +51,58 @@ struct TipBarView: View {
     }
 }
 
+/// 视觉任务的统一转场层：固定 75pt 矢量标记、低速匀速旋转，并展示知识卡片。
+struct OperationTransitionOverlay: View {
+    let message: String
+    let tips: [String]
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var animationStartedAt = Date.now
+
+    private let rotationDuration: TimeInterval = 3.2
+
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+                .opacity(0.97)
+                .ignoresSafeArea()
+
+            VStack(spacing: 28) {
+                TimelineView(.animation(minimumInterval: 1 / 60, paused: reduceMotion)) { context in
+                    Image("TransitionSpinner")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 75, height: 75)
+                        .rotationEffect(.degrees(rotationAngle(at: context.date)))
+                        .accessibilityHidden(true)
+                }
+
+                TipBarView(tips: tips, interval: 4.5)
+                    .frame(maxWidth: 390)
+
+                Text(message)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear {
+            animationStartedAt = .now
+        }
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
+    }
+
+    private func rotationAngle(at date: Date) -> Double {
+        guard !reduceMotion else { return 0 }
+        let elapsed = max(0, date.timeIntervalSince(animationStartedAt))
+        return elapsed.truncatingRemainder(dividingBy: rotationDuration) / rotationDuration * 360
+    }
+}
+
 #Preview {
     TipBarView()
 }

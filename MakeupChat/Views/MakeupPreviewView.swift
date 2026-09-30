@@ -80,6 +80,13 @@ struct MakeupPreviewView: View {
                     .animation(.spring(response: 0.48, dampingFraction: 0.86), value: expandedStep)
                 }
             }
+
+            if isRenderingPreview {
+                OperationTransitionOverlay(
+                    message: "正在生成你的上妆预览…",
+                    tips: TipLibrary.makeupTips
+                )
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -103,20 +110,14 @@ struct MakeupPreviewView: View {
         let look = plan.look
 
         return HStack(spacing: 12) {
-            Group {
-                if let rendered = session.makeupRenderPreviewPath {
-                    LocalImageView(storedPath: rendered, assetName: look.imageAssetName)
-                } else {
-                    Image(look.imageAssetName)
-                        .resizable()
-                        .scaledToFill()
-                }
-            }
-            .frame(width: 120, height: 120)
-            .scaleEffect(1.1)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.08), radius: 2)
+            Image(look.imageAssetName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 120, height: 120)
+                .scaleEffect(1.1)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.08), radius: 2)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -134,7 +135,7 @@ struct MakeupPreviewView: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.22)) {
                             selectedLookIndex = (selectedLookIndex + 1) % MakeupLookCatalog.plans.count
-                            session.selectedLookID = MakeupLookCatalog.plans[selectedLookIndex].id
+                            session.selectLook(id: MakeupLookCatalog.plans[selectedLookIndex].id)
                             expandedStep = nil
                         }
                     } label: {
@@ -192,7 +193,7 @@ struct MakeupPreviewView: View {
     }
 
     private func requestRenderedPreview(for plan: MakeupLookPlan) {
-        session.selectedLookID = plan.id
+        session.selectLook(id: plan.id)
         guard session.makeupRenderPreviewPath == nil,
               let portrait = portraitInput(),
               let accountID = SessionManager.shared.context?.userId else {

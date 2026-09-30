@@ -11,7 +11,6 @@ struct FirstTimeUseView: View {
     @State private var showImageSourcePicker = false
     @State private var showPhotoLibrary = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
-    @State private var loadingIconRotation = 0.0
     @State private var loadingTextPulse = false
 
     init(session: AppSession, path: Binding<NavigationPath>) {
@@ -134,48 +133,22 @@ struct FirstTimeUseView: View {
                 )
             } else if let product = viewModel.pendingProduct {
                 productConfirmation(product)
+            } else if viewModel.processingStage == .cosmetics {
+                OperationTransitionOverlay(
+                    message: "正在识别并添加化妆品…",
+                    tips: TipLibrary.cosmeticsTips
+                )
             } else if viewModel.processingStage == .makeup {
-                generationWaitingOverlay
+                OperationTransitionOverlay(
+                    message: "正在生成专属妆容…",
+                    tips: TipLibrary.makeupTips
+                )
             }
         }
     }
 
     private var usesFixedDemoGallery: Bool {
         SessionManager.shared.context?.features.galleryMode == .fixedDemo
-    }
-
-    private var generationWaitingOverlay: some View {
-        ZStack {
-            Color.white.opacity(0.96)
-                .ignoresSafeArea()
-
-            VStack(spacing: 22) {
-                Image("PracticeToolIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
-                    .rotationEffect(.degrees(loadingIconRotation))
-
-                Text("正在生成专属妆容…")
-                .font(.system(size: 17, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.ColorToken.textPrimary)
-                .scaleEffect(loadingTextPulse ? 1.012 : 0.995)
-                .offset(y: loadingTextPulse ? -1 : 1)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .onAppear {
-            loadingIconRotation = 0
-            loadingTextPulse = false
-            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                loadingIconRotation = 360
-            }
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                loadingTextPulse = true
-            }
-        }
-        .transition(.opacity)
-        .zIndex(20)
     }
 
     private var statusBar: some View {

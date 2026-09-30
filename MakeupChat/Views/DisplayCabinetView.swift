@@ -19,6 +19,7 @@ struct DisplayCabinetView: View {
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var successMessage: String?
     @State private var guideHandPressed = false
+    @State private var isAddingProduct = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,7 +109,12 @@ struct DisplayCabinetView: View {
             Text(viewModel.recognitionErrorMessage ?? "")
         }
         .overlay {
-            if showImageSourcePicker {
+            if isAddingProduct {
+                OperationTransitionOverlay(
+                    message: "正在添加到你的陈列柜…",
+                    tips: TipLibrary.cosmeticsTips
+                )
+            } else if showImageSourcePicker {
                 MediaSourceDialog(
                     showsCamera: !usesFixedDemoGallery,
                     onCamera: {
@@ -125,13 +131,10 @@ struct DisplayCabinetView: View {
             } else if let product = viewModel.pendingProduct {
                 productConfirmation(product)
             } else if viewModel.isRecognizing {
-                ZStack {
-                    Color.black.opacity(0.2).ignoresSafeArea()
-                    ProgressView("识别中…")
-                        .padding(20)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
-                }
+                OperationTransitionOverlay(
+                    message: "正在识别化妆品…",
+                    tips: TipLibrary.cosmeticsTips
+                )
             }
         }
         .overlay(alignment: .top) {
@@ -188,11 +191,7 @@ struct DisplayCabinetView: View {
                     }
 
                     Button {
-                        if viewModel.confirmPendingProduct() {
-                            session.markCosmeticsAdded()
-                            session.reportCosmeticAdded(category: product.category)
-                            showPendingSuccessFeedback()
-                        }
+                        addPendingProduct(product)
                     } label: {
                         Text("添加")
                             .font(.headline)
@@ -344,6 +343,26 @@ struct DisplayCabinetView: View {
             try? await Task.sleep(for: .seconds(1.8))
             withAnimation(.easeIn(duration: 0.2)) {
                 successMessage = nil
+            }
+        }
+    }
+
+    private func addPendingProduct(_ product: CosmeticsRecognitionResult) {
+        guard !isAddingProduct else { return }
+        isAddingProduct = true
+
+        Task { @MainActor in
+            // 先让确认卡平滑切换到转场层，再执行本地入库。
+            await Task.yield()
+            let succeeded = viewModel.confirmPendingProduct()
+            if succeeded {
+                session.markCosmeticsAdded()
+                session.reportCosmeticAdded(category: product.category)
+                try? await Task.sleep(for: .milliseconds(650))
+            }
+            isAddingProduct = false
+            if succeeded {
+                showPendingSuccessFeedback()
             }
         }
     }

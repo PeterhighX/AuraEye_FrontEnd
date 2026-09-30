@@ -10,8 +10,6 @@ struct UserProfileSetupView: View {
     @State private var showImagePicker = false
     @State private var showPhotoLibrary = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
-    @State private var logoRotation = 0.0
-    @State private var textPulse = false
 
     var body: some View {
         ZStack {
@@ -94,48 +92,10 @@ struct UserProfileSetupView: View {
     }
 
     private var analysisOverlay: some View {
-        ZStack {
-            Color.white.opacity(0.94)
-                .ignoresSafeArea()
-
-            VStack(spacing: 24) {
-                logoMark
-                    .rotationEffect(.degrees(logoRotation))
-                    .onAppear {
-                        withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                            logoRotation = 360
-                        }
-                    }
-
-                Text("AuraAye 沐瞳")
-                    .font(.system(size: 28, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.ColorToken.textPrimary)
-
-                Text("正在分析你的面部特征，请稍候…")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .scaleEffect(textPulse ? 1.015 : 0.995)
-                    .offset(y: textPulse ? -1 : 1)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                            textPulse = true
-                        }
-                    }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("正在分析面部特征")
-        }
-        .transition(.opacity)
-    }
-
-    private var logoMark: some View {
-        Image("AuraAyeLogo")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 132, height: 132)
-            .frame(width: 132, height: 94, alignment: .top)
-            .clipped()
-            .accessibilityHidden(true)
+        OperationTransitionOverlay(
+            message: "正在分析你的面部特征，请稍候…",
+            tips: TipLibrary.profileTips
+        )
     }
 
     private func handleSelectedImage(_ image: UIImage) {
