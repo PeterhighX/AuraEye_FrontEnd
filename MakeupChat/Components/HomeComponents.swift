@@ -72,6 +72,7 @@ private extension Color {
 
 struct HomeTeachingCard: View {
     let weather: LiveWeatherSnapshot
+    let onRefreshWeather: () -> Void
     let onQuickStart: () -> Void
 
     var body: some View {
@@ -81,21 +82,30 @@ struct HomeTeachingCard: View {
                 .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
                 .frame(height: 148)
 
-            Group {
-                if let symbolName = weather.symbolName {
-                    AnimatedWeatherSymbol(
-                        symbolName: symbolName,
-                        size: 68,
-                        frameWidth: 120,
-                        frameHeight: 90
-                    )
-                } else {
-                    ProgressView()
-                        .frame(width: 120, height: 90)
+            Button(action: onRefreshWeather) {
+                ZStack(alignment: .topLeading) {
+                    if let symbolName = weather.symbolName {
+                        AnimatedWeatherSymbol(
+                            symbolName: symbolName,
+                            size: 85,
+                            frameWidth: 150,
+                            frameHeight: 100
+                        )
+                        .offset(y: -30)
+                    }
+
+                    HomeWeatherDetails(weather: weather)
+                        .frame(width: 141)
+                        .frame(maxHeight: .infinity, alignment: .bottomLeading)
+                        .padding(.bottom, 12)
                 }
+                .frame(width: 170, height: 148, alignment: .topLeading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding(.leading, 18)
-            .offset(y: -20)
+            .accessibilityLabel("刷新天气")
+            .accessibilityValue("\(weather.conditionText ?? "多云")，\(weather.temperature ?? 25)度")
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text("上妆教学")
@@ -110,12 +120,6 @@ struct HomeTeachingCard: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.trailing, 18)
             .padding(.top, 19)
-
-            HomeWeatherDetails(weather: weather)
-                .frame(width: 141)
-                .padding(.leading, 18)
-                .padding(.bottom, 12)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
             Button(action: onQuickStart) {
                 HStack(spacing: 12) {
@@ -173,7 +177,7 @@ private struct HomeWeatherDetails: View {
                                 .opacity(0.45)
                         )
                         .clipShape(Capsule())
-                    Link("Open-Meteo", destination: LiveWeatherSnapshot.dataSourceURL)
+                    Text("Open-Meteo")
                         .font(.system(size: 8, weight: .light))
                 }
                 .foregroundStyle(Color(red: 102 / 255, green: 102 / 255, blue: 102 / 255))

@@ -3,13 +3,14 @@ import CoreLocation
 import Foundation
 
 struct LiveWeatherSnapshot: Equatable {
-    var temperature: Int?
-    var conditionText: String?
-    var symbolName: String?
-    var uvIndex: Int?
-    var district = "定位中"
+    var temperature: Int? = 25
+    var conditionText: String? = "多云"
+    var symbolName: String? = "cloud.fill"
+    var uvIndex: Int? = 3
+    var district = "默认天气"
 
     static let dataSourceURL = URL(string: "https://open-meteo.com/")!
+    static let fallback = LiveWeatherSnapshot()
 
     var uvDescription: String {
         guard let uvIndex else { return "加载中" }
@@ -35,11 +36,12 @@ struct LiveWeatherSnapshot: Equatable {
 
 @MainActor
 final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
-    @Published private(set) var snapshot = LiveWeatherSnapshot()
+    @Published private(set) var snapshot = LiveWeatherSnapshot.fallback
     @Published private(set) var isLive = false
 
     private let locationManager = CLLocationManager()
     private var isLoading = false
+    private var lastLocation: CLLocation?
 
     override init() {
         super.init()
@@ -49,6 +51,11 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
 
     func start() {
         guard !isLoading else { return }
+
+        if let lastLocation {
+            requestWeather(at: lastLocation)
+            return
+        }
 
         switch locationManager.authorizationStatus {
         case .notDetermined:
@@ -77,11 +84,8 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last, !isLoading else { return }
-        isLoading = true
-        Task {
-            await loadWeather(at: location)
-            isLoading = false
-        }
+        lastLocation = location
+        requestWeather(at: location)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -91,7 +95,16 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     private func markLocationUnavailable(as district: String) {
         isLoading = false
         isLive = false
-        snapshot = LiveWeatherSnapshot(district: district)
+        snapshot = Self.fallbackSnapshot(district: district)
+    }
+
+    private func requestWeather(at location: CLLocation) {
+        guard !isLoading else { return }
+        isLoading = true
+        Task {
+            await loadWeather(at: location)
+            isLoading = false
+        }
     }
 
     private func loadWeather(at location: CLLocation) async {
@@ -111,8 +124,14 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
             await loadDistrict(at: location)
         } catch {
             isLive = false
-            snapshot = LiveWeatherSnapshot(district: "天气不可用")
+            snapshot = Self.fallbackSnapshot(district: "离线天气")
         }
+    }
+
+    private static func fallbackSnapshot(district: String) -> LiveWeatherSnapshot {
+        var fallback = LiveWeatherSnapshot.fallback
+        fallback.district = district
+        return fallback
     }
 
     private func fetchWeather(at location: CLLocation) async throws -> OpenMeteoResponse {

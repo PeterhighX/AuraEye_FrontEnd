@@ -14,52 +14,15 @@ struct HomeView: View {
     @State private var profileImageSource: UIImagePickerController.SourceType = .camera
     @State private var logoRotation = 0.0
     @State private var analysisTextPulse = false
-    @State private var isAIEntryHovered = false
-    @State private var isAIEntryPressed = false
-    @State private var showsAIChat = false
-    @State private var pageTransitionProgress: CGFloat = 0
-    @State private var aiChatViewModel: ChatViewModel?
-    @State private var chatConfigurationError: String?
-    @State private var isClosingAIChat = false
     @StateObject private var weatherProvider = LiveWeatherProvider()
 
     private let recommendedLooks = MakeupLookCatalog.plans.map(\.look)
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                homeForeground
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .offset(x: pageTransitionProgress * proxy.size.width)
-                    .allowsHitTesting(!showsAIChat)
-
-                if showsAIChat, let aiChatViewModel {
-                    ChatConversationView(
-                        viewModel: aiChatViewModel,
-                        layoutMode: .full,
-                        onBack: { closeAIChat() }
-                    )
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .offset(x: (pageTransitionProgress - 1) * proxy.size.width)
-                    .zIndex(200)
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 28)
-                            .onEnded { value in
-                                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
-                                if isHorizontal,
-                                   value.translation.width < -85,
-                                   value.predictedEndTranslation.width < -120 {
-                                    closeAIChat()
-                                }
-                            }
-                    )
-                }
-            }
-        }
+        homeForeground
         .appDynamicBackground()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(showsAIChat ? .hidden : .automatic, for: .tabBar)
         .onAppear {
             viewModel.reload()
             presentRequestedProfileCaptureIfNeeded()
@@ -78,14 +41,6 @@ struct HomeView: View {
             if requested {
                 presentRequestedProfileCaptureIfNeeded()
             }
-        }
-        .alert("对话服务不可用", isPresented: Binding(
-            get: { chatConfigurationError != nil },
-            set: { if !$0 { chatConfigurationError = nil } }
-        )) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text(chatConfigurationError ?? "")
         }
         .fullScreenCover(isPresented: $showProfileImagePicker) {
             CameraPickerView(
@@ -151,91 +106,8 @@ struct HomeView: View {
                 }
             }
 
-            VStack {
-                HStack {
-                    Image("HomeAIFloating")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 70, height: 44)
-                        // 默认只露出原设计右侧的圆形图标；悬停/按压时向右展开。
-                        .offset(x: isAIEntryExpanded ? 0 : -26)
-                    .frame(width: 70, height: 44, alignment: .leading)
-                    .clipped()
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                            isAIEntryHovered = hovering
-                        }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
-                                    isAIEntryPressed = true
-                                }
-                            }
-                            .onEnded { _ in
-                                withAnimation(.easeOut(duration: 0.16)) {
-                                    isAIEntryPressed = false
-                                }
-                                openAIChat()
-                            }
-                    )
-                    .accessibilityLabel("打开 AI 妆容助手")
-
-                    Spacer()
-                }
-                .padding(.top, 96)
-                Spacer()
-            }
-
             if profileSetupViewModel.isAnalyzing {
                 profileAnalysisOverlay
-            }
-        }
-    }
-
-    private var isAIEntryExpanded: Bool {
-        isAIEntryHovered || isAIEntryPressed
-    }
-
-    private func openAIChat() {
-        guard !showsAIChat else { return }
-        do {
-            aiChatViewModel = try ChatCompositionRoot.makeViewModel()
-        } catch {
-            chatConfigurationError = error.localizedDescription
-            return
-        }
-        isClosingAIChat = false
-        pageTransitionProgress = 0
-        showsAIChat = true
-        session.isAIChatPresented = true
-
-        // 背景不参与动画；两个前景容器像相邻卡片一样整体切换。
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.44, dampingFraction: 0.9)) {
-                pageTransitionProgress = 1
-            }
-        }
-    }
-
-    private func closeAIChat(nextRoute: AppRoute? = nil) {
-        guard showsAIChat, !isClosingAIChat else { return }
-        isClosingAIChat = true
-
-        // 负一屏向左退出、首页从右侧回到原位，Shader 背景保持固定。
-        withAnimation(.easeInOut(duration: 0.3)) {
-            pageTransitionProgress = 0
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(300))
-            showsAIChat = false
-            session.isAIChatPresented = false
-            isClosingAIChat = false
-            if let nextRoute {
-                path.append(nextRoute)
             }
         }
     }
@@ -293,9 +165,11 @@ struct HomeView: View {
 
     private var teachingSection: some View {
         VStack(spacing: 12) {
-            HomeTeachingCard(weather: weatherProvider.snapshot) {
-                path.append(session.routeForQuickStart())
-            }
+            HomeTeachingCard(
+                weather: weatherProvider.snapshot,
+                onRefreshWeather: { weatherProvider.start() },
+                onQuickStart: { path.append(session.routeForQuickStart()) }
+            )
 
             HStack(spacing: 8) {
                 quickActionButton(
@@ -439,6 +313,10 @@ struct HomeView: View {
 
 #Preview {
     NavigationStack {
-        HomeView(session: AppSession(), path: .constant(NavigationPath()), selectedTab: .constant(0))
+        HomeView(
+            session: AppSession(),
+            path: .constant(NavigationPath()),
+            selectedTab: .constant(0)
+        )
     }
 }

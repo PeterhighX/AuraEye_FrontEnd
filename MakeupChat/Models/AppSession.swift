@@ -6,8 +6,6 @@ import SwiftUI
 @MainActor
 final class AppSession {
     private(set) var authenticatedAccount: AuthenticatedAccount?
-    /// 当前产品演示规则：每次重新启动 App 都视为第一次使用。
-    /// 状态只在本次运行期间保留，不写入 UserDefaults。
     var hasCompletedFirstMakeup = false
     var hasScannedFace = false
     var hasAddedCosmetics = false
@@ -15,7 +13,6 @@ final class AppSession {
     var hasGeneratedMakeup = false
     var scannedFaceImagePath: String?
     var makeupRenderPreviewPath: String?
-    var hasResetOnboardingThisLaunch = false
     var shouldRequestProfileCapture = false
     /// 负一屏以首页同层覆盖方式呈现时，暂停根 Tab 的横向切换手势。
     var isAIChatPresented = false
@@ -100,6 +97,40 @@ final class AppSession {
     func completeLogin(with account: AuthenticatedAccount) {
         authenticatedAccount = account
         SessionManager.shared.establish(account: account)
+
+        do {
+            let userRepository = UserRepository()
+            let cosmeticsRepository = CosmeticsRepository()
+            let user = try userRepository.upsertChatUser(
+                userId: account.userId,
+                displayName: account.displayName
+            )
+            let cosmetics = try cosmeticsRepository.fetchUserOwned(userId: account.userId)
+            restorePersistedProgress(user: user, cosmetics: cosmetics)
+        } catch {
+            // 登录本身已经成功；本地数据暂不可用时保持空状态，页面仍可正常重试。
+            restorePersistedProgress(user: nil, cosmetics: [])
+        }
+    }
+
+    /// 登录后以本地业务数据为唯一事实来源，恢复快速开始流程。
+    /// 不单独持久化布尔值，避免它们与用户档案或陈列柜内容失配。
+    func restorePersistedProgress(user: UserProfile?, cosmetics: [CosmeticItem]) {
+        let portraitPath = user?.userPortraitPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let categories = Set(cosmetics.compactMap {
+            CosmeticCategory.from(raw: $0.makeupCategory)
+        })
+        let hasMakeupPreview = user?.eyePreviewPath?.isEmpty == false
+
+        scannedFaceImagePath = portraitPath?.isEmpty == false ? portraitPath : nil
+        hasScannedFace = scannedFaceImagePath != nil
+        onboardingCosmeticCategories = categories
+        hasAddedCosmetics = !categories.isEmpty
+        hasCompletedOnboardingCosmeticsStep = hasAllRequiredOnboardingCosmetics
+        hasGeneratedMakeup = hasMakeupPreview
+        hasCompletedFirstMakeup = hasMakeupPreview
+        makeupRenderPreviewPath = nil
+        pendingCosmeticSuccessMessage = nil
     }
 
     func logout() {
@@ -108,6 +139,7 @@ final class AppSession {
         }
         authenticatedAccount = nil
         SessionManager.shared.clear()
+        restorePersistedProgress(user: nil, cosmetics: [])
     }
 
     func consumeProfileCaptureRequest() {

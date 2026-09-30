@@ -30,38 +30,6 @@ final class OnboardingRepository {
         }
     }
 
-    func resetForNewLaunch(userId: String) throws {
-        try db.perform { db in
-            let sql = """
-            UPDATE onboarding_steps
-            SET status = CASE WHEN step_key = 'user_profile' THEN 'in_progress' ELSE 'pending' END,
-                subtitle = CASE step_key
-                    WHEN 'user_profile' THEN '✨ 闪闪正在用火眼金睛分析你的面部特征哦'
-                    WHEN 'cosmetics' THEN '✨ 闪闪正在认真翻看宝子自己有哪些化妆品……'
-                    ELSE '✨ 正在为你规划最不容易手残的保姆级步骤……'
-                END,
-                preview_asset = CASE step_key
-                    WHEN 'user_profile' THEN 'OnboardingUserProfileProvided'
-                    WHEN 'cosmetics' THEN 'OnboardingCosmeticsProvided'
-                    ELSE 'OnboardingChooseLookProvided'
-                END,
-                preview_path = NULL,
-                updated_at = ?
-            WHERE user_id = ?;
-            """
-            var statement: OpaquePointer?
-            defer { sqlite3_finalize(statement) }
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw DatabaseError.prepareFailed
-            }
-            sqlite3_bind_double(statement, 1, Date().timeIntervalSince1970)
-            sqlite3_bind_text(statement, 2, userId, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-            guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw DatabaseError.executionFailed
-            }
-        }
-    }
-
     func fetchSteps(userId: String) throws -> [OnboardingStep] {
         try db.perform { db in
             let sql = """

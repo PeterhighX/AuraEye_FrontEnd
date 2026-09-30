@@ -34,11 +34,9 @@ struct MakeupPreviewView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         if expandedStep == nil {
-                            Image("MakeupPreviewWeatherComposed")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity)
-                                .accessibilityLabel("今日天气卡片")
+                            LiveWeatherSummaryCard(
+                                aiMessage: "今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！"
+                            )
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
 

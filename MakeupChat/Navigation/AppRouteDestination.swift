@@ -9,8 +9,6 @@ func appRouteDestination(
 ) -> some View {
     Group {
         switch route {
-        case .aiChat:
-            AIChatRouteView(session: session, path: path)
         case .firstTimeUse:
             FirstTimeUseView(session: session, path: path)
         case .onboardingCabinet:

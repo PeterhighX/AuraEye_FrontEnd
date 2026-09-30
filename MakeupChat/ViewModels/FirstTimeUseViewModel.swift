@@ -59,23 +59,18 @@ final class FirstTimeUseViewModel {
 
     func reload() {
         do {
-            if !session.hasResetOnboardingThisLaunch {
-                try service.resetStepsForNewLaunch()
-                session.hasResetOnboardingThisLaunch = true
-                hasStartedProgress = false
-                preparationProgress = 0
-            }
-            let (_, loaded) = try service.loadSteps()
-            steps = completeThreeStepSet(from: loaded)
+            _ = try service.loadSteps()
+            steps = completeThreeStepSet(from: try service.resumeExistingInputs(
+                faceImagePath: session.scannedFaceImagePath,
+                hasCosmetics: session.hasCompletedOnboardingCosmeticsStep
+            ))
             if session.hasScannedFace || session.hasAddedCosmetics {
-                steps = completeThreeStepSet(from: try service.resumeExistingInputs(
-                    faceImagePath: session.scannedFaceImagePath,
-                    hasCosmetics: session.hasCompletedOnboardingCosmeticsStep
-                ))
-                if session.hasScannedFace {
-                    hasStartedProgress = true
-                    preparationProgress = session.hasCompletedOnboardingCosmeticsStep ? 1 : 0.5
-                }
+                hasStartedProgress = true
+                let cosmeticsProgress = Double(session.onboardingCosmeticCategories.count)
+                    / Double(CosmeticCategory.allCases.count)
+                preparationProgress = session.hasScannedFace
+                    ? 0.5 + (0.5 * cosmeticsProgress)
+                    : 0
             }
             syncSessionFromSteps()
             updateStatusText()

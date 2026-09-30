@@ -33,12 +33,6 @@ final class OnboardingService {
         return (user, steps)
     }
 
-    func resetStepsForNewLaunch() throws {
-        let user = try userRepository.currentUser()
-        try onboardingRepository.ensureDefaultSteps(userId: user.userId)
-        try onboardingRepository.resetForNewLaunch(userId: user.userId)
-    }
-
     /// 将本次启动中从其他入口已经完成的建档/入柜结果同步到引导流程。
     func resumeExistingInputs(
         faceImagePath: String?,
