@@ -207,6 +207,11 @@ struct DisplayCabinetView: View {
                 Text(product.displayName)
                     .font(.system(size: 20, weight: .regular, design: .rounded))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if session.isDemoAccount && product.resultSource == "demo_fallback" {
+                    Text("演示数据 · 服务端审核缓存")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 LocalImageView(storedPath: product.previewPath)
                     .frame(width: 160, height: 160)
@@ -353,6 +358,7 @@ struct DisplayCabinetView: View {
                 }
         }
         .buttonStyle(.plain)
+        .disabled(session.isDemoAccount && (session.demoRunError != nil || category != demoNextCategory))
     }
 
     private func presentImageSourcePicker() {
@@ -363,6 +369,7 @@ struct DisplayCabinetView: View {
     }
 
     private var highlightedCategory: CosmeticCategory? {
+        if session.isDemoAccount { return demoNextCategory }
         if presentationMode == .onboarding {
             return CosmeticCategory.allCases.first {
                 !session.onboardingCosmeticCategories.contains($0)
@@ -377,10 +384,26 @@ struct DisplayCabinetView: View {
     }
 
     private var topAddGuidance: String {
+        if session.isDemoAccount {
+            if let error = session.demoRunError { return "演示流程暂不可用：\(error)" }
+            if let next = demoNextCategory {
+                return "本轮请先识别并确认\(next.rawValue)。已有商品仍会保留在陈列柜中。"
+            }
+            return "本轮化妆品识别已完成，已有商品仍会保留在陈列柜中。"
+        }
         if let highlightedCategory {
             return "还需添加\(highlightedCategory.rawValue)。眼影、眼线和毛刷三类全部添加后，才会解锁妆容生成。"
         }
         return "眼影、眼线和毛刷均已添加，仍可继续补充其他产品。"
+    }
+
+    private var demoNextCategory: CosmeticCategory? {
+        switch session.demoRun?.nextStep {
+        case "eyeshadow_recognition": .eyeshadow
+        case "eyeliner_recognition": .eyeliner
+        case "brush_recognition": .brush
+        default: nil
+        }
     }
 
     private func showPendingSuccessFeedback() {
@@ -404,7 +427,12 @@ struct DisplayCabinetView: View {
             // 确认后才提交服务端。
             await Task.yield()
             let succeeded = await viewModel.confirmPendingProduct()
+            if !succeeded && viewModel.lastWriteErrorCode == "DEMO_RUN_STALE" {
+                await session.handleDemoWriteError(DemoRunError.stale)
+                viewModel.rejectPendingProduct()
+            }
             if succeeded {
+                if session.isDemoAccount { await session.refreshDemoRun() }
                 session.syncCosmeticCategoriesFromServer()
                 session.markCosmeticsAdded()
                 session.reportCosmeticAdded(category: product.category)

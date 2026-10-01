@@ -48,10 +48,11 @@ final class FirstTimeUseViewModel {
     private let completeFaceScan: @MainActor (VisionImageInput) async throws -> [OnboardingStep]
 
     init(
-        service: OnboardingService = OnboardingService(),
+        service: OnboardingService? = nil,
         session: AppSession,
         completeFaceScan: (@MainActor (VisionImageInput) async throws -> [OnboardingStep])? = nil
     ) {
+        let service = service ?? OnboardingService()
         self.service = service
         self.session = session
         self.completeFaceScan = completeFaceScan ?? { input in
@@ -62,6 +63,13 @@ final class FirstTimeUseViewModel {
     func reload() async {
         loadErrorMessage = nil
         do {
+            if session.isDemoAccount {
+                await session.refreshDemoRun()
+                if let error = session.demoRunError { throw NSError(domain: "AuraEyeDemoRun", code: 1, userInfo: [NSLocalizedDescriptionKey: error]) }
+                guard let run = session.demoRun else { throw DemoRunError.unavailable }
+                applyDemoRun(run)
+                return
+            }
             await session.business.refreshProfile()
             if let error = session.business.profileError {
                 throw NSError(domain: "AuraEyeVisualProfile", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
@@ -152,26 +160,40 @@ final class FirstTimeUseViewModel {
                     profileAnalysisProgress = 0
                     await animateProfileProgress(to: 0.78, duration: 0.65)
                     try await Task.sleep(for: .milliseconds(650))
-                    steps = completeThreeStepSet(from: try await completeFaceScan(input))
+                    let completedSteps = try await completeFaceScan(input)
                     await session.business.refreshProfile()
-                    session.markFaceScanned(imagePath: steps.first(where: { $0.stepKey == .userProfile })?.previewPath ?? "")
+                    session.markFaceScanned(imagePath: (try? UserRepository().currentUser().userPortraitPath) ?? "")
+                    if session.isDemoAccount {
+                        await session.refreshDemoRun()
+                        if let error = session.demoRunError { throw NSError(domain: "AuraEyeDemoRun", code: 1, userInfo: [NSLocalizedDescriptionKey: error]) }
+                        guard let run = session.demoRun else { throw DemoRunError.unavailable }
+                        applyDemoRun(run)
+                    } else {
+                        steps = completeThreeStepSet(from: completedSteps)
+                    }
                     await animateProfileProgress(to: 1, duration: 0.42)
                     statusText = "用户档案已创建完成"
                     try await Task.sleep(for: .milliseconds(320))
-                    if session.hasCompletedOnboardingCosmeticsStep {
+                    if !session.isDemoAccount && session.hasCompletedOnboardingCosmeticsStep {
                         steps = completeThreeStepSet(from: try service.resumeExistingInputs(
                             faceImagePath: session.scannedFaceImagePath,
                             hasVisualProfile: session.business.visualProfile != nil,
                             cosmetics: session.business.cosmetics
                         ))
                         preparationProgress = 1
-                    } else {
+                    } else if !session.isDemoAccount {
                         preparationProgress = 0.5
                     }
                 case .cosmetics:
                     statusText = "扫描化妆品，建立化妆品库中……"
                     await animateProgress(to: 0.72, duration: 0.55)
                     pendingProduct = try await service.recognizeCosmetics(input: input)
+                    if session.isDemoAccount,
+                       let expected = expectedDemoCategory,
+                       CosmeticCategory.from(raw: pendingProduct?.category ?? "") != expected {
+                        pendingProduct = nil
+                        throw DemoRunError.wrongCategory(expected.rawValue)
+                    }
                     pendingCosmeticRequestID = UUID().uuidString
                     preparationProgress = max(preparationProgress, 0.72)
                     statusText = "已识别化妆品，请确认添加"
@@ -190,9 +212,19 @@ final class FirstTimeUseViewModel {
                 recognitionErrorMessage = nil
                 return
         } catch {
-                preparationProgress = session.hasCompletedOnboardingCosmeticsStep
-                    ? 1
-                    : (session.hasScannedFace ? 0.5 : 0)
+                await session.handleDemoWriteError(error)
+                if DemoRunError.isStale(error) {
+                    pendingProduct = nil
+                    pendingCosmeticRequestID = nil
+                }
+                if session.isDemoAccount {
+                    if let run = session.demoRun { applyDemoRun(run) }
+                    else { steps = []; preparationProgress = 0 }
+                } else {
+                    preparationProgress = session.hasCompletedOnboardingCosmeticsStep
+                        ? 1
+                        : (session.hasScannedFace ? 0.5 : 0)
+                }
 
                 if let failure = error as? VisionRequestFailure {
                     recognitionErrorTitle = cameraTarget == .face
@@ -262,23 +294,33 @@ final class FirstTimeUseViewModel {
             do {
                 let requestID = pendingCosmeticRequestID ?? UUID().uuidString
                 pendingCosmeticRequestID = requestID
-                steps = completeThreeStepSet(from: try await service.completeCosmeticsScan(
+                let completedSteps = try await service.completeCosmeticsScan(
                     result: product, requestID: requestID
-                ))
+                )
+                if session.isDemoAccount {
+                    await session.refreshDemoRun()
+                    if let error = session.demoRunError { throw NSError(domain: "AuraEyeDemoRun", code: 1, userInfo: [NSLocalizedDescriptionKey: error]) }
+                    guard let run = session.demoRun else { throw DemoRunError.unavailable }
+                    applyDemoRun(run)
+                } else {
+                    steps = completeThreeStepSet(from: completedSteps)
+                }
                 pendingCosmeticRequestID = nil
                 session.reportCosmeticAdded(category: product.category)
-                session.markOnboardingCosmeticsStepCompleted()
+                if !session.isDemoAccount { session.markOnboardingCosmeticsStepCompleted() }
                 let categoryProgress = Double(session.onboardingCosmeticCategories.count) / 3
-                await animateProgress(
+                if !session.isDemoAccount { await animateProgress(
                     to: session.hasAllRequiredOnboardingCosmetics
                         ? 1
                         : 0.5 + (0.48 * categoryProgress),
                     duration: 0.65
-                )
+                ) }
                 updateStatusText()
                 pendingNavigation = .onboardingCabinet
             } catch {
-                pendingProduct = product
+                await session.handleDemoWriteError(error)
+                pendingProduct = DemoRunError.isStale(error) ? nil : product
+                if DemoRunError.isStale(error) { pendingCosmeticRequestID = nil }
                 statusText = "添加失败，请重试"
             }
         }
@@ -313,6 +355,7 @@ final class FirstTimeUseViewModel {
 
     func generateMakeup() {
         guard !isProcessing, preparationProgress >= 1 else { return }
+        guard !session.isDemoAccount || session.demoRunError == nil else { return }
         // 这里仅进入风格选择。真正生成由 /makeup/plans 在用户确认风格后执行。
         pendingNavigation = .makeupPreview
     }
@@ -323,6 +366,7 @@ final class FirstTimeUseViewModel {
 
     func canTap(_ step: OnboardingStep) -> Bool {
         guard loadErrorMessage == nil else { return false }
+        guard !session.isDemoAccount || session.demoRunError == nil else { return false }
         guard step.isActive, !step.isCompleted, !isProcessing else { return false }
         if step.stepKey == .makeupGenerate {
             return preparationProgress >= 1
@@ -336,12 +380,35 @@ final class FirstTimeUseViewModel {
     }
 
     private func syncSessionFromSteps() {
+        guard !session.isDemoAccount else { return }
         if let profile = steps.first(where: { $0.stepKey == .userProfile }), profile.isCompleted {
             session.syncProfileAvailability()
         }
         if let cosmetics = steps.first(where: { $0.stepKey == .cosmetics }), cosmetics.isCompleted {
             session.markOnboardingCosmeticsStepCompleted()
         }
+    }
+
+    private var expectedDemoCategory: CosmeticCategory? {
+        switch session.demoRun?.nextStep {
+        case "eyeshadow_recognition": .eyeshadow
+        case "eyeliner_recognition": .eyeliner
+        case "brush_recognition": .brush
+        default: nil
+        }
+    }
+
+    private func applyDemoRun(_ run: DemoRunDTO) {
+        steps = OnboardingService.demoSteps(
+            from: run, userID: session.authenticatedAccount?.userId ?? ""
+        )
+        hasStartedProgress = true
+        let completedCosmetics = ["eyeshadow_recognition", "eyeliner_recognition", "brush_recognition"]
+            .filter { run.completed.contains($0) }.count
+        preparationProgress = run.completed.contains("face_analysis")
+            ? 0.5 + 0.5 * Double(completedCosmetics) / 3
+            : 0
+        updateStatusText()
     }
 
     private func updateStatusText() {

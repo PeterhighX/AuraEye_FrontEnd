@@ -1,6 +1,81 @@
 import Foundation
 import Observation
 
+enum DemoRunError: LocalizedError, Equatable {
+    case buildIDMissing
+    case buildIDInvalid
+    case unavailable
+    case stale
+    case wrongCategory(String)
+
+    static func isStale(_ error: Error) -> Bool {
+        (error as? APIClientError)?.problemCode == "DEMO_RUN_STALE"
+            || (error as? VisionRequestFailure)?.serverCode == "DEMO_RUN_STALE"
+            || (error as? DemoRunError) == .stale
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case .buildIDMissing: "演示流程暂不可用：构建包缺少演示标识。"
+        case .buildIDInvalid: "演示流程暂不可用：构建包演示标识无效。"
+        case .unavailable: "演示流程暂不可用，请重试。"
+        case .stale: "演示轮次已更新，请重试当前操作。"
+        case .wrongCategory(let category): "本轮需要先确认\(category)，请从演示相册选择对应图片。"
+        }
+    }
+}
+
+enum DemoBuildID {
+    static func load(bundle: Bundle = .main) throws -> String {
+        guard let url = bundle.url(forResource: "AuraEyeDemoBuildID", withExtension: "txt"),
+              let value = try? String(contentsOf: url, encoding: .utf8) else {
+            throw DemoRunError.buildIDMissing
+        }
+        let identifier = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard UUID(uuidString: identifier) != nil else { throw DemoRunError.buildIDInvalid }
+        return identifier
+    }
+}
+
+struct DemoRunDTO: Decodable, Sendable {
+    let runID: String
+    let buildID: String
+    let status: String
+    let requiredSteps: [String]
+    let completedSteps: [String]
+    let nextStep: String?
+    let activePlanID: String?
+    let activeSessionID: String?
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case runID = "run_id"
+        case buildID = "build_id"
+        case requiredSteps = "required_steps"
+        case completedSteps = "completed_steps"
+        case nextStep = "next_step"
+        case activePlanID = "active_plan_id"
+        case activeSessionID = "active_session_id"
+        case updatedAt = "updated_at"
+    }
+
+    var completed: Set<String> { Set(completedSteps) }
+    var isPreparationComplete: Bool {
+        ["face_analysis", "eyeshadow_recognition", "eyeliner_recognition", "brush_recognition"]
+            .allSatisfy { completed.contains($0) }
+    }
+}
+
+private struct OpenDemoRunRequest: Encodable {
+    let requestID: String
+    let buildID: String
+    enum CodingKeys: String, CodingKey {
+        case requestID = "request_id"
+        case buildID = "build_id"
+    }
+}
+
 // Public AuraEye business DTOs. These routes are frozen in docs 14–17 and may
 // return 404 until the corresponding backend controllers are deployed.
 struct GrowthOverviewDTO: Decodable, Sendable {
@@ -599,6 +674,29 @@ final class BusinessDataService {
         return try APIEnvironment.shared.authenticatedClient(accessToken: token)
     }
 
+    private func demoRunID() throws -> String? {
+        try SessionManager.shared.currentDemoRunID()
+    }
+
+    func openDemoRun(buildID: String, requestID: String) async throws -> DemoRunDTO {
+        guard SessionManager.shared.context?.accountMode == .demo else { throw DemoRunError.unavailable }
+        let response: APIEnvelope<DemoRunDTO> = try await client().send(
+            path: "/demo/runs/open",
+            body: OpenDemoRunRequest(requestID: requestID, buildID: buildID),
+            idempotencyKey: requestID
+        )
+        guard response.data.buildID.caseInsensitiveCompare(buildID) == .orderedSame,
+              !response.data.runID.isEmpty else { throw APIClientError.invalidResponse }
+        return response.data
+    }
+
+    func demoRun(id: String) async throws -> DemoRunDTO {
+        guard SessionManager.shared.context?.accountMode == .demo else { throw DemoRunError.unavailable }
+        let response: APIEnvelope<DemoRunDTO> = try await client().send(path: "/demo/runs/\(id)")
+        guard response.data.runID == id else { throw APIClientError.invalidResponse }
+        return response.data
+    }
+
     func growthOverview() async throws -> GrowthOverviewDTO {
         let response: APIEnvelope<GrowthOverviewDTO> = try await client().send(path: "/growth/overview")
         return response.data
@@ -645,14 +743,24 @@ final class BusinessDataService {
         return response.data
     }
 
-    func renderResult(jobID: String) async throws -> MakeupRenderResultDTO? {
+    func renderResult(jobID: String, plan: MakeupPlanDTO) async throws -> MakeupRenderResultDTO? {
+        guard plan.render.jobID == jobID else { throw APIClientError.invalidResponse }
+        let context = SessionManager.shared.context
+        if context?.accountMode == .demo {
+            guard try SessionManager.shared.currentDemoRun()?.activePlanID == plan.planID else {
+                throw DemoRunError.stale
+            }
+        }
         let response: APIEnvelope<MakeupRenderJobDTO> = try await client().send(path: "/vision/jobs/\(jobID)")
         let job = response.data
         guard job.jobID == jobID, job.jobType == "makeup_render" else {
             throw APIClientError.invalidResponse
         }
         guard job.status == "succeeded" else { return nil }
-        guard let result = job.result, result.resultSource == "remote_provider",
+        guard let result = job.result,
+              (context?.accountMode == .demo
+                ? result.resultSource == "demo_seed"
+                : result.resultSource == "remote_provider"),
               result.schemaVersion == "1.0", !result.recipeID.isEmpty,
               !result.recipeHash.isEmpty, !result.outputAsset.assetID.isEmpty else {
             throw APIClientError.invalidResponse
@@ -703,7 +811,8 @@ final class BusinessDataService {
                 category: category, displayName: candidate.displayName,
                 brand: nil, shade: nil, attributes: attributes
             ),
-            idempotencyKey: requestID
+            idempotencyKey: requestID,
+            demoRunID: try demoRunID()
         )
         return response.data
     }
@@ -775,7 +884,7 @@ final class BusinessDataService {
                 requestID: requestID, portraitJobID: portraitJobID, styleID: styleID,
                 scene: "daily", weather: weather
             ),
-            idempotencyKey: requestID, expectedStatusCode: 202
+            idempotencyKey: requestID, demoRunID: try demoRunID(), expectedStatusCode: 202
         )
         return response.data
     }
@@ -789,7 +898,8 @@ final class BusinessDataService {
         let response: APIEnvelope<MakeupSessionDTO> = try await client().send(
             path: "/makeup/sessions",
             body: StartMakeupSessionRequest(requestID: requestID, planID: planID),
-            idempotencyKey: requestID
+            idempotencyKey: requestID,
+            demoRunID: try demoRunID()
         )
         return response.data
     }
@@ -810,7 +920,8 @@ final class BusinessDataService {
                 kind: kind, direction: direction, committed: committed,
                 visibleMS: visibleMS, occurredAt: ISO8601DateFormatter().string(from: .now)
             ),
-            idempotencyKey: eventID
+            idempotencyKey: eventID,
+            demoRunID: try demoRunID()
         )
         return response.data
     }
@@ -822,7 +933,8 @@ final class BusinessDataService {
                 requestID: requestID,
                 completedAt: ISO8601DateFormatter().string(from: .now)
             ),
-            idempotencyKey: requestID
+            idempotencyKey: requestID,
+            demoRunID: try demoRunID()
         )
         return response.data
     }
@@ -1029,6 +1141,38 @@ final class BusinessStore {
             activeSession = resolvedPractice
         } catch {
             // History remains visible; the user can retry after the service recovers.
+        }
+    }
+
+    func clearActiveFlow() {
+        activePlan = nil
+        activeSession = nil
+        completion = nil
+    }
+
+    func restoreDemoPractice(run: DemoRunDTO) async {
+        guard let planID = run.activePlanID else {
+            clearActiveFlow()
+            return
+        }
+        let requestedAccount = accountID
+        do {
+            let resolvedPlan = try await BusinessDataService.shared.plan(id: planID)
+            let resolvedSession: MakeupSessionDTO?
+            if let sessionID = run.activeSessionID {
+                resolvedSession = try await BusinessDataService.shared.session(id: sessionID)
+            } else {
+                resolvedSession = nil
+            }
+            guard accountID == requestedAccount,
+                  try SessionManager.shared.currentDemoRunID() == run.runID,
+                  resolvedPlan.planID == planID,
+                  resolvedSession?.sessionID == run.activeSessionID else { return }
+            activePlan = resolvedPlan
+            activeSession = resolvedSession
+        } catch {
+            // Keep the run visible; the user can retry loading its plan/session.
+            clearActiveFlow()
         }
     }
 

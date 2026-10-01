@@ -18,6 +18,7 @@ final class DisplayCabinetViewModel {
     private(set) var recognitionErrorMessage: String?
     private(set) var analysisState: AsyncAnalysisState<CosmeticsRecognitionResult> = .idle
     private(set) var loadErrorMessage: String?
+    private(set) var lastWriteErrorCode: String?
 
     private let userRepository: UserRepository
     private let recognitionService: any CosmeticsRecognitionServicing
@@ -98,6 +99,7 @@ final class DisplayCabinetViewModel {
     @discardableResult
     func confirmPendingProduct() async -> Bool {
         guard let pendingProduct else { return false }
+        lastWriteErrorCode = nil
         do {
             let requestID = pendingRequestID ?? UUID().uuidString
             pendingRequestID = requestID
@@ -107,6 +109,7 @@ final class DisplayCabinetViewModel {
             await reload()
             return true
         } catch {
+            lastWriteErrorCode = (error as? APIClientError)?.problemCode
             // 数据库写入失败时保留确认卡，方便用户再次尝试
             recognitionErrorMessage = "化妆品信息已经识别，但保存失败，请再次点击“添加”。"
             return false

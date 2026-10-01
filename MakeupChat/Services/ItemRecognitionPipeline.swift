@@ -134,11 +134,13 @@ struct ItemRecognitionResultDTO: Codable, Equatable, Sendable {
     let items: [RecognizedItemDTO]
     let warnings: [String]
     let knowledgeKeys: [String]
+    let resultSource: String?
 
     enum CodingKeys: String, CodingKey {
         case recognitionLevel = "recognition_level"
         case items, warnings
         case knowledgeKeys = "knowledge_keys"
+        case resultSource = "result_source"
     }
 }
 
@@ -165,13 +167,15 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
 
     func recognizeItem(_ input: RecognitionInput) async throws -> CosmeticsRecognitionResult {
         let capability = VisionCapability.itemRecognition
-        let pending = try persistence.pendingJob(accountID: input.userID, capability: capability)
+        let demoRunID = try await MainActor.run { try SessionManager.shared.currentDemoRunID() }
+        let pendingAccountID = demoRunID.map { "\(input.userID)#\($0)" } ?? input.userID
+        let pending = try persistence.resumableJob(accountID: pendingAccountID, capability: capability)
         let requestID = pending?.requestID ?? "req_item_\(UUID().uuidString.lowercased())"
         let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
 
         if pending == nil {
             try persistence.savePendingJob(VisionPendingJob(
-                accountID: input.userID,
+                accountID: pendingAccountID,
                 capability: capability,
                 requestID: requestID,
                 idempotencyKey: idempotencyKey,
@@ -195,14 +199,15 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
                     capability: capability,
                     options: options,
                     requestID: requestID,
-                    idempotencyKey: idempotencyKey
+                    idempotencyKey: idempotencyKey,
+                    demoRunID: demoRunID
                 )
                 guard response.value.capability == capability else {
                     throw VisionAPIError.resultInvalid
                 }
                 jobID = response.value.jobId
                 try persistence.savePendingJob(VisionPendingJob(
-                    accountID: input.userID,
+                    accountID: pendingAccountID,
                     capability: capability,
                     requestID: requestID,
                     idempotencyKey: idempotencyKey,
@@ -220,7 +225,7 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
                 fetch: { [jobs] in try await jobs.job(id: $0) },
                 onResponse: { [persistence] metadata in
                     try? persistence.savePendingJob(VisionPendingJob(
-                        accountID: input.userID,
+                        accountID: pendingAccountID,
                         capability: capability,
                         requestID: requestID,
                         idempotencyKey: idempotencyKey,
@@ -232,20 +237,31 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
                     ))
                 }
             )
-            try persistence.removePendingJob(accountID: input.userID, capability: capability)
+            if demoRunID != nil {
+                guard dto.resultSource == "demo_fallback" || dto.resultSource == "demo_seed" else {
+                    throw VisionAPIError.resultInvalid
+                }
+            } else if dto.resultSource != "remote_provider" {
+                throw VisionAPIError.resultInvalid
+            }
+            if let demoRunID {
+                let currentRunID = try await MainActor.run { try SessionManager.shared.currentDemoRunID() }
+                guard currentRunID == demoRunID else { throw DemoRunError.stale }
+            }
+            try persistence.removePendingJob(accountID: pendingAccountID, capability: capability)
             return try Self.map(dto: dto, previewImage: input.image, sourceJobID: jobID)
         } catch let failure as VisionRequestFailure {
             if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
                 .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
                 .unsupportedMediaType].contains(failure.visionError) {
-                try? persistence.removePendingJob(accountID: input.userID, capability: capability)
+                try? persistence.removePendingJob(accountID: pendingAccountID, capability: capability)
             }
             throw failure
         } catch let error as VisionAPIError {
             if [.providerUnavailable, .cancelled, .demoFixtureNotRecognized,
                 .demoFixtureMismatch, .demoCacheNotReady, .payloadTooLarge,
                 .unsupportedMediaType].contains(error) {
-                try? persistence.removePendingJob(accountID: input.userID, capability: capability)
+                try? persistence.removePendingJob(accountID: pendingAccountID, capability: capability)
             }
             throw error
         }
@@ -284,7 +300,7 @@ final class UnifiedItemRecognitionProvider: ItemRecognitionProviding {
             previewPath: storedPath,
             recognitionID: sourceJobID,
             needsConfirmation: item.needsConfirmation,
-            resultSource: "vision_job"
+            resultSource: dto.resultSource ?? "unknown"
         )
     }
 }
@@ -297,6 +313,8 @@ final class AccountAwareItemRecognitionProvider: ItemRecognitionProviding {
         do {
             let client = try await MainActor.run { try VisionClientFactory.authenticatedClient() }
             return try await UnifiedItemRecognitionProvider(client: client).recognizeItem(input)
+        } catch let error as DemoRunError {
+            throw error
         } catch {
             let failure = VisionRequestFailure.capturing(error, stage: .processingResult)
             _ = visionFailureMessage(failure, fallbackStage: .processingResult)

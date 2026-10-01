@@ -450,6 +450,7 @@
 				A10000000000000000000003 /* Sources */,
 				EC0000000000000000000002 /* Frameworks */,
 				A10000000000000000000004 /* Resources */,
+				F90000000000000000000002 /* Stamp Demo Build ID */,
 			);
 			buildRules = (
 			);
@@ -535,6 +536,26 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		F90000000000000000000002 /* Stamp Demo Build ID */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp Demo Build ID";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AuraEyeDemoBuildID.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\nresource_dir=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nmkdir -p \"$resource_dir\"\nuuidgen > \"$resource_dir/AuraEyeDemoBuildID.txt\"\ntest -s \"$resource_dir/AuraEyeDemoBuildID.txt\"\n";
+		};
 		F90000000000000000000001 /* Verify Release Configuration */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;

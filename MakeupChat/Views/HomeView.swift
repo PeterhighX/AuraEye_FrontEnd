@@ -79,7 +79,12 @@ struct HomeView: View {
             get: { quickStartMessage != nil },
             set: { if !$0 { quickStartMessage = nil } }
         )) {
-            Button("重试") { Task { await session.business.refreshGrowth() } }
+            Button("重试") {
+                Task {
+                    if session.isDemoAccount { await session.openDemoRun() }
+                    else { await session.business.refreshGrowth() }
+                }
+            }
         } message: {
             Text(quickStartMessage ?? "请稍后重试。")
         }
@@ -190,7 +195,9 @@ struct HomeView: View {
                     if let route = session.routeForQuickStart() {
                         path.append(route)
                     } else {
-                        quickStartMessage = session.business.growthError ?? "正在读取上妆记录，请稍后重试。"
+                        quickStartMessage = session.isDemoAccount
+                            ? (session.demoRunError ?? "正在打开演示流程，请稍后重试。")
+                            : (session.business.growthError ?? "正在读取上妆记录，请稍后重试。")
                     }
                 }
             )
@@ -313,7 +320,6 @@ struct HomeView: View {
                     .padding(.horizontal, 12)
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
 }

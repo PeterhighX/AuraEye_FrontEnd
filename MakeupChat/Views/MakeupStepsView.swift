@@ -32,6 +32,8 @@ struct MakeupStepsView: View {
             .padding(.top, 8)
 
             if let plan, let practice,
+               !session.isDemoAccount || session.demoRunError == nil,
+               !session.isDemoAccount || (session.demoRun?.activePlanID == plan.planID && session.demoRun?.activeSessionID == practice.sessionID),
                let stepID = practice.currentStepID,
                let step = plan.steps.first(where: { $0.id == stepID }) {
                 practiceContent(plan: plan, practice: practice, step: step)
@@ -46,7 +48,8 @@ struct MakeupStepsView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .task(id: plan?.portrait?.portraitID) {
+        .task(id: plan?.planID) {
+            portraitImage = nil
             if let plan { await loadPortrait(for: plan) }
         }
         .onAppear {
@@ -262,6 +265,7 @@ struct MakeupStepsView: View {
         _ direction: String, committed: Bool, step: MakeupPlanStepDTO,
         practice: MakeupSessionDTO, plan: MakeupPlanDTO
     ) {
+        guard !session.isDemoAccount || session.demoRun?.activeSessionID == practice.sessionID else { return }
         isSubmitting = true
         let visibleMS = visibleDurationMS()
         let signature = "\(practice.sessionID):\(step.id):\(direction):\(committed)"
@@ -278,6 +282,7 @@ struct MakeupStepsView: View {
                     kind: "swipe", direction: direction, committed: committed,
                     visibleMS: visibleMS
                 )
+                guard !session.isDemoAccount || session.demoRun?.activeSessionID == updated.sessionID else { return }
                 session.business.install(session: updated)
                 pendingSwipeSignature = nil
                 pendingSwipeEventID = nil
@@ -288,6 +293,12 @@ struct MakeupStepsView: View {
                     try await finishPractice(sessionID: updated.sessionID)
                 }
             } catch {
+                await session.handleDemoWriteError(error)
+                if DemoRunError.isStale(error) {
+                    pendingSwipeSignature = nil
+                    pendingSwipeEventID = nil
+                    completeRequestID = nil
+                }
                 errorMessage = error.localizedDescription
             }
         }
@@ -295,6 +306,7 @@ struct MakeupStepsView: View {
 
     private func requestExplanation(_ step: MakeupPlanStepDTO) {
         guard let practice, !isSubmitting else { return }
+        guard !session.isDemoAccount || session.demoRun?.activeSessionID == practice.sessionID else { return }
         isSubmitting = true
         let eventID = pendingExplainStepID == step.id
             ? (pendingExplainEventID ?? UUID().uuidString) : UUID().uuidString
@@ -309,17 +321,26 @@ struct MakeupStepsView: View {
                     kind: "explain", direction: nil, committed: nil,
                     visibleMS: visibleDurationMS()
                 )
+                guard !session.isDemoAccount || session.demoRun?.activeSessionID == updated.sessionID else { return }
                 session.business.install(session: updated)
                 pendingExplainStepID = nil
                 pendingExplainEventID = nil
                 visibleStartedAt = .now
             } catch {
+                await session.handleDemoWriteError(error)
+                if DemoRunError.isStale(error) {
+                    pendingExplainStepID = nil
+                    pendingExplainEventID = nil
+                }
                 errorMessage = error.localizedDescription
             }
         }
     }
 
     private func finishPractice(sessionID: String) async throws {
+        guard !session.isDemoAccount || session.demoRun?.activeSessionID == sessionID else {
+            throw DemoRunError.stale
+        }
         let requestID = completeRequestID ?? UUID().uuidString
         completeRequestID = requestID
         let result = try await BusinessDataService.shared.complete(
@@ -328,6 +349,7 @@ struct MakeupStepsView: View {
         guard result.growthDelta.levelAfter == result.growthOverview.level else {
             throw APIClientError.invalidResponse
         }
+        if session.isDemoAccount { await session.refreshDemoRun() }
         session.business.install(completion: result)
         path.append(AppRoute.makeupComplete)
     }
@@ -340,6 +362,7 @@ struct MakeupStepsView: View {
         guard session.business.completion == nil,
               let practice, let stepID = practice.currentStepID,
               practice.status == "in_progress" else { return }
+        guard !session.isDemoAccount || session.demoRun?.activeSessionID == practice.sessionID else { return }
         let visibleMS = visibleDurationMS()
         Task {
             _ = try? await BusinessDataService.shared.action(
@@ -352,23 +375,28 @@ struct MakeupStepsView: View {
     }
 
     private func loadPortrait(for plan: MakeupPlanDTO) async {
+        guard !session.isDemoAccount || session.demoRun?.activePlanID == plan.planID else { return }
         guard let portrait = plan.portrait,
               portrait.status == "succeeded", portrait.hasAlpha else { return }
         if let data = try? await BusinessDataService.shared.portraitImage(
             id: portrait.portraitID, variant: "full"
         ) {
-            portraitImage = UIImage(data: data)
+            if !session.isDemoAccount || session.demoRun?.activePlanID == plan.planID {
+                portraitImage = UIImage(data: data)
+            }
         }
         for _ in 0..<30 {
             guard !Task.isCancelled else { return }
             guard let updated = try? await BusinessDataService.shared.plan(id: plan.planID) else { return }
             if updated.render.status == "succeeded", let jobID = updated.render.jobID {
-                if let result = try? await BusinessDataService.shared.renderResult(jobID: jobID),
+                if let result = try? await BusinessDataService.shared.renderResult(jobID: jobID, plan: updated),
                    result.portraitPreview?.status == "succeeded",
                    result.portraitPreview?.sourcePortraitID == portrait.portraitID,
                    let data = try? await BusinessDataService.shared.portraitPreviewImage(jobID: jobID),
                    let image = UIImage(data: data) {
-                    portraitImage = image
+                    if !session.isDemoAccount || session.demoRun?.activePlanID == plan.planID {
+                        portraitImage = image
+                    }
                 }
                 return
             }
