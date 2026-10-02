@@ -4,8 +4,7 @@ import SwiftUI
 func appRouteDestination(
     _ route: AppRoute,
     session: AppSession,
-    path: Binding<NavigationPath>,
-    selectedTab: Binding<Int>
+    path: Binding<NavigationPath>
 ) -> some View {
     Group {
         switch route {
@@ -25,7 +24,7 @@ func appRouteDestination(
         case .makeupSteps:
             MakeupStepsView(session: session, path: path)
         case .makeupComplete:
-            MakeupCompleteView(session: session, path: path, selectedTab: selectedTab)
+            MakeupCompleteView(session: session, path: path)
         case .userProfile:
             UserProfileDetailView(session: session, path: path)
         }

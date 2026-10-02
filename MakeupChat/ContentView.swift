@@ -120,8 +120,7 @@ struct ContentView: View {
                     appRouteDestination(
                         route,
                         session: session,
-                        path: $homePath,
-                        selectedTab: $selectedTab
+                        path: $homePath
                     )
                 }
         }
@@ -136,8 +135,7 @@ struct ContentView: View {
                     appRouteDestination(
                         route,
                         session: session,
-                        path: $profilePath,
-                        selectedTab: $selectedTab
+                        path: $profilePath
                     )
                 }
         }

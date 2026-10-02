@@ -5,7 +5,6 @@ import UIKit
 struct MakeupCompleteView: View {
     @Bindable var session: AppSession
     @Binding var path: NavigationPath
-    @Binding var selectedTab: Int
     @State private var feedbackRating: Int?
     @State private var feedbackRequestID: String?
     @State private var feedbackMessage: String?
@@ -69,45 +68,13 @@ struct MakeupCompleteView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) { completionNavigationBar }
+        .toolbar(.visible, for: .tabBar)
         .task {
             if session.business.styles.isEmpty { await session.business.refreshStyles() }
             await session.business.refreshHistory()
             await session.business.refreshStats()
             await session.business.refreshGrowth()
         }
-    }
-
-    private var completionNavigationBar: some View {
-        HStack {
-            completionTab(title: "首页", symbol: "house.fill", tab: .home)
-            completionTab(title: "陈列柜", symbol: "square.grid.2x2.fill", tab: .cabinet)
-            completionTab(title: "我的", symbol: "person.fill", tab: .profile)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 4)
-    }
-
-    private func completionTab(title: String, symbol: String, tab: AppTab) -> some View {
-        Button {
-            path = NavigationPath()
-            selectedTab = tab.rawValue
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: symbol).font(.system(size: 21))
-                Text(title).font(.caption)
-            }
-            .foregroundStyle(tab == .profile ? AppTheme.ColorToken.accentOrange : Color.secondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-        }
-        .buttonStyle(.plain)
     }
 
     private func levelCard(_ result: MakeupCompletionDTO) -> some View {
@@ -248,8 +215,7 @@ struct MakeupCompleteView: View {
 #Preview {
     NavigationStack {
         MakeupCompleteView(
-            session: AppSession(), path: .constant(NavigationPath()),
-            selectedTab: .constant(AppTab.home.rawValue)
+            session: AppSession(), path: .constant(NavigationPath())
         )
     }
 }
