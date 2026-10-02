@@ -48,10 +48,11 @@ final class FirstTimeUseViewModel {
     private let completeFaceScan: @MainActor (VisionImageInput) async throws -> [OnboardingStep]
 
     init(
-        service: OnboardingService = OnboardingService(),
+        service: OnboardingService? = nil,
         session: AppSession,
         completeFaceScan: (@MainActor (VisionImageInput) async throws -> [OnboardingStep])? = nil
     ) {
+        let service = service ?? OnboardingService()
         self.service = service
         self.session = session
         self.completeFaceScan = completeFaceScan ?? { input in
