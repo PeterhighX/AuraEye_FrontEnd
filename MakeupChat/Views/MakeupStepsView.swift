@@ -88,12 +88,15 @@ struct MakeupStepsView: View {
             progressCard(plan: plan, practice: practice, step: step, index: currentIndex)
                 .padding(.top, 24)
 
-            HStack {
-                Image(systemName: "eye")
+            VStack(spacing: 2) {
+                Image(step.previewAssetKey ?? "PracticeStep\(step.order)")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 68)
                 Text("\(step.title) · \(step.toolName ?? "按教程操作")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
             .frame(height: 90)
             .background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 24))
@@ -204,10 +207,9 @@ struct MakeupStepsView: View {
                 Text(step.toolName ?? "按教程操作").font(.headline).underline()
             }
 
-            Image(systemName: "paintbrush.pointed.fill")
+            Image("StepTool")
                 .resizable().scaledToFit()
                 .frame(width: 92, height: 92)
-                .foregroundStyle(AppTheme.ColorToken.accentOrange)
 
             styledMakeupInstruction(step.instruction)
                 .font(.callout)
@@ -376,8 +378,14 @@ struct MakeupStepsView: View {
 
     private func loadPortrait(for plan: MakeupPlanDTO) async {
         guard !session.isDemoAccount || session.demoRun?.activePlanID == plan.planID else { return }
-        guard let portrait = plan.portrait,
-              portrait.status == "succeeded", portrait.hasAlpha else { return }
+        var currentPlan = plan
+        for _ in 0..<30 where currentPlan.portrait?.status != "succeeded" {
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(for: .seconds(2))
+            guard let updated = try? await BusinessDataService.shared.plan(id: plan.planID) else { return }
+            currentPlan = updated
+        }
+        guard let portrait = currentPlan.portrait, portrait.hasAlpha else { return }
         if let data = try? await BusinessDataService.shared.portraitImage(
             id: portrait.portraitID, variant: "full"
         ) {
