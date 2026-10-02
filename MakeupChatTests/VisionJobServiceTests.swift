@@ -73,11 +73,11 @@ final class VisionJobServiceTests: XCTestCase {
             capability: .faceAnalysis, requestID: "request-a", idempotencyKey: "request-a",
             demoRunID: "run-a"
         )
-        let _: APIEnvelope<JSONValue> = try await client.send(
+        let _: JSONValue = try await client.send(
             path: "/cosmetics", body: Body(requestID: "request-b"),
             idempotencyKey: "request-b", demoRunID: "run-a"
         )
-        let _: APIEnvelope<JSONValue> = try await client.send(path: "/growth/overview")
+        let _: JSONValue = try await client.send(path: "/growth/overview")
 
         XCTAssertEqual(VisionURLProtocolStub.requests.map {
             $0.value(forHTTPHeaderField: "X-AuraEye-Demo-Run-ID")
