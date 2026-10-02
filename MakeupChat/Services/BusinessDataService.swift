@@ -680,39 +680,37 @@ final class BusinessDataService {
 
     func openDemoRun(buildID: String, requestID: String) async throws -> DemoRunDTO {
         guard SessionManager.shared.context?.accountMode == .demo else { throw DemoRunError.unavailable }
-        let response: APIEnvelope<DemoRunDTO> = try await client().send(
+        let response: DemoRunDTO = try await client().send(
             path: "/demo/runs/open",
             body: OpenDemoRunRequest(requestID: requestID, buildID: buildID),
             idempotencyKey: requestID
         )
-        guard response.data.buildID.caseInsensitiveCompare(buildID) == .orderedSame,
-              !response.data.runID.isEmpty else { throw APIClientError.invalidResponse }
-        return response.data
+        guard response.buildID.caseInsensitiveCompare(buildID) == .orderedSame,
+              !response.runID.isEmpty else { throw APIClientError.invalidResponse }
+        return response
     }
 
     func demoRun(id: String) async throws -> DemoRunDTO {
         guard SessionManager.shared.context?.accountMode == .demo else { throw DemoRunError.unavailable }
-        let response: APIEnvelope<DemoRunDTO> = try await client().send(path: "/demo/runs/\(id)")
-        guard response.data.runID == id else { throw APIClientError.invalidResponse }
-        return response.data
+        let response: DemoRunDTO = try await client().send(path: "/demo/runs/\(id)")
+        guard response.runID == id else { throw APIClientError.invalidResponse }
+        return response
     }
 
     func growthOverview() async throws -> GrowthOverviewDTO {
-        let response: APIEnvelope<GrowthOverviewDTO> = try await client().send(path: "/growth/overview")
-        return response.data
+        return try await client().send(path: "/growth/overview")
     }
 
     func checkIn(requestID: String) async throws -> GrowthOverviewDTO {
-        let response: APIEnvelope<CheckInResponse> = try await client().send(
+        let response: CheckInResponse = try await client().send(
             path: "/growth/check-ins", body: CheckInRequest(requestID: requestID),
             idempotencyKey: requestID
         )
-        return response.data.overview
+        return response.overview
     }
 
     func visualProfile() async throws -> UserVisualProfileDTO {
-        let response: APIEnvelope<UserVisualProfileDTO> = try await client().send(path: "/users/me/visual-profile")
-        return response.data
+        return try await client().send(path: "/users/me/visual-profile")
     }
 
     func portraitImage(id: String, variant: String) async throws -> Data {
@@ -725,7 +723,7 @@ final class BusinessDataService {
     }
 
     func generatePortrait(requestID: String, profileVersion: Int) async throws -> PortraitGenerateTicketDTO {
-        let response: APIEnvelope<PortraitGenerateTicketDTO> = try await client().send(
+        return try await client().send(
             path: "/users/me/portrait/generate",
             body: PortraitGenerateRequest(
                 requestID: requestID, profileVersion: profileVersion,
@@ -733,7 +731,6 @@ final class BusinessDataService {
             ),
             idempotencyKey: requestID, expectedStatusCode: 202
         )
-        return response.data
     }
 
     func portraitPreviewImage(jobID: String) async throws -> Data {
@@ -751,8 +748,7 @@ final class BusinessDataService {
                 throw DemoRunError.stale
             }
         }
-        let response: APIEnvelope<MakeupRenderJobDTO> = try await client().send(path: "/vision/jobs/\(jobID)")
-        let job = response.data
+        let job: MakeupRenderJobDTO = try await client().send(path: "/vision/jobs/\(jobID)")
         guard job.jobID == jobID, job.jobType == "makeup_render" else {
             throw APIClientError.invalidResponse
         }
@@ -776,8 +772,8 @@ final class BusinessDataService {
     }
 
     func styles() async throws -> [MakeupStyleDTO] {
-        let response: APIEnvelope<MakeupStylesDTO> = try await client().send(path: "/makeup/styles")
-        return response.data.items
+        let response: MakeupStylesDTO = try await client().send(path: "/makeup/styles")
+        return response.items
     }
 
     func cosmetics() async throws -> [CosmeticDTO] {
@@ -788,9 +784,9 @@ final class BusinessDataService {
             var components = URLComponents()
             if let cursor { components.queryItems = [URLQueryItem(name: "cursor", value: cursor)] }
             let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
-            let response: APIEnvelope<CosmeticsPageDTO> = try await client().send(path: "/cosmetics\(query)")
-            items.append(contentsOf: response.data.items)
-            cursor = response.data.nextCursor
+            let response: CosmeticsPageDTO = try await client().send(path: "/cosmetics\(query)")
+            items.append(contentsOf: response.items)
+            cursor = response.nextCursor
             if let cursor, !seenCursors.insert(cursor).inserted { throw APIClientError.invalidResponse }
         } while cursor != nil
         return items
@@ -804,7 +800,7 @@ final class BusinessDataService {
             "material": .string(candidate.material),
             "summary": .string(candidate.summary)
         ]
-        let response: APIEnvelope<CosmeticDTO> = try await client().send(
+        return try await client().send(
             path: "/cosmetics",
             body: CreateCosmeticRequest(
                 requestID: requestID, sourceJobID: candidate.recognitionID,
@@ -814,7 +810,6 @@ final class BusinessDataService {
             idempotencyKey: requestID,
             demoRunID: try demoRunID()
         )
-        return response.data
     }
 
     func cosmeticImage(id: String) async throws -> Data {
@@ -828,18 +823,17 @@ final class BusinessDataService {
         guard !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw APIClientError.invalidResponse
         }
-        let response: APIEnvelope<CosmeticDTO> = try await client().send(
+        return try await client().send(
             path: "/cosmetics/\(id)", method: .patch,
             body: UpdateCosmeticRequest(displayName: displayName)
         )
-        return response.data
     }
 
     func deleteCosmetic(id: String) async throws {
-        let response: APIEnvelope<DeleteCosmeticResponse> = try await client().send(
+        let response: DeleteCosmeticResponse = try await client().send(
             path: "/cosmetics/\(id)", method: .delete
         )
-        guard response.data.deleted else { throw APIClientError.invalidResponse }
+        guard response.deleted else { throw APIClientError.invalidResponse }
     }
 
     func makeupHistory() async throws -> [MakeupHistoryDTO] {
@@ -850,35 +844,34 @@ final class BusinessDataService {
             var components = URLComponents()
             if let cursor { components.queryItems = [URLQueryItem(name: "cursor", value: cursor)] }
             let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
-            let response: APIEnvelope<MakeupHistoryPageDTO> = try await client().send(
+            let response: MakeupHistoryPageDTO = try await client().send(
                 path: "/makeup/sessions\(query)"
             )
-            items.append(contentsOf: response.data.items)
-            cursor = response.data.nextCursor
+            items.append(contentsOf: response.items)
+            cursor = response.nextCursor
             if let cursor, !seenCursors.insert(cursor).inserted { throw APIClientError.invalidResponse }
         } while cursor != nil
         return items
     }
 
     func makeupStats() async throws -> MakeupStatsDTO {
-        let response: APIEnvelope<MakeupStatsDTO> = try await client().send(path: "/makeup/stats")
-        return response.data
+        return try await client().send(path: "/makeup/stats")
     }
 
     func submitFeedback(sessionID: String, requestID: String, rating: Int) async throws {
         guard (1...5).contains(rating) else { throw APIClientError.invalidResponse }
-        let response: APIEnvelope<MakeupFeedbackResponse> = try await client().send(
+        let response: MakeupFeedbackResponse = try await client().send(
             path: "/makeup/sessions/\(sessionID)/feedback",
             body: MakeupFeedbackRequest(requestID: requestID, rating: rating, tags: [], comment: nil),
             idempotencyKey: requestID
         )
-        guard response.data.rating == rating else { throw APIClientError.invalidResponse }
+        guard response.rating == rating else { throw APIClientError.invalidResponse }
     }
 
     func createPlan(
         requestID: String, portraitJobID: String, styleID: String?, weather: WeatherContextDTO?
     ) async throws -> MakeupPlanTicketDTO {
-        let response: APIEnvelope<MakeupPlanTicketDTO> = try await client().send(
+        return try await client().send(
             path: "/makeup/plans",
             body: CreateMakeupPlanRequest(
                 requestID: requestID, portraitJobID: portraitJobID, styleID: styleID,
@@ -886,34 +879,30 @@ final class BusinessDataService {
             ),
             idempotencyKey: requestID, demoRunID: try demoRunID(), expectedStatusCode: 202
         )
-        return response.data
     }
 
     func plan(id: String) async throws -> MakeupPlanDTO {
-        let response: APIEnvelope<MakeupPlanDTO> = try await client().send(path: "/makeup/plans/\(id)")
-        return response.data
+        return try await client().send(path: "/makeup/plans/\(id)")
     }
 
     func startSession(requestID: String, planID: String) async throws -> MakeupSessionDTO {
-        let response: APIEnvelope<MakeupSessionDTO> = try await client().send(
+        return try await client().send(
             path: "/makeup/sessions",
             body: StartMakeupSessionRequest(requestID: requestID, planID: planID),
             idempotencyKey: requestID,
             demoRunID: try demoRunID()
         )
-        return response.data
     }
 
     func session(id: String) async throws -> MakeupSessionDTO {
-        let response: APIEnvelope<MakeupSessionDTO> = try await client().send(path: "/makeup/sessions/\(id)")
-        return response.data
+        return try await client().send(path: "/makeup/sessions/\(id)")
     }
 
     func action(
         sessionID: String, eventID: String, stepID: String, planVersion: Int,
         kind: String, direction: String?, committed: Bool?, visibleMS: Int
     ) async throws -> MakeupSessionDTO {
-        let response: APIEnvelope<MakeupSessionDTO> = try await client().send(
+        return try await client().send(
             path: "/makeup/sessions/\(sessionID)/actions",
             body: MakeupSessionActionRequest(
                 eventID: eventID, stepID: stepID, planVersion: planVersion,
@@ -923,11 +912,10 @@ final class BusinessDataService {
             idempotencyKey: eventID,
             demoRunID: try demoRunID()
         )
-        return response.data
     }
 
     func complete(sessionID: String, requestID: String) async throws -> MakeupCompletionDTO {
-        let response: APIEnvelope<MakeupCompletionDTO> = try await client().send(
+        return try await client().send(
             path: "/makeup/sessions/\(sessionID)/complete",
             body: CompleteMakeupSessionRequest(
                 requestID: requestID,
@@ -936,7 +924,6 @@ final class BusinessDataService {
             idempotencyKey: requestID,
             demoRunID: try demoRunID()
         )
-        return response.data
     }
 
     func tip(surface: String, planID: String? = nil, stepID: String? = nil) async throws -> KnowledgeTipDTO.Item? {
@@ -945,20 +932,19 @@ final class BusinessDataService {
         if let stepID { query.append(URLQueryItem(name: "step_id", value: stepID)) }
         var components = URLComponents()
         components.queryItems = query
-        let response: APIEnvelope<KnowledgeTipDTO> = try await client().send(
+        let response: KnowledgeTipDTO = try await client().send(
             path: "/knowledge/tip?\(components.percentEncodedQuery ?? "")"
         )
-        return response.data.item
+        return response.item
     }
 
     func weatherCopy(surface: String, styleID: String?, weather: WeatherContextDTO?) async throws -> WeatherCopyDTO {
         let requestID = UUID().uuidString
-        let response: APIEnvelope<WeatherCopyDTO> = try await client().send(
+        return try await client().send(
             path: "/assistant/weather-copy",
             body: WeatherCopyRequest(requestID: requestID, surface: surface, styleID: styleID, weather: weather),
             idempotencyKey: requestID
         )
-        return response.data
     }
 
     func recordTipEvent(_ item: KnowledgeTipDTO.Item, surface: String, type: String) async throws {
@@ -968,7 +954,7 @@ final class BusinessDataService {
             eventID: eventID, eventType: type, tipID: item.id, surface: surface,
             occurredAt: ISO8601DateFormatter().string(from: .now)
         )
-        let _: APIEnvelope<EmptyBusinessResponse> = try await client().send(
+        let _: EmptyBusinessResponse = try await client().send(
             path: "/behavior/events", body: body, idempotencyKey: eventID
         )
     }
