@@ -53,6 +53,37 @@ final class VisionJobServiceTests: XCTestCase {
         VisionURLProtocolStub.handler = nil
     }
 
+    func testDemoRunHeaderIsExplicitOnWritesAndAbsentOnReads() async throws {
+        struct Body: Encodable { let requestID: String }
+        VisionURLProtocolStub.handler = { request in
+            let isVisionJob = request.url?.path == "/v1/vision/jobs"
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: isVisionJob ? 202 : 200,
+                httpVersion: nil, headerFields: ["Content-Type": "application/json"]
+            )!
+            let data = isVisionJob
+                ? Data(#"{"data":{"job_id":"job-1","job_type":"face_analysis","status":"queued"}}"#.utf8)
+                : Data(#"{"data":{}}"#.utf8)
+            return (response, data)
+        }
+        let client = makeClient()
+        let image = try XCTUnwrap(UIImage(systemName: "circle.fill")?.jpegData(compressionQuality: 1))
+        _ = try await VisionJobService(client: client).create(
+            input: try VisionImageInput(photoData: image, contentType: "image/jpeg"),
+            capability: .faceAnalysis, requestID: "request-a", idempotencyKey: "request-a",
+            demoRunID: "run-a"
+        )
+        let _: JSONValue = try await client.send(
+            path: "/cosmetics", body: Body(requestID: "request-b"),
+            idempotencyKey: "request-b", demoRunID: "run-a"
+        )
+        let _: JSONValue = try await client.send(path: "/growth/overview")
+
+        XCTAssertEqual(VisionURLProtocolStub.requests.map {
+            $0.value(forHTTPHeaderField: "X-AuraEye-Demo-Run-ID")
+        }, ["run-a", "run-a", nil])
+    }
+
     func testEveryCapabilityUsesSameMultipartEndpointAndOriginalBytes() async throws {
         let original = try XCTUnwrap(UIImage(systemName: "circle.fill")?.jpegData(compressionQuality: 1))
         let input = try VisionImageInput(photoData: original, contentType: "image/jpeg")

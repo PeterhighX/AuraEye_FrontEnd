@@ -21,6 +21,42 @@ final class OnboardingService {
         self.faceAnalysisService = faceAnalysisService
     }
 
+    static func demoSteps(from run: DemoRunDTO, userID: String) -> [OnboardingStep] {
+        let completed = run.completed
+        let cosmeticSteps = ["eyeshadow_recognition", "eyeliner_recognition", "brush_recognition"]
+        let cosmeticCount = cosmeticSteps.filter { completed.contains($0) }.count
+        let nextCosmetic: String
+        switch run.nextStep {
+        case "eyeshadow_recognition": nextCosmetic = "眼影盘"
+        case "eyeliner_recognition": nextCosmetic = "眼线笔"
+        case "brush_recognition": nextCosmetic = "化妆刷"
+        default: nextCosmetic = "化妆品"
+        }
+        let faceDone = completed.contains("face_analysis")
+        let cosmeticsDone = cosmeticCount == cosmeticSteps.count
+        let planDone = completed.contains("makeup_plan") || completed.contains("makeup_practice")
+        return OnboardingStepKey.allCases.map { key in
+            let status: OnboardingStepStatus
+            let subtitle: String
+            switch key {
+            case .userProfile:
+                status = faceDone ? .completed : .inProgress
+                subtitle = key.defaultSubtitle
+            case .cosmetics:
+                status = cosmeticsDone ? .completed : (faceDone ? .inProgress : .pending)
+                subtitle = "✨ 本轮已确认 \(cosmeticCount)/3 类，接下来识别\(nextCosmetic)"
+            case .makeupGenerate:
+                status = planDone ? .completed : (cosmeticsDone ? .inProgress : .pending)
+                subtitle = key.defaultSubtitle
+            }
+            return OnboardingStep(
+                id: "demo_\(run.runID)_\(key.rawValue)", userId: userID,
+                stepKey: key, status: status, subtitle: subtitle,
+                previewAsset: key.defaultPreviewAsset, previewPath: nil, updatedAt: .now
+            )
+        }
+    }
+
     func loadSteps() throws -> (UserProfile, [OnboardingStep]) {
         let user = try userRepository.currentUser()
         try onboardingRepository.ensureDefaultSteps(userId: user.userId)
@@ -105,6 +141,8 @@ final class OnboardingService {
         profile.userFileJSON = analysis.profileJSON
         try userRepository.update(profile)
 
+        if SessionManager.shared.context?.accountMode == .demo { return [] }
+
         try onboardingRepository.updateStep(
             userId: user.userId,
             key: .userProfile,
@@ -139,6 +177,8 @@ final class OnboardingService {
         if let error = BusinessStore.shared.cosmeticsError {
             throw NSError(domain: "AuraEyeCosmetics", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
         }
+
+        if SessionManager.shared.context?.accountMode == .demo { return [] }
 
         let categories = Set(
             BusinessStore.shared.cosmetics.compactMap { CosmeticCategory.from(raw: $0.category) }

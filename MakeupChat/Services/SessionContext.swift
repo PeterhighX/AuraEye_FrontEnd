@@ -18,10 +18,14 @@ final class SessionManager {
     static let shared = SessionManager()
 
     private(set) var context: SessionContext?
+    private var demoRun: (accountID: String, value: DemoRunDTO)?
 
     private init() {}
 
     func establish(account: AuthenticatedAccount) {
+        if context?.userId != account.userId || context?.accountMode != account.accountMode {
+            demoRun = nil
+        }
         context = SessionContext(
             userId: account.userId,
             username: account.username,
@@ -35,5 +39,33 @@ final class SessionManager {
 
     func clear() {
         context = nil
+        demoRun = nil
+    }
+
+    func installDemoRun(_ run: DemoRunDTO, for accountID: String) {
+        guard context?.accountMode == .demo, context?.userId == accountID else { return }
+        demoRun = (accountID, run)
+    }
+
+    func clearDemoRun() {
+        demoRun = nil
+    }
+
+    func currentDemoRunID() throws -> String? {
+        guard let context else { return nil }
+        guard context.accountMode == .demo else { return nil }
+        guard let demoRun, demoRun.accountID == context.userId else {
+            throw DemoRunError.unavailable
+        }
+        return demoRun.value.runID
+    }
+
+    func currentDemoRun() throws -> DemoRunDTO? {
+        guard let context else { return nil }
+        guard context.accountMode == .demo else { return nil }
+        guard let demoRun, demoRun.accountID == context.userId else {
+            throw DemoRunError.unavailable
+        }
+        return demoRun.value
     }
 }

@@ -373,7 +373,8 @@ final class VisionJobService {
         capability: VisionCapability,
         options: VisionJobOptions? = nil,
         requestID: String,
-        idempotencyKey: String
+        idempotencyKey: String,
+        demoRunID: String? = nil
     ) async throws -> APIResponse<VisionJobTicketDTO> {
         let payload: (data: Data, mimeType: String)
         do {
@@ -395,6 +396,7 @@ final class VisionJobService {
                 imageData: payload.data,
                 imageContentType: payload.mimeType,
                 idempotencyKey: idempotencyKey,
+                demoRunID: demoRunID,
                 expectedStatusCode: 202
             )
         } catch let error as APIClientError {

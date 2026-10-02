@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var session = AppSession()
     @State private var loginViewModel = LoginViewModel()
     @State private var homePath = NavigationPath()
@@ -19,6 +20,11 @@ struct ContentView: View {
                     }
                 }
                 .transition(.opacity)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, session.isDemoAccount {
+                Task { await session.refreshDemoRun() }
             }
         }
     }

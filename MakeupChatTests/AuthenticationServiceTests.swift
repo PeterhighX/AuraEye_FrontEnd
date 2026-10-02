@@ -60,6 +60,46 @@ final class AuthenticationServiceTests: XCTestCase {
         XCTAssertEqual(session.selectedLookID, "chinese_warm")
     }
 
+    @MainActor
+    func testDemoRunSurvivesTokenRefreshButClearsOnAccountSwitch() throws {
+        let demo = AuthenticatedAccount(
+            userId: "demo-1", username: "demo", displayName: "Demo",
+            accessToken: "token-a", expiresAt: nil, accountMode: .demo, features: .demo
+        )
+        let run = DemoRunDTO(
+            runID: "run-a", buildID: UUID().uuidString, status: "in_progress",
+            requiredSteps: ["face_analysis"], completedSteps: [], nextStep: "face_analysis",
+            activePlanID: nil, activeSessionID: nil, updatedAt: "2026-10-01T00:00:00Z"
+        )
+        SessionManager.shared.establish(account: demo)
+        defer { SessionManager.shared.clear() }
+        SessionManager.shared.installDemoRun(run, for: demo.userId)
+        SessionManager.shared.establish(account: AuthenticatedAccount(
+            userId: demo.userId, username: demo.username, displayName: demo.displayName,
+            accessToken: "token-b", expiresAt: nil, accountMode: .demo, features: .demo
+        ))
+        XCTAssertEqual(try SessionManager.shared.currentDemoRunID(), "run-a")
+
+        SessionManager.shared.establish(account: AuthenticatedAccount(
+            userId: "standard-2", username: "other", displayName: "Other",
+            accessToken: "token-c", expiresAt: nil, accountMode: .standard, features: .standard
+        ))
+        XCTAssertNil(try SessionManager.shared.currentDemoRunID())
+    }
+
+    @MainActor
+    func testDemoOnboardingProjectionUsesOnlyCurrentRunSteps() {
+        let run = DemoRunDTO(
+            runID: "build-b-run", buildID: UUID().uuidString, status: "in_progress",
+            requiredSteps: ["face_analysis", "eyeshadow_recognition", "eyeliner_recognition", "brush_recognition", "makeup_plan", "makeup_practice"],
+            completedSteps: [], nextStep: "face_analysis", activePlanID: nil,
+            activeSessionID: nil, updatedAt: "2026-10-01T00:00:00Z"
+        )
+        let steps = OnboardingService.demoSteps(from: run, userID: "existing-demo-user")
+        XCTAssertEqual(steps.map(\.status), [.inProgress, .pending, .pending])
+        XCTAssertTrue(steps.allSatisfy { $0.previewPath == nil })
+    }
+
     func testLogoutRequestEncodesRequiredRefreshTokenAndRequestID() throws {
         let request = LogoutRequest(
             refreshToken: "refresh-token-value",

@@ -398,9 +398,10 @@ actor APIClient {
         method: HTTPMethod = .post,
         body: Body,
         idempotencyKey: String? = nil,
+        demoRunID: String? = nil,
         expectedStatusCode: Int? = nil
     ) async throws -> Response {
-        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey)
+        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey, demoRunID: demoRunID)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         return try await perform(request, expectedStatusCode: expectedStatusCode).value
@@ -433,9 +434,10 @@ actor APIClient {
         method: HTTPMethod = .post,
         body: Body,
         idempotencyKey: String? = nil,
+        demoRunID: String? = nil,
         expectedStatusCode: Int? = nil
     ) async throws -> APIResponse<Response> {
-        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey)
+        var request = try makeRequest(path: path, method: method, idempotencyKey: idempotencyKey, demoRunID: demoRunID)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         return try await perform(request, expectedStatusCode: expectedStatusCode)
@@ -470,6 +472,7 @@ actor APIClient {
         imageData: Data,
         imageContentType: String,
         idempotencyKey: String,
+        demoRunID: String? = nil,
         expectedStatusCode: Int? = nil
     ) async throws -> APIResponse<Response> {
         guard imageContentType.lowercased().hasPrefix("image/") else {
@@ -480,7 +483,8 @@ actor APIClient {
         var request = try makeRequest(
             path: path,
             method: .post,
-            idempotencyKey: idempotencyKey
+            idempotencyKey: idempotencyKey,
+            demoRunID: demoRunID
         )
         request.setValue(
             "multipart/form-data; boundary=\(boundary)",
@@ -554,7 +558,8 @@ actor APIClient {
     private func makeRequest(
         path: String,
         method: HTTPMethod,
-        idempotencyKey: String? = nil
+        idempotencyKey: String? = nil,
+        demoRunID: String? = nil
     ) throws -> URLRequest {
         let normalizedPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
         guard normalizedPath != "v1", !normalizedPath.hasPrefix("v1/") else {
@@ -575,6 +580,10 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let idempotencyKey, !idempotencyKey.isEmpty {
             request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        }
+        if let demoRunID {
+            guard !demoRunID.isEmpty else { throw APIClientError.invalidResponse }
+            request.setValue(demoRunID, forHTTPHeaderField: "X-AuraEye-Demo-Run-ID")
         }
         if let token = configuration.accessToken, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

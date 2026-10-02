@@ -47,6 +47,7 @@ final class UserProfileSetupViewModel {
             try userRepository.update(user)
             session.markFaceScanned(imagePath: result.portraitPath)
             await session.business.refreshProfile()
+            if session.isDemoAccount { await session.refreshDemoRun() }
             analysisState = .succeeded(result)
             return true
         } catch is CancellationError {
@@ -58,6 +59,7 @@ final class UserProfileSetupViewModel {
             errorMessage = nil
             return false
         } catch let failure as VisionRequestFailure {
+            await session.handleDemoWriteError(failure)
             analysisState = .failed(failure.visionError)
             errorMessage = visionFailureMessage(failure, fallbackStage: fallbackFailureStage)
             return false
@@ -70,6 +72,7 @@ final class UserProfileSetupViewModel {
             errorMessage = error.localizedDescription
             return false
         } catch {
+            await session.handleDemoWriteError(error)
             let failure = VisionRequestFailure.capturing(error, stage: fallbackFailureStage)
             analysisState = .failed(failure.visionError)
             errorMessage = visionFailureMessage(failure, fallbackStage: fallbackFailureStage)

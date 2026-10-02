@@ -37,6 +37,7 @@ struct MakeupPreviewView: View {
 
     private var generatedPlan: MakeupPlanDTO? {
         guard let plan = session.business.activePlan else { return nil }
+        if session.isDemoAccount && session.demoRun?.activePlanID != plan.planID { return nil }
         if let style = selectedStyle, plan.styleID != style.id { return nil }
         return plan
     }
@@ -110,7 +111,15 @@ struct MakeupPreviewView: View {
             isStylesLoading = false
             usesAutomaticStyle = styles.isEmpty && session.business.stylesError == nil
             await session.business.refreshProfile()
-            if let index = styles.firstIndex(where: { $0.id == session.selectedLookID }) {
+            if let plan = session.business.activePlan,
+               (!session.isDemoAccount || session.demoRun?.activePlanID == plan.planID) {
+                if let index = styles.firstIndex(where: { $0.id == plan.styleID }) {
+                    selectedStyleIndex = index
+                    usesAutomaticStyle = false
+                } else {
+                    usesAutomaticStyle = true
+                }
+            } else if let index = styles.firstIndex(where: { $0.id == session.selectedLookID }) {
                 selectedStyleIndex = index
             }
         }
@@ -268,7 +277,7 @@ struct MakeupPreviewView: View {
                     .frame(height: 150)
                     .foregroundStyle(.secondary)
             }
-            Text(renderMessage ?? "妆容文字已就绪，真实试妆图生成中…")
+            Text(renderMessage ?? "妆容文字已就绪，试妆图生成中…")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -288,12 +297,12 @@ struct MakeupPreviewView: View {
                     return
                 }
                 if current.render.status == "succeeded", let jobID = current.render.jobID,
-                   let _ = try await BusinessDataService.shared.renderResult(jobID: jobID) {
+                   let result = try await BusinessDataService.shared.renderResult(jobID: jobID, plan: current) {
                     let data = try await BusinessDataService.shared.renderResultImage(jobID: jobID)
                     guard !Task.isCancelled, let image = UIImage(data: data) else { return }
                     renderedImage = image
                     renderedPlanID = plan.planID
-                    renderMessage = "真实试妆效果"
+                    renderMessage = result.resultSource == "demo_seed" ? "演示缓存试妆效果" : "真实试妆效果"
                     return
                 }
             } catch {
@@ -306,14 +315,24 @@ struct MakeupPreviewView: View {
     }
 
     private func generatePlan(_ style: MakeupStyleDTO?) {
-        guard let sourceJobID = session.business.visualProfile?.sourceJobID else {
-            errorMessage = "请先完成真实面部分析，再生成妆容。"
+        if session.isDemoAccount, let error = session.demoRunError {
+            errorMessage = "演示流程暂不可用：\(error)"
             return
         }
-        guard session.business.visualProfile?.resultSource == "remote_provider" else {
-            errorMessage = "当前档案来自演示分析，请重新完成真实面部分析。"
+        guard let profile = session.business.visualProfile else {
+            errorMessage = "请先完成面部分析，再生成妆容。"
             return
         }
+        let isAllowedSource = session.isDemoAccount
+            ? (session.demoRun?.completed.contains("face_analysis") == true && profile.resultSource == "demo_seed")
+            : profile.resultSource == "remote_provider"
+        guard isAllowedSource else {
+            errorMessage = session.isDemoAccount
+                ? "请先完成本轮演示面部分析。"
+                : "请先完成真实面部分析。"
+            return
+        }
+        let sourceJobID = profile.sourceJobID
         let requestID = planRequestID ?? UUID().uuidString
         planRequestID = requestID
         isSubmitting = true
@@ -331,6 +350,12 @@ struct MakeupPreviewView: View {
                               (plan.portrait == nil || plan.portrait?.sourceJobID == sourceJobID) else {
                             throw APIClientError.invalidResponse
                         }
+                        if session.isDemoAccount {
+                            await session.refreshDemoRun()
+                            guard session.demoRun?.activePlanID == plan.planID else {
+                                throw DemoRunError.stale
+                            }
+                        }
                         session.business.install(plan: plan)
                         return
                     }
@@ -343,6 +368,8 @@ struct MakeupPreviewView: View {
                 }
                 errorMessage = "生成时间较长，请稍后重新进入查看。"
             } catch {
+                await session.handleDemoWriteError(error)
+                if DemoRunError.isStale(error) { planRequestID = nil }
                 if (error as? APIClientError)?.problemCode == "INSUFFICIENT_POINTS" {
                     await session.business.refreshGrowth()
                 }
@@ -365,6 +392,10 @@ struct MakeupPreviewView: View {
     }
 
     private func beginPractice(_ plan: MakeupPlanDTO) {
+        if session.isDemoAccount && session.demoRun?.activePlanID != plan.planID {
+            errorMessage = DemoRunError.stale.localizedDescription
+            return
+        }
         let requestID = sessionRequestID ?? UUID().uuidString
         sessionRequestID = requestID
         isSubmitting = true
@@ -374,9 +405,17 @@ struct MakeupPreviewView: View {
                 let practice = try await BusinessDataService.shared.startSession(
                     requestID: requestID, planID: plan.planID
                 )
+                if session.isDemoAccount {
+                    await session.refreshDemoRun()
+                    guard session.demoRun?.activeSessionID == practice.sessionID else {
+                        throw DemoRunError.stale
+                    }
+                }
                 session.business.install(session: practice)
                 path.append(AppRoute.makeupSteps)
             } catch {
+                await session.handleDemoWriteError(error)
+                if DemoRunError.isStale(error) { sessionRequestID = nil }
                 errorMessage = error.localizedDescription
             }
         }

@@ -82,13 +82,15 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
 
     func analyzePortrait(_ input: PortraitInput) async throws -> VisualProfileResult {
         let capability = VisionCapability.faceAnalysis
-        let pending = try persistence.resumableJob(accountID: input.userID, capability: capability)
+        let demoRunID = try await MainActor.run { try SessionManager.shared.currentDemoRunID() }
+        let pendingAccountID = demoRunID.map { "\(input.userID)#\($0)" } ?? input.userID
+        let pending = try persistence.resumableJob(accountID: pendingAccountID, capability: capability)
         let requestID = pending?.requestID ?? "req_profile_\(UUID().uuidString.lowercased())"
         let idempotencyKey = pending?.idempotencyKey ?? "idem_\(UUID().uuidString.lowercased())"
 
         if pending == nil {
             try persistence.savePendingJob(VisionPendingJob(
-                accountID: input.userID,
+                accountID: pendingAccountID,
                 capability: capability,
                 requestID: requestID,
                 idempotencyKey: idempotencyKey,
@@ -108,14 +110,15 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
                     capability: capability,
                     options: .faceAnalysis(.init()),
                     requestID: requestID,
-                    idempotencyKey: idempotencyKey
+                    idempotencyKey: idempotencyKey,
+                    demoRunID: demoRunID
                 )
                 guard response.value.capability == capability else {
                     throw VisionAPIError.resultInvalid
                 }
                 jobID = response.value.jobId
                 try persistence.savePendingJob(VisionPendingJob(
-                    accountID: input.userID,
+                    accountID: pendingAccountID,
                     capability: capability,
                     requestID: requestID,
                     idempotencyKey: idempotencyKey,
@@ -133,7 +136,7 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
                 fetch: { [jobs] in try await jobs.job(id: $0) },
                 onResponse: { [persistence] metadata in
                     try? persistence.savePendingJob(VisionPendingJob(
-                        accountID: input.userID,
+                        accountID: pendingAccountID,
                         capability: capability,
                         requestID: requestID,
                         idempotencyKey: idempotencyKey,
@@ -146,10 +149,16 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
                 }
             )
             guard dto.schemaVersion == "1.0",
-                  ["remote_provider", "demo_seed", "demo_fallback"].contains(dto.resultSource) else {
+                  (demoRunID == nil
+                    ? dto.resultSource == "remote_provider"
+                    : dto.resultSource == "demo_seed") else {
                 throw VisionAPIError.resultInvalid
             }
-            try persistence.removePendingJob(accountID: input.userID, capability: capability)
+            if let demoRunID {
+                let currentRunID = try await MainActor.run { try SessionManager.shared.currentDemoRunID() }
+                guard currentRunID == demoRunID else { throw DemoRunError.stale }
+            }
+            try persistence.removePendingJob(accountID: pendingAccountID, capability: capability)
             let portraitPath: String
             if let originalData = input.originalData, let contentType = input.contentType {
                 portraitPath = try LocalMediaStore.saveData(
@@ -167,12 +176,12 @@ final class UnifiedVisualProfileProvider: VisualProfileProviding {
             return VisualProfileResult(dto: dto, portraitPath: portraitPath)
         } catch let failure as VisionRequestFailure {
             if Self.shouldClearPendingJob(after: failure.visionError) {
-                try? persistence.removePendingJob(accountID: input.userID, capability: capability)
+                try? persistence.removePendingJob(accountID: pendingAccountID, capability: capability)
             }
             throw failure
         } catch let error as VisionAPIError {
             if Self.shouldClearPendingJob(after: error) {
-                try? persistence.removePendingJob(accountID: input.userID, capability: capability)
+                try? persistence.removePendingJob(accountID: pendingAccountID, capability: capability)
             }
             throw error
         }
@@ -214,6 +223,8 @@ final class AccountAwareVisualProfileProvider: VisualProfileProviding {
             return try await UnifiedVisualProfileProvider(client: client).analyzePortrait(input)
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as DemoRunError {
+            throw error
         } catch {
             let failure = VisionRequestFailure.capturing(error, stage: .processingResult)
             _ = visionFailureMessage(failure, fallbackStage: .processingResult)

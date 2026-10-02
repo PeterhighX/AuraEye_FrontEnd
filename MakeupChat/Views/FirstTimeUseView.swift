@@ -38,7 +38,7 @@ struct FirstTimeUseView: View {
 
                         if let error = viewModel.loadErrorMessage {
                             VStack(spacing: 8) {
-                                Text("用户数据暂不可用：\(error)")
+                                Text("\(session.isDemoAccount ? "演示流程暂不可用" : "用户数据暂不可用")：\(error)")
                                     .font(.callout).foregroundStyle(.secondary)
                                 Button("重试") { Task { await viewModel.reload() } }
                             }
@@ -242,6 +242,7 @@ struct FirstTimeUseView: View {
 
     private func handleStepTap(_ step: OnboardingStep) {
         if step.stepKey == .cosmetics,
+           !session.isDemoAccount,
            !session.onboardingCosmeticCategories.isEmpty,
            !session.hasAllRequiredOnboardingCosmetics {
             path.append(AppRoute.onboardingCabinet)
@@ -266,6 +267,11 @@ struct FirstTimeUseView: View {
                 Text(product.displayName)
                     .font(.title3)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if session.isDemoAccount && product.resultSource == "demo_fallback" {
+                    Text("演示数据 · 服务端审核缓存")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 LocalImageView(storedPath: product.previewPath)
                     .frame(width: 160, height: 160)

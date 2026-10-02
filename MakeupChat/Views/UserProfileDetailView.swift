@@ -98,7 +98,12 @@ struct UserProfileDetailView: View {
             get: { quickStartMessage != nil },
             set: { if !$0 { quickStartMessage = nil } }
         )) {
-            Button("重试") { Task { await session.business.refreshGrowth() } }
+            Button("重试") {
+                Task {
+                    if session.isDemoAccount { await session.openDemoRun() }
+                    else { await session.business.refreshGrowth() }
+                }
+            }
         } message: {
             Text(quickStartMessage ?? "请稍后重试。")
         }
@@ -123,7 +128,7 @@ struct UserProfileDetailView: View {
         .task {
             await session.business.refreshProfile()
             if session.shouldOfferPortraitConsent,
-               session.business.visualProfile?.resultSource == "remote_provider",
+               canGeneratePortrait,
                session.business.visualProfile?.portrait == nil {
                 session.shouldOfferPortraitConsent = false
                 showsPortraitConsent = true
@@ -206,7 +211,7 @@ struct UserProfileDetailView: View {
                     Text(portraitStatus(profile.portrait))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    if profile.resultSource == "remote_provider",
+                    if canGeneratePortrait,
                        (profile.portrait == nil || profile.portrait?.status == "failed") {
                         Button(isGeneratingPortrait ? "生成中…" : "生成透明头像") {
                             showsPortraitConsent = true
@@ -316,7 +321,9 @@ struct UserProfileDetailView: View {
                 if let route = session.routeForQuickStart() {
                     path.append(route)
                 } else {
-                    quickStartMessage = session.business.growthError ?? "正在读取上妆记录，请稍后重试。"
+                    quickStartMessage = session.isDemoAccount
+                        ? (session.demoRunError ?? "正在打开演示流程，请稍后重试。")
+                        : (session.business.growthError ?? "正在读取上妆记录，请稍后重试。")
                 }
             } label: {
                 bottomButtonLabel("继续上妆")
@@ -352,7 +359,7 @@ struct UserProfileDetailView: View {
 
     private func requestPortrait() {
         guard let version = session.business.visualProfile?.profileVersion,
-              session.business.visualProfile?.resultSource == "remote_provider",
+              canGeneratePortrait,
               !isGeneratingPortrait else { return }
         if session.business.visualProfile?.portrait?.status == "failed" {
             portraitRequestID = nil
@@ -380,6 +387,15 @@ struct UserProfileDetailView: View {
 
     private var usesFixedDemoGallery: Bool {
         SessionManager.shared.context?.features.galleryMode == .fixedDemo
+    }
+
+    private var canGeneratePortrait: Bool {
+        guard let profile = session.business.visualProfile else { return false }
+        if session.isDemoAccount {
+            return session.demoRun?.completed.contains("face_analysis") == true
+                && profile.resultSource == "demo_seed"
+        }
+        return profile.resultSource == "remote_provider"
     }
 
     private func runAnalysis() {
@@ -435,7 +451,8 @@ struct UserProfileDetailView: View {
                 capturedPortrait = nil
                 user = profile
                 await session.business.refreshProfile()
-                if session.business.visualProfile?.resultSource == "remote_provider",
+                if session.isDemoAccount { await session.refreshDemoRun() }
+                if canGeneratePortrait,
                    session.business.visualProfile?.portrait == nil {
                     showsPortraitConsent = true
                 }
@@ -471,7 +488,8 @@ struct UserProfileDetailView: View {
             capturedPortrait = nil
             user = profile
             await session.business.refreshProfile()
-            if session.business.visualProfile?.resultSource == "remote_provider",
+            if session.isDemoAccount { await session.refreshDemoRun() }
+            if canGeneratePortrait,
                session.business.visualProfile?.portrait == nil {
                 showsPortraitConsent = true
             }
