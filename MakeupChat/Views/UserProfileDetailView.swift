@@ -399,7 +399,7 @@ struct UserProfileDetailView: View {
             return session.demoRun?.completed.contains("face_analysis") == true
                 && profile.resultSource == "demo_seed"
         }
-        return profile.resultSource == "remote_provider"
+        return false
     }
 
     private func runAnalysis() {
