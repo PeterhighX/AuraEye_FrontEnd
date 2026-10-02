@@ -4,6 +4,8 @@ import UIKit
 struct ChatBubbleView: View {
     let message: ChatMessage
     var onRetry: (() -> Void)?
+    var onRetryAttachment: ((ChatAttachment) -> Void)?
+    var onOpenAttachment: ((ChatAttachment) -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -31,23 +33,8 @@ struct ChatBubbleView: View {
                 .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(.secondary)
             } else {
-                ForEach(message.imageAttachments, id: \.id) { attachment in
-                    AsyncImage(url: attachment.thumbnailURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                        case .failure:
-                            Image(systemName: "photo.badge.exclamationmark")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                        default:
-                            ProgressView()
-                        }
-                    }
-                    .frame(width: 238, height: 168)
-                    .background(.white.opacity(0.45))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .clipped()
+                ForEach(message.attachments) { attachment in
+                    attachmentView(attachment)
                 }
 
                 if !message.text.isEmpty {
@@ -67,6 +54,39 @@ struct ChatBubbleView: View {
         .frame(maxWidth: 274, alignment: .leading)
         .background(message.sender == .user ? Color(red: 0.88, green: 0.88, blue: 1.0) : Color.white.opacity(0.75))
         .clipShape(bubbleShape)
+    }
+
+    @ViewBuilder
+    private func attachmentView(_ attachment: ChatAttachment) -> some View {
+        let height = min(280, max(120, 238 * CGFloat(attachment.height) / CGFloat(attachment.width)))
+        if let image = LocalMediaStore.loadImage(fromStoredPath: attachment.localThumbnailPath)
+            ?? LocalMediaStore.loadImage(fromStoredPath: attachment.localContentPath) {
+            Button {
+                onOpenAttachment?(attachment)
+            } label: {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 238, height: height)
+                    .clipped()
+            }
+            .buttonStyle(.plain)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else {
+            VStack(spacing: 9) {
+                Image(systemName: "photo.badge.arrow.down")
+                    .font(.title2)
+                Button("重新加载图片") {
+                    onRetryAttachment?(attachment)
+                }
+                .buttonStyle(.borderless)
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .frame(width: 238, height: height)
+            .background(.white.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
     }
 
     @ViewBuilder

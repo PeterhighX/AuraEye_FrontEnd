@@ -4,6 +4,19 @@ protocol AIAgentServicing: Sendable {
     func stream(_ request: ChatSendRequest) -> AsyncThrowingStream<ChatStreamEvent, Error>
 }
 
+enum ChatAssetVariant: String, Sendable {
+    case thumbnail
+    case full
+}
+
+protocol ChatAssetDownloading: Sendable {
+    func download(
+        assetID: String,
+        variant: ChatAssetVariant,
+        expectedMimeType: String
+    ) async throws -> Data
+}
+
 struct ChatSendRequest: Encodable, Sendable {
     let requestId: String
     let conversationId: String
@@ -21,6 +34,8 @@ struct ChatReply: Sendable, Equatable {
     let conversationId: String
     let messageId: String
     let message: String
+    let replyType: ChatReplyType
+    let attachments: [ChatAttachment]
     let avatarAsset: String
     let status: String
     let serverRequestId: String?

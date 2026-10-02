@@ -27,6 +27,10 @@ enum APIEndpoint {
     static func visionJobResultImage(_ jobID: String) -> String {
         "/vision/jobs/\(jobID)/result-image"
     }
+
+    static func chatAssetContent(_ assetID: String, variant: ChatAssetVariant) -> String {
+        "/chat/assets/\(assetID)/content?variant=\(variant.rawValue)"
+    }
 }
 
 enum APIConfigurationError: LocalizedError, Equatable, Sendable {
@@ -987,20 +991,79 @@ private struct RemoteChatStreamPayload: Decodable {
     let toolCallId: String?
     let name: String?
     let status: String?
+    let replyType: ChatReplyType?
+    let attachments: [RemoteChatAttachment]?
 
     enum CodingKeys: String, CodingKey {
         case type
         case requestId = "request_id"
         case conversationId = "conversation_id"
         case messageId = "message_id"
-        case delta, message, code, detail, retryable, name, status
+        case delta, message, code, detail, retryable, name, status, attachments
+        case replyType = "reply_type"
         case serverRequestId = "server_request_id"
         case httpStatus = "http_status"
         case toolCallId = "tool_call_id"
     }
 }
 
-final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
+private struct RemoteChatAttachment: Decodable {
+    let id: String
+    let type: String
+    let source: String
+    let thumbnailURL: String
+    let contentURL: String
+    let mimeType: String
+    let width: Int
+    let height: Int
+    let expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, source, width, height
+        case thumbnailURL = "thumbnail_url"
+        case contentURL = "content_url"
+        case mimeType = "mime_type"
+        case expiresAt = "expires_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard container.contains(.expiresAt) else {
+            throw DecodingError.keyNotFound(
+                CodingKeys.expiresAt,
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "expires_at is required and may be null"
+                )
+            )
+        }
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decode(String.self, forKey: .type)
+        source = try container.decode(String.self, forKey: .source)
+        thumbnailURL = try container.decode(String.self, forKey: .thumbnailURL)
+        contentURL = try container.decode(String.self, forKey: .contentURL)
+        mimeType = try container.decode(String.self, forKey: .mimeType)
+        width = try container.decode(Int.self, forKey: .width)
+        height = try container.decode(Int.self, forKey: .height)
+        if let value = try container.decodeIfPresent(String.self, forKey: .expiresAt) {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let standard = ISO8601DateFormatter()
+            guard let date = fractional.date(from: value) ?? standard.date(from: value) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .expiresAt,
+                    in: container,
+                    debugDescription: "expires_at must be an ISO-8601 datetime or null"
+                )
+            }
+            expiresAt = date
+        } else {
+            expiresAt = nil
+        }
+    }
+}
+
+final class RemoteAIAgentService: AIAgentServicing, ChatAssetDownloading, @unchecked Sendable {
     private let client: APIClient
 
     init(client: APIClient) {
@@ -1064,14 +1127,22 @@ final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
                         case "message.completed":
                             guard let messageId = payload.messageId,
                                   let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  let replyType = payload.replyType,
+                                  let remoteAttachments = payload.attachments,
                                   !messageId.isEmpty, !message.isEmpty else {
                                 throw ChatContractError.invalidResponse
                             }
+                            let attachments = try validateAttachments(
+                                remoteAttachments,
+                                replyType: replyType
+                            )
                             continuation.yield(.completed(ChatReply(
                                 clientRequestId: request.requestId,
                                 conversationId: request.conversationId,
                                 messageId: messageId,
                                 message: message,
+                                replyType: replyType,
+                                attachments: attachments,
                                 avatarAsset: "AvatarAI2",
                                 status: "completed",
                                 serverRequestId: payload.serverRequestId
@@ -1102,6 +1173,20 @@ final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
         }
     }
 
+    func download(
+        assetID: String,
+        variant: ChatAssetVariant,
+        expectedMimeType: String
+    ) async throws -> Data {
+        guard isValidIdentifier(assetID), Self.allowedImageTypes.contains(expectedMimeType) else {
+            throw ChatContractError.invalidResponse
+        }
+        return try await client.downloadResponse(
+            path: APIEndpoint.chatAssetContent(assetID, variant: variant),
+            expectedContentType: expectedMimeType
+        ).data
+    }
+
     private func validate(_ request: ChatSendRequest) throws {
         let idPattern = #"^[A-Za-z0-9._:-]{8,128}$"#
         let message = request.message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1122,4 +1207,70 @@ final class RemoteAIAgentService: AIAgentServicing, @unchecked Sendable {
             throw ChatContractError.mismatchedResponse
         }
     }
+
+    private func validateAttachments(
+        _ payloads: [RemoteChatAttachment],
+        replyType: ChatReplyType
+    ) throws -> [ChatAttachment] {
+        switch replyType {
+        case .text where !payloads.isEmpty,
+             .image where payloads.isEmpty,
+             .mixed where payloads.isEmpty:
+            throw ChatContractError.invalidResponse
+        default:
+            break
+        }
+        guard Set(payloads.map(\.id)).count == payloads.count else {
+            throw ChatContractError.invalidResponse
+        }
+
+        return try payloads.map { payload in
+            guard isValidIdentifier(payload.id),
+                  payload.type == "image",
+                  payload.source == "generated",
+                  Self.allowedImageTypes.contains(payload.mimeType),
+                  payload.width > 0,
+                  payload.height > 0,
+                  isValidAssetPath(payload.thumbnailURL, assetID: payload.id, variant: .thumbnail),
+                  isValidAssetPath(payload.contentURL, assetID: payload.id, variant: .full) else {
+                throw ChatContractError.invalidResponse
+            }
+            return ChatAttachment(
+                id: payload.id,
+                type: payload.type,
+                source: payload.source,
+                thumbnailURL: payload.thumbnailURL,
+                contentURL: payload.contentURL,
+                mimeType: payload.mimeType,
+                width: payload.width,
+                height: payload.height,
+                expiresAt: payload.expiresAt,
+                localThumbnailPath: nil,
+                localContentPath: nil
+            )
+        }
+    }
+
+    private func isValidIdentifier(_ value: String) -> Bool {
+        value.range(of: #"^[A-Za-z0-9._:-]{8,128}$"#, options: .regularExpression) != nil
+    }
+
+    private func isValidAssetPath(
+        _ value: String,
+        assetID: String,
+        variant: ChatAssetVariant
+    ) -> Bool {
+        guard let components = URLComponents(string: value),
+              components.scheme == nil,
+              components.host == nil,
+              components.path == "/v1/chat/assets/\(assetID)/content",
+              components.queryItems == [URLQueryItem(name: "variant", value: variant.rawValue)] else {
+            return false
+        }
+        return true
+    }
+
+    private static let allowedImageTypes: Set<String> = [
+        "image/png", "image/jpeg", "image/webp"
+    ]
 }

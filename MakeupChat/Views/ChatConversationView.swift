@@ -7,6 +7,7 @@ struct ChatConversationView: View {
     let layoutMode: LayoutMode
     var onBack: () -> Void = {}
     @State private var draftText = ""
+    @State private var selectedAttachment: ChatAttachment?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,9 +31,12 @@ struct ChatConversationView: View {
                                     .padding(.bottom, 8)
                             }
 
-                            ChatBubbleView(message: message) {
-                                viewModel.retry(message: message)
-                            }
+                            ChatBubbleView(
+                                message: message,
+                                onRetry: { viewModel.retry(message: message) },
+                                onRetryAttachment: { viewModel.retry(attachment: $0) },
+                                onOpenAttachment: { selectedAttachment = $0 }
+                            )
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 6)
@@ -58,6 +62,9 @@ struct ChatConversationView: View {
             }
         }
         .onAppear(perform: viewModel.reload)
+        .fullScreenCover(item: $selectedAttachment) { attachment in
+            ChatAttachmentPreview(attachment: attachment)
+        }
     }
 
     private func sendDraft() {
@@ -78,6 +85,52 @@ struct ChatConversationView: View {
         if calendar.isDateInToday(date) { return "今天" }
         if calendar.isDateInYesterday(date) { return "昨天" }
         return date.formatted(.dateTime.year().month().day())
+    }
+}
+
+private struct ChatAttachmentPreview: View {
+    let attachment: ChatAttachment
+    @Environment(\.dismiss) private var dismiss
+
+    private var localURL: URL? {
+        if LocalMediaStore.fileExists(storedPath: attachment.localContentPath) {
+            return LocalMediaStore.fileURL(forStoredPath: attachment.localContentPath)
+        }
+        return LocalMediaStore.fileURL(forStoredPath: attachment.localThumbnailPath)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let image = LocalMediaStore.loadImage(fromStoredPath: attachment.localContentPath)
+                ?? LocalMediaStore.loadImage(fromStoredPath: attachment.localThumbnailPath) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .ignoresSafeArea(edges: .horizontal)
+            } else {
+                ContentUnavailableView("图片暂不可用", systemImage: "photo.badge.exclamationmark")
+                    .foregroundStyle(.white)
+            }
+
+            VStack {
+                HStack(spacing: 16) {
+                    Button(action: dismiss.callAsFunction) {
+                        Image(systemName: "xmark")
+                    }
+                    Spacer()
+                    if let localURL {
+                        ShareLink(item: localURL) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                    }
+                }
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding()
+                Spacer()
+            }
+        }
     }
 }
 

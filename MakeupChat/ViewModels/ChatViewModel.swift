@@ -12,6 +12,7 @@ final class ChatViewModel {
 
     private let store: AccountScopedChatStore
     private var sendTask: Task<Void, Never>?
+    private var attachmentDownloadTask: Task<Void, Never>?
 
     init(store: AccountScopedChatStore) {
         self.store = store
@@ -24,6 +25,7 @@ final class ChatViewModel {
             conversationId = loaded.1
             messages = loaded.2
             configurationError = nil
+            refreshMissingAttachments()
         } catch {
             configurationError = error.localizedDescription
         }
@@ -55,9 +57,15 @@ final class ChatViewModel {
         }
     }
 
+    func retry(attachment: ChatAttachment) {
+        refreshMissingAttachments(only: attachment.id)
+    }
+
     func cancelPendingSend() {
         sendTask?.cancel()
+        attachmentDownloadTask?.cancel()
         sendTask = nil
+        attachmentDownloadTask = nil
         isSending = false
         ChatSendRegistry.shared.unregister(userId: store.context.userId)
     }
@@ -86,10 +94,23 @@ final class ChatViewModel {
                 }
                 guard SessionManager.shared.context?.userId == self.store.context.userId else { return }
                 self.messages = (try? self.store.messages()) ?? self.messages
+                self.refreshMissingAttachments()
             } catch is CancellationError {
                 // 登出或显式取消后不将状态写入其他账号的页面。
             } catch {
                 guard SessionManager.shared.context?.userId == self.store.context.userId else { return }
+                self.messages = (try? self.store.messages()) ?? self.messages
+            }
+        }
+    }
+
+    private func refreshMissingAttachments(only attachmentID: String? = nil) {
+        attachmentDownloadTask?.cancel()
+        attachmentDownloadTask = Task { [weak self] in
+            guard let self else { return }
+            await self.store.downloadMissingAttachments(only: attachmentID) { [weak self] in
+                guard let self,
+                      SessionManager.shared.context?.userId == self.store.context.userId else { return }
                 self.messages = (try? self.store.messages()) ?? self.messages
             }
         }

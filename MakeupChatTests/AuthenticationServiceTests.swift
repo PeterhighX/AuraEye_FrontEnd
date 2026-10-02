@@ -577,7 +577,7 @@ final class ChatContractTests: XCTestCase {
             data: {"type":"assistant.delta","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","delta":"已为你整理"}
 
             event: message.completed
-            data: {"type":"message.completed","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"已为你整理通勤妆容建议。","server_request_id":"req_http_chat_01"}
+            data: {"type":"message.completed","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","reply_type":"text","message":"已为你整理通勤妆容建议。","attachments":[],"server_request_id":"req_http_chat_01"}
 
             """.utf8))
         }
@@ -593,6 +593,79 @@ final class ChatContractTests: XCTestCase {
         XCTAssertEqual(reply?.conversationId, "conversation_01JTEST")
         XCTAssertEqual(reply?.messageId, "resp_01")
         XCTAssertEqual(reply?.serverRequestId, "req_http_chat_01")
+        XCTAssertEqual(reply?.replyType, .text)
+        XCTAssertEqual(reply?.attachments, [])
+    }
+
+    func testRemoteChatParsesGeneratedImageAttachment() async throws {
+        VisionURLProtocolStub.handler = { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "text/event-stream"]
+            )!
+            return (response, Data("""
+            event: message.completed
+            data: {"type":"message.completed","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_image_01","reply_type":"mixed","message":"已生成秋日通勤眼妆预览图。","attachments":[{"id":"chat_asset_01JTEST","type":"image","source":"generated","thumbnail_url":"/v1/chat/assets/chat_asset_01JTEST/content?variant=thumbnail","content_url":"/v1/chat/assets/chat_asset_01JTEST/content?variant=full","mime_type":"image/png","width":1024,"height":768,"expires_at":null}]}
+
+            """.utf8))
+        }
+
+        var reply: ChatReply?
+        for try await event in RemoteAIAgentService(client: makeAuthenticatedClient()).stream(
+            ChatSendRequest(requestId: "req_chat_01JTEST", conversationId: "conversation_01JTEST", message: "生成预览图")
+        ) {
+            if case let .completed(value) = event { reply = value }
+        }
+
+        XCTAssertEqual(reply?.replyType, .mixed)
+        XCTAssertEqual(reply?.attachments.first?.id, "chat_asset_01JTEST")
+        XCTAssertEqual(reply?.attachments.first?.width, 1024)
+        XCTAssertNil(reply?.attachments.first?.expiresAt)
+    }
+
+    func testRemoteChatRejectsCompletedWithoutImageContractFields() async throws {
+        VisionURLProtocolStub.handler = { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "text/event-stream"]
+            )!
+            return (response, Data("""
+            event: message.completed
+            data: {"type":"message.completed","request_id":"req_chat_01JTEST","conversation_id":"conversation_01JTEST","message_id":"resp_01","message":"旧格式回复"}
+
+            """.utf8))
+        }
+
+        do {
+            for try await _ in RemoteAIAgentService(client: makeAuthenticatedClient()).stream(
+                ChatSendRequest(requestId: "req_chat_01JTEST", conversationId: "conversation_01JTEST", message: "测试")
+            ) {}
+            XCTFail("新版终态缺少 reply_type/attachments 时必须拒绝")
+        } catch is ChatContractError {
+            // Expected.
+        }
+    }
+
+    func testChatAssetDownloadUsesBearerAndProtectedAssetPath() async throws {
+        let expected = Data([0x89, 0x50, 0x4E, 0x47])
+        VisionURLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/chat/assets/chat_asset_01JTEST/content")
+            XCTAssertEqual(request.url?.query, "variant=thumbnail")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer chat-access-token")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "image/png")
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "image/png"]
+            )!
+            return (response, expected)
+        }
+
+        let data = try await RemoteAIAgentService(client: makeAuthenticatedClient()).download(
+            assetID: "chat_asset_01JTEST",
+            variant: .thumbnail,
+            expectedMimeType: "image/png"
+        )
+        XCTAssertEqual(data, expected)
     }
 
     func testRemoteChatRejectsMismatchedClientRequestID() async throws {
@@ -637,6 +710,34 @@ final class ChatContractTests: XCTestCase {
         XCTAssertTrue(try secondStore.messages().isEmpty)
     }
 
+    @MainActor
+    func testImageReplyPersistsAndCachesBothLocalVariants() async throws {
+        let context = SessionContext(
+            userId: "chat-image-user-\(UUID().uuidString)",
+            username: "image-user",
+            displayName: "Image User",
+            accountMode: .standard,
+            features: .standard,
+            accessToken: "token",
+            refreshToken: nil
+        )
+        let store = AccountScopedChatStore(
+            context: context,
+            agentService: ChatImageReplyStub(),
+            assetDownloader: ChatAssetDownloaderStub()
+        )
+        _ = try store.load()
+        let request = try store.prepareNew(text: "生成图片")
+        try await store.perform(request) {}
+        await store.downloadMissingAttachments {}
+
+        let persistedMessages = try store.messages()
+        let attachment = try XCTUnwrap(persistedMessages.last?.attachments.first)
+        XCTAssertEqual(persistedMessages.last?.replyType, .mixed)
+        XCTAssertTrue(LocalMediaStore.fileExists(storedPath: attachment.localThumbnailPath))
+        XCTAssertTrue(LocalMediaStore.fileExists(storedPath: attachment.localContentPath))
+    }
+
     func testHermesUnavailableIsRetryableButInvalidResponseIsNot() {
         let unavailable = ChatRequestFailure.capture(APIClientError.httpStatus(
             503, "Hermes unavailable", code: "HERMES_UNAVAILABLE",
@@ -668,11 +769,55 @@ private struct ChatReplyStub: AIAgentServicing {
                 conversationId: request.conversationId,
                 messageId: messageId,
                 message: "远端回复",
+                replyType: .text,
+                attachments: [],
                 avatarAsset: "AvatarAI2",
                 status: "completed",
                 serverRequestId: "server_\(request.requestId)"
             )))
             continuation.finish()
         }
+    }
+}
+
+private struct ChatImageReplyStub: AIAgentServicing {
+    func stream(_ request: ChatSendRequest) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let assetID = "chat_asset_\(request.requestId)"
+            continuation.yield(.completed(ChatReply(
+                clientRequestId: request.requestId,
+                conversationId: request.conversationId,
+                messageId: "message_\(request.requestId)",
+                message: "图片已生成。",
+                replyType: .mixed,
+                attachments: [ChatAttachment(
+                    id: assetID,
+                    type: "image",
+                    source: "generated",
+                    thumbnailURL: "/v1/chat/assets/\(assetID)/content?variant=thumbnail",
+                    contentURL: "/v1/chat/assets/\(assetID)/content?variant=full",
+                    mimeType: "image/png",
+                    width: 1,
+                    height: 1,
+                    expiresAt: nil,
+                    localThumbnailPath: nil,
+                    localContentPath: nil
+                )],
+                avatarAsset: "AvatarAI2",
+                status: "completed",
+                serverRequestId: nil
+            )))
+            continuation.finish()
+        }
+    }
+}
+
+private struct ChatAssetDownloaderStub: ChatAssetDownloading {
+    func download(
+        assetID: String,
+        variant: ChatAssetVariant,
+        expectedMimeType: String
+    ) async throws -> Data {
+        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")!
     }
 }

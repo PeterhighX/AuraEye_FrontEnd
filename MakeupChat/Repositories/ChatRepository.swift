@@ -24,7 +24,7 @@ final class ChatRepository {
     func fetchMessages(userId: String, conversationId: String) throws -> [ChatMessage] {
         try db.perform { db in
             let sql = """
-            SELECT id, user_id, conversation_id, sender, text, ai_avatar_name,
+            SELECT id, user_id, conversation_id, sender, text, reply_type, ai_avatar_name,
                    client_request_id, server_message_id, server_request_id,
                    delivery_status, error_code, error_detail, http_status,
                    created_at, updated_at
@@ -38,7 +38,9 @@ final class ChatRepository {
             bind(userId, to: statement, at: 1)
             bind(conversationId, to: statement, at: 2)
             var messages: [ChatMessage] = []
-            while sqlite3_step(statement) == SQLITE_ROW { messages.append(mapMessage(statement)) }
+            while sqlite3_step(statement) == SQLITE_ROW {
+                messages.append(mapMessage(statement, database: db))
+            }
             return messages
         }
     }
@@ -103,12 +105,39 @@ final class ChatRepository {
                 guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
                 try execute(db, sql: """
                 UPDATE chat_messages
-                SET text = ?, ai_avatar_name = ?, server_message_id = ?, server_request_id = ?,
+                SET text = ?, reply_type = ?, ai_avatar_name = ?, server_message_id = ?, server_request_id = ?,
                     delivery_status = 'completed', error_code = NULL, error_detail = NULL,
                     http_status = NULL, updated_at = ?
                 WHERE user_id = ? AND conversation_id = ? AND sender = 'ai' AND client_request_id = ?;
-                """, bindings: [reply.message, reply.avatarAsset, reply.messageId, reply.serverRequestId, now, userId, conversationId, reply.clientRequestId])
+                """, bindings: [reply.message, reply.replyType.rawValue, reply.avatarAsset, reply.messageId, reply.serverRequestId, now, userId, conversationId, reply.clientRequestId])
                 guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
+
+                guard let localMessageID = scalarText(
+                    db,
+                    sql: """
+                    SELECT id FROM chat_messages
+                    WHERE user_id = ? AND conversation_id = ? AND sender = 'ai' AND client_request_id = ?
+                    LIMIT 1;
+                    """,
+                    bindings: [userId, conversationId, reply.clientRequestId]
+                ) else {
+                    throw ChatStorageError.messageNotFound
+                }
+                try execute(db, sql: "DELETE FROM chat_attachments WHERE message_id = ?;", bindings: [localMessageID])
+                for attachment in reply.attachments {
+                    try execute(db, sql: """
+                    INSERT INTO chat_attachments (
+                        id, message_id, type, source, thumbnail_url, content_url,
+                        mime_type, width, height, expires_at, local_thumbnail_path,
+                        local_content_path, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    """, bindings: [
+                        attachment.id, localMessageID, attachment.type, attachment.source,
+                        attachment.thumbnailURL, attachment.contentURL, attachment.mimeType,
+                        attachment.width, attachment.height, attachment.expiresAt?.timeIntervalSince1970,
+                        attachment.localThumbnailPath, attachment.localContentPath, now, now
+                    ])
+                }
                 try touchConversation(db, userId: userId, at: now)
                 guard executeRaw("COMMIT;", in: db) else { throw DatabaseError.executionFailed }
             } catch {
@@ -185,6 +214,32 @@ final class ChatRepository {
         }
     }
 
+    func updateAttachmentPaths(
+        userId: String,
+        attachmentId: String,
+        localThumbnailPath: String? = nil,
+        localContentPath: String? = nil
+    ) throws {
+        try db.perform { db in
+            try execute(db, sql: """
+            UPDATE chat_attachments
+            SET local_thumbnail_path = COALESCE(?, local_thumbnail_path),
+                local_content_path = COALESCE(?, local_content_path),
+                updated_at = ?
+            WHERE id = ? AND message_id IN (
+                SELECT id FROM chat_messages WHERE user_id = ?
+            );
+            """, bindings: [
+                localThumbnailPath,
+                localContentPath,
+                Date().timeIntervalSince1970,
+                attachmentId,
+                userId
+            ])
+            guard sqlite3_changes(db) == 1 else { throw ChatStorageError.messageNotFound }
+        }
+    }
+
     private func touchConversation(_ db: OpaquePointer, userId: String, at timestamp: TimeInterval) throws {
         try execute(db, sql: "UPDATE chat_conversations SET updated_at = ? WHERE user_id = ?;", bindings: [timestamp, userId])
     }
@@ -208,8 +263,60 @@ final class ChatRepository {
         return text(statement, 0)
     }
 
-    private func mapMessage(_ statement: OpaquePointer?) -> ChatMessage {
-        ChatMessage(id: text(statement, 0) ?? UUID().uuidString, userId: text(statement, 1) ?? "", conversationId: text(statement, 2) ?? "", sender: ChatSender(rawValue: text(statement, 3) ?? "ai") ?? .ai, text: text(statement, 4) ?? "", aiAvatarName: text(statement, 5) ?? "AvatarAI2", clientRequestId: text(statement, 6), serverMessageId: text(statement, 7), serverRequestId: text(statement, 8), deliveryStatus: ChatDeliveryStatus(rawValue: text(statement, 9) ?? "completed") ?? .completed, errorCode: text(statement, 10), errorDetail: text(statement, 11), httpStatus: sqlite3_column_type(statement, 12) == SQLITE_NULL ? nil : Int(sqlite3_column_int(statement, 12)), createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 13)), updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 14)))
+    private func mapMessage(_ statement: OpaquePointer?, database: OpaquePointer) -> ChatMessage {
+        let messageID = text(statement, 0) ?? UUID().uuidString
+        return ChatMessage(
+            id: messageID,
+            userId: text(statement, 1) ?? "",
+            conversationId: text(statement, 2) ?? "",
+            sender: ChatSender(rawValue: text(statement, 3) ?? "ai") ?? .ai,
+            text: text(statement, 4) ?? "",
+            replyType: ChatReplyType(rawValue: text(statement, 5) ?? "text") ?? .text,
+            attachments: attachments(for: messageID, database: database),
+            aiAvatarName: text(statement, 6) ?? "AvatarAI2",
+            clientRequestId: text(statement, 7),
+            serverMessageId: text(statement, 8),
+            serverRequestId: text(statement, 9),
+            deliveryStatus: ChatDeliveryStatus(rawValue: text(statement, 10) ?? "completed") ?? .completed,
+            errorCode: text(statement, 11),
+            errorDetail: text(statement, 12),
+            httpStatus: sqlite3_column_type(statement, 13) == SQLITE_NULL ? nil : Int(sqlite3_column_int(statement, 13)),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 14)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 15))
+        )
+    }
+
+    private func attachments(for messageID: String, database: OpaquePointer) -> [ChatAttachment] {
+        let sql = """
+        SELECT id, type, source, thumbnail_url, content_url, mime_type, width, height,
+               expires_at, local_thumbnail_path, local_content_path
+        FROM chat_attachments
+        WHERE message_id = ?
+        ORDER BY created_at ASC, id ASC;
+        """
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        bind(messageID, to: statement, at: 1)
+        var result: [ChatAttachment] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(ChatAttachment(
+                id: text(statement, 0) ?? "",
+                type: text(statement, 1) ?? "image",
+                source: text(statement, 2) ?? "generated",
+                thumbnailURL: text(statement, 3) ?? "",
+                contentURL: text(statement, 4) ?? "",
+                mimeType: text(statement, 5) ?? "image/png",
+                width: Int(sqlite3_column_int(statement, 6)),
+                height: Int(sqlite3_column_int(statement, 7)),
+                expiresAt: sqlite3_column_type(statement, 8) == SQLITE_NULL
+                    ? nil
+                    : Date(timeIntervalSince1970: sqlite3_column_double(statement, 8)),
+                localThumbnailPath: text(statement, 9),
+                localContentPath: text(statement, 10)
+            ))
+        }
+        return result
     }
 
     private func bind(_ value: Any?, to statement: OpaquePointer?, at index: Int32) {

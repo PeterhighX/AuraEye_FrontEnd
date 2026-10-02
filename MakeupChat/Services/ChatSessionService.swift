@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct ChatRequestFailure: Sendable {
     let code: String
@@ -50,6 +51,7 @@ final class AccountScopedChatStore {
     private let userRepository: UserRepository
     private let chatRepository: ChatRepository
     private let agentService: any AIAgentServicing
+    private let assetDownloader: (any ChatAssetDownloading)?
 
     private(set) var user: UserProfile?
     private(set) var conversationId: String?
@@ -57,11 +59,13 @@ final class AccountScopedChatStore {
     init(
         context: SessionContext,
         agentService: any AIAgentServicing,
+        assetDownloader: (any ChatAssetDownloading)? = nil,
         userRepository: UserRepository = UserRepository(),
         chatRepository: ChatRepository = ChatRepository()
     ) {
         self.context = context
         self.agentService = agentService
+        self.assetDownloader = assetDownloader
         self.userRepository = userRepository
         self.chatRepository = chatRepository
     }
@@ -98,6 +102,61 @@ final class AccountScopedChatStore {
     func messages() throws -> [ChatMessage] {
         let conversationId = try requireConversationID()
         return try chatRepository.fetchMessages(userId: context.userId, conversationId: conversationId)
+    }
+
+    /// 下载失败不改变已完成消息的状态；下次进入页面会重新检查缺失文件。
+    func downloadMissingAttachments(
+        only attachmentID: String? = nil,
+        onMessagesChanged: @MainActor () -> Void
+    ) async {
+        guard let assetDownloader,
+              let messages = try? messages() else { return }
+        let attachments = messages
+            .flatMap(\.attachments)
+            .filter { attachmentID == nil || $0.id == attachmentID }
+
+        for attachment in attachments {
+            guard !Task.isCancelled else { return }
+            if !LocalMediaStore.fileExists(storedPath: attachment.localThumbnailPath) {
+                do {
+                    let path = try await cache(
+                        attachment,
+                        variant: .thumbnail,
+                        downloader: assetDownloader
+                    )
+                    try chatRepository.updateAttachmentPaths(
+                        userId: context.userId,
+                        attachmentId: attachment.id,
+                        localThumbnailPath: path
+                    )
+                    onMessagesChanged()
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // 附件保留远端资产 ID，用户可稍后重试，不影响 Chat 成功终态。
+                }
+            }
+
+            if !LocalMediaStore.fileExists(storedPath: attachment.localContentPath) {
+                do {
+                    let path = try await cache(
+                        attachment,
+                        variant: .full,
+                        downloader: assetDownloader
+                    )
+                    try chatRepository.updateAttachmentPaths(
+                        userId: context.userId,
+                        attachmentId: attachment.id,
+                        localContentPath: path
+                    )
+                    onMessagesChanged()
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // 原图失败时仍可展示已落盘的缩略图，并在后续进入页面时重试。
+                }
+            }
+        }
     }
 
     func perform(
@@ -215,6 +274,37 @@ final class AccountScopedChatStore {
     private static func makeRequestID() -> String {
         "req_chat_\(UUID().uuidString.lowercased())"
     }
+
+    private func cache(
+        _ attachment: ChatAttachment,
+        variant: ChatAssetVariant,
+        downloader: any ChatAssetDownloading
+    ) async throws -> String {
+        let data = try await downloader.download(
+            assetID: attachment.id,
+            variant: variant,
+            expectedMimeType: attachment.mimeType
+        )
+        guard UIImage(data: data) != nil else { throw APIClientError.invalidImage }
+        let safeID = attachment.id.map { character in
+            character.isLetter || character.isNumber || character == "-" || character == "_"
+                ? String(character)
+                : "_"
+        }.joined()
+        return try LocalMediaStore.saveData(
+            data,
+            bucket: .chatAttachments,
+            fileName: "\(safeID)_\(variant.rawValue).\(fileExtension(for: attachment.mimeType))"
+        )
+    }
+
+    private func fileExtension(for mimeType: String) -> String {
+        switch mimeType {
+        case "image/jpeg": return "jpg"
+        case "image/webp": return "webp"
+        default: return "png"
+        }
+    }
 }
 
 @MainActor
@@ -222,7 +312,12 @@ enum ChatCompositionRoot {
     static func makeViewModel() throws -> ChatViewModel {
         guard let context = SessionManager.shared.context else { throw APIConfigurationError.configurationMissing }
         let client = try APIEnvironment.shared.authenticatedClient(accessToken: context.accessToken)
-        return ChatViewModel(store: AccountScopedChatStore(context: context, agentService: RemoteAIAgentService(client: client)))
+        let service = RemoteAIAgentService(client: client)
+        return ChatViewModel(store: AccountScopedChatStore(
+            context: context,
+            agentService: service,
+            assetDownloader: service
+        ))
     }
 }
 

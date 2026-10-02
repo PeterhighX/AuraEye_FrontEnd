@@ -50,6 +50,7 @@ final class DatabaseManager {
         applyVisionAPIV11Migration(database: db)
         applyUnifiedVisionJobMigration(database: db)
         applyChatHermesMigration(database: db)
+        applyChatAttachmentMigration(database: db)
         MediaPathMigrator.migrateIfNeeded(in: db)
     }
 
@@ -154,34 +155,62 @@ final class DatabaseManager {
         }
     }
 
+    /// v5 为最终 Chat 回复保存类型和附件元数据；二进制文件由 LocalMediaStore 单独管理。
+    private func applyChatAttachmentMigration(database: OpaquePointer) {
+        let currentVersion = scalarInt(database, sql: "PRAGMA user_version;") ?? 0
+        guard currentVersion < 5 else { return }
+
+        guard execute("BEGIN IMMEDIATE;", in: database) else { return }
+        guard ensureColumn(
+            "reply_type",
+            definition: "TEXT NOT NULL DEFAULT 'text'",
+            in: "chat_messages",
+            database: database
+        ) else {
+            _ = execute("ROLLBACK;", in: database)
+            return
+        }
+        let statements = [
+            Schema.createChatAttachments,
+            "CREATE INDEX IF NOT EXISTS idx_chat_attachment_message ON chat_attachments(message_id, created_at);",
+            "PRAGMA user_version = 5;"
+        ]
+        guard statements.allSatisfy({ execute($0, in: database) }) else {
+            _ = execute("ROLLBACK;", in: database)
+            return
+        }
+        _ = execute("COMMIT;", in: database)
+    }
+
     /// SQLite 不支持所有版本通用的 `ADD COLUMN IF NOT EXISTS`，先读取表结构再迁移。
+    @discardableResult
     private func ensureColumn(
         _ column: String,
         definition: String,
         in table: String,
         database: OpaquePointer
-    ) {
+    ) -> Bool {
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
 
         guard sqlite3_prepare_v2(database, "PRAGMA table_info(\(table));", -1, &statement, nil) == SQLITE_OK else {
-            return
+            return false
         }
 
         while sqlite3_step(statement) == SQLITE_ROW {
             guard let name = sqlite3_column_text(statement, 1) else { continue }
             if String(cString: name) == column {
-                return
+                return true
             }
         }
 
-        _ = sqlite3_exec(
+        return sqlite3_exec(
             database,
             "ALTER TABLE \(table) ADD COLUMN \(column) \(definition);",
             nil,
             nil,
             nil
-        )
+        ) == SQLITE_OK
     }
 
     @discardableResult

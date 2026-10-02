@@ -29,16 +29,24 @@ enum ChatDeliveryStatus: String {
     var isRetryable: Bool { self == .failedRetryable }
 }
 
-struct ChatImageAttachment: Hashable, Sendable {
-    let id: String
-    let thumbnailURL: URL
-    let fullURL: URL
+enum ChatReplyType: String, Codable, Sendable {
+    case text
+    case image
+    case mixed
+}
 
-    init(id: String = UUID().uuidString, thumbnailURL: URL, fullURL: URL? = nil) {
-        self.id = id
-        self.thumbnailURL = thumbnailURL
-        self.fullURL = fullURL ?? thumbnailURL
-    }
+struct ChatAttachment: Identifiable, Codable, Sendable, Equatable {
+    let id: String
+    let type: String
+    let source: String
+    let thumbnailURL: String
+    let contentURL: String
+    let mimeType: String
+    let width: Int
+    let height: Int
+    let expiresAt: Date?
+    var localThumbnailPath: String?
+    var localContentPath: String?
 }
 
 struct ChatMessage: Identifiable {
@@ -47,7 +55,8 @@ struct ChatMessage: Identifiable {
     let conversationId: String
     let sender: ChatSender
     let text: String
-    let imageAttachments: [ChatImageAttachment]
+    let replyType: ChatReplyType
+    let attachments: [ChatAttachment]
     let aiAvatarName: String
     let clientRequestId: String?
     let serverMessageId: String?
@@ -65,7 +74,8 @@ struct ChatMessage: Identifiable {
         conversationId: String,
         sender: ChatSender,
         text: String,
-        imageAttachments: [ChatImageAttachment] = [],
+        replyType: ChatReplyType = .text,
+        attachments: [ChatAttachment] = [],
         aiAvatarName: String = "AvatarAI",
         clientRequestId: String? = nil,
         serverMessageId: String? = nil,
@@ -82,7 +92,8 @@ struct ChatMessage: Identifiable {
         self.conversationId = conversationId
         self.sender = sender
         self.text = text
-        self.imageAttachments = imageAttachments
+        self.replyType = replyType
+        self.attachments = attachments
         self.aiAvatarName = aiAvatarName
         self.clientRequestId = clientRequestId
         self.serverMessageId = serverMessageId

@@ -13,6 +13,8 @@ enum MediaBucket: String {
     case cosmetics
     /// 第一次使用 · 妆容生成步骤预览
     case makeupPreviews
+    /// Chat 自动生成图片的缩略图与原图
+    case chatAttachments
 }
 
 /// 统一管理本地文件：磁盘存文件，SQLite 只存相对路径 `media/{bucket}/{file}`
