@@ -207,9 +207,11 @@ struct MakeupStepsView: View {
                 Text(step.toolName ?? "按教程操作").font(.headline).underline()
             }
 
-            Image("StepTool")
-                .resizable().scaledToFit()
-                .frame(width: 92, height: 92)
+            Image(step.previewAssetKey ?? "PracticeStep\(step.order)")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .frame(height: 92)
 
             styledMakeupInstruction(step.instruction)
                 .font(.callout)
