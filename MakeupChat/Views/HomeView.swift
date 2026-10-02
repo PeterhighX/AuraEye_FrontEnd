@@ -223,7 +223,8 @@ struct HomeView: View {
     private var profileAnalysisOverlay: some View {
         OperationTransitionOverlay(
             message: "正在分析你的面部特征，请稍候…",
-            surface: "onboarding"
+            surface: "onboarding",
+            fallbackKind: .profile
         )
     }
 

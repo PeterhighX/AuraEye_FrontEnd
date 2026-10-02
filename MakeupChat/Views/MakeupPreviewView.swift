@@ -98,7 +98,8 @@ struct MakeupPreviewView: View {
             if isSubmitting {
                 OperationTransitionOverlay(
                     message: generatedPlan == nil ? "正在生成你的上妆预览…" : "正在准备上妆步骤…",
-                    surface: "quick_start_preview"
+                    surface: "quick_start_preview",
+                    fallbackKind: .makeup
                 )
             }
         }

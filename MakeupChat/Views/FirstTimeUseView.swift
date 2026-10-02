@@ -145,12 +145,14 @@ struct FirstTimeUseView: View {
             } else if viewModel.processingStage == .cosmetics {
                 OperationTransitionOverlay(
                     message: "正在识别并添加化妆品…",
-                    surface: "onboarding"
+                    surface: "onboarding",
+                    fallbackKind: .cosmetics
                 )
             } else if viewModel.processingStage == .makeup {
                 OperationTransitionOverlay(
                     message: "正在生成专属妆容…",
-                    surface: "onboarding"
+                    surface: "onboarding",
+                    fallbackKind: .makeup
                 )
             }
         }

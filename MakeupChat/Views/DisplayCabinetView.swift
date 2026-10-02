@@ -152,7 +152,8 @@ struct DisplayCabinetView: View {
             if isAddingProduct {
                 OperationTransitionOverlay(
                     message: "正在添加到你的陈列柜…",
-                    surface: "onboarding"
+                    surface: "onboarding",
+                    fallbackKind: .cosmetics
                 )
             } else if showImageSourcePicker {
                 MediaSourceDialog(
@@ -173,7 +174,8 @@ struct DisplayCabinetView: View {
             } else if viewModel.isRecognizing {
                 OperationTransitionOverlay(
                     message: "正在识别化妆品…",
-                    surface: "onboarding"
+                    surface: "onboarding",
+                    fallbackKind: .cosmetics
                 )
             }
         }

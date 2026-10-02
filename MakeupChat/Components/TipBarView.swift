@@ -1,9 +1,65 @@
 import SwiftUI
 
+enum KnowledgeTipFallbackKind {
+    case all
+    case profile
+    case cosmetics
+    case makeup
+
+    var tips: [String] {
+        switch self {
+        case .all:
+            Self.profileTips + Self.cosmeticsTips + Self.makeupTips + Self.generalTips
+        case .profile:
+            Self.profileTips
+        case .cosmetics:
+            Self.cosmeticsTips
+        case .makeup:
+            Self.makeupTips
+        }
+    }
+
+    private static let profileTips = [
+        "闪闪正在用火眼金睛分析你的面部特征哦。",
+        "专属的面部大数据正在加马力分析中呢。",
+        "闪闪来帮您分析面部情况，宝子等我一下。",
+        "正在帮宝子看眼型和脸型，马上就出结果。",
+        "闪闪正在精准测量你的五官比例，别走开。"
+    ]
+
+    private static let cosmeticsTips = [
+        "闪闪搬好小板凳，正等着翻看你的化妆包呢。",
+        "快把你手边现有的眼影盘拍给闪闪看看吧。",
+        "闪闪正在认真翻看宝子自己有哪些化妆品。",
+        "正在扫描你现有的眼影盘，看看能画什么妆。",
+        "闪闪在帮你看看手头的化妆品怎么物尽其用。",
+        "正在识别宝子的宝贝化妆品，马上帮你搭配。",
+        "闪闪正在你的化妆包里为你挑选本命色号。",
+        "原来你手头有这么多宝藏，闪闪正在看呢。",
+        "正在为你现有的化妆品量身定制专属画法。",
+        "闪闪在研究怎么用你现有的刷子画出大眼。"
+    ]
+
+    private static let makeupTips = [
+        "金牌眼妆教程正在一字一句为你敲出来哦。",
+        "闪闪正在把大牌化妆师的独家手法写进教程。",
+        "清透消肿的魔幻眼妆步骤马上就要生成啦。",
+        "正在为你规划最不容易手残的保姆级步骤。",
+        "今日份完美妆容秘籍正在马不停蹄赶来。"
+    ]
+
+    private static let generalTips = [
+        "美貌魔法正在加载中，宝子再稍微等一下。",
+        "专属你的变美秘籍马上就好，赶快期待一下。",
+        "闪闪正在为你全力以赴，好妆容值得等待。",
+        "美丽值正在疯狂充值中，马上就为你揭晓。",
+        "宝子稍微喝口水，闪闪马上把报告双手奉上。"
+    ]
+}
+
 /// 小知识横条的显示组件；业务页面由 KnowledgeTipBar 获取后端内容。
 struct TipBarView: View {
     let text: String
-    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -26,15 +82,8 @@ struct TipBarView: View {
                 .padding(.vertical, 4)
                 .background(Color(red: 0.89, green: 0.88, blue: 0.88).opacity(0.24))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-            if let onDismiss {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("关闭小知识")
-            }
+                .animation(AppTheme.Motion.statusFade, value: text)
+                .id(text)
         }
         .padding(.horizontal, 16)
     }
@@ -44,42 +93,44 @@ struct KnowledgeTipBar: View {
     let surface: String
     var planID: String?
     var stepID: String?
+    var fallbackKind: KnowledgeTipFallbackKind = .all
 
     @State private var item: KnowledgeTipDTO.Item?
     @State private var reportedID: String?
-    @State private var dismissedID: String?
+    @State private var fallbackIndex = 0
 
     private var requestKey: String { "\(surface):\(planID ?? ""):\(stepID ?? "")" }
+    private var fallbackTips: [String] { fallbackKind.tips }
+    private var displayedText: String {
+        item?.text ?? fallbackTips[fallbackIndex % fallbackTips.count]
+    }
 
     var body: some View {
-        Group {
-            if let item, dismissedID != item.id {
-                TipBarView(text: item.text) {
-                    dismissedID = item.id
-                    Task {
-                        try? await BusinessDataService.shared.recordTipEvent(
-                            item, surface: surface, type: "tip_dismissed"
-                        )
-                    }
-                }
-                    .onAppear {
-                        guard reportedID != item.id else { return }
-                        reportedID = item.id
-                        Task {
-                            try? await BusinessDataService.shared.recordTipEvent(
-                                item, surface: surface, type: "tip_shown"
-                            )
-                        }
-                    }
-            }
-        }
+        TipBarView(text: displayedText)
         .task(id: requestKey) {
             item = nil
             reportedID = nil
-            dismissedID = nil
-            guard SessionManager.shared.context != nil else { return }
-            item = try? await BusinessDataService.shared.tip(
-                surface: surface, planID: planID, stepID: stepID
+            fallbackIndex = 0
+            if SessionManager.shared.context != nil {
+                item = try? await BusinessDataService.shared.tip(
+                    surface: surface, planID: planID, stepID: stepID
+                )
+            }
+            guard item == nil, fallbackTips.count > 1 else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                } catch {
+                    break
+                }
+                fallbackIndex = (fallbackIndex + 1) % fallbackTips.count
+            }
+        }
+        .task(id: item?.id) {
+            guard let item, reportedID != item.id else { return }
+            reportedID = item.id
+            try? await BusinessDataService.shared.recordTipEvent(
+                item, surface: surface, type: "tip_shown"
             )
         }
     }
@@ -89,6 +140,7 @@ struct KnowledgeTipBar: View {
 struct OperationTransitionOverlay: View {
     let message: String
     let surface: String
+    var fallbackKind: KnowledgeTipFallbackKind = .all
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animationStartedAt = Date.now
@@ -111,7 +163,7 @@ struct OperationTransitionOverlay: View {
                         .accessibilityHidden(true)
                 }
 
-                KnowledgeTipBar(surface: surface)
+                KnowledgeTipBar(surface: surface, fallbackKind: fallbackKind)
                     .frame(maxWidth: 390)
 
                 Text(message)
