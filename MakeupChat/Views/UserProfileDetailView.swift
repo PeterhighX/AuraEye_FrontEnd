@@ -15,6 +15,9 @@ struct UserProfileDetailView: View {
     @State private var isAnalyzing = false
     @State private var analysisErrorMessage: String?
     @State private var showsProfileMenu = false
+    @State private var showsPortraitConsent = false
+    @State private var isGeneratingPortrait = false
+    @State private var portraitRequestID: String?
     @State private var quickStartMessage: String?
 
     private let userRepository = UserRepository()
@@ -61,6 +64,18 @@ struct UserProfileDetailView: View {
                 runAnalysis()
             }
             Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "生成透明头像",
+            isPresented: $showsPortraitConsent,
+            titleVisibility: .visible
+        ) {
+            Button("同意使用本次照片生成头像与教程人物图") {
+                requestPortrait()
+            }
+            Button("暂不生成", role: .cancel) {}
+        } message: {
+            Text("将本次面部分析使用的照片去除背景，生成仅本账号可读取的透明肖像。")
         }
         .alert(
             "分析未完成",
@@ -112,6 +127,12 @@ struct UserProfileDetailView: View {
         .onAppear { loadUser() }
         .task {
             await session.business.refreshProfile()
+            if session.shouldOfferPortraitConsent,
+               canGeneratePortrait,
+               session.business.visualProfile?.portrait == nil {
+                session.shouldOfferPortraitConsent = false
+                showsPortraitConsent = true
+            }
         }
     }
 
@@ -188,6 +209,19 @@ struct UserProfileDetailView: View {
                     .disabled(isAnalyzing)
                 }
 
+                if let profile = session.business.visualProfile {
+                    Text(portraitStatus(profile.portrait))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if canGeneratePortrait,
+                       (profile.portrait == nil || profile.portrait?.status == "failed") {
+                        Button(isGeneratingPortrait ? "生成中…" : "生成透明头像") {
+                            showsPortraitConsent = true
+                        }
+                        .font(.caption)
+                        .disabled(isGeneratingPortrait)
+                    }
+                }
             }
             .font(.system(size: 14, weight: .thin))
             .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
@@ -317,8 +351,55 @@ struct UserProfileDetailView: View {
         user = try? userRepository.currentUser()
     }
 
+    private func portraitStatus(_ portrait: UserPortraitDTO?) -> String {
+        guard let portrait else { return "尚未生成透明头像" }
+        switch portrait.status {
+        case "queued", "running": return "透明头像生成中"
+        case "succeeded": return portrait.hasAlpha ? "透明头像已更新" : "头像结果未通过透明度校验"
+        case "failed": return portrait.error?.message ?? "透明头像生成失败"
+        default: return "透明头像状态待同步"
+        }
+    }
+
+    private func requestPortrait() {
+        guard let version = session.business.visualProfile?.profileVersion,
+              canGeneratePortrait,
+              !isGeneratingPortrait else { return }
+        if session.business.visualProfile?.portrait?.status == "failed" {
+            portraitRequestID = nil
+        }
+        let requestID = portraitRequestID ?? UUID().uuidString
+        portraitRequestID = requestID
+        isGeneratingPortrait = true
+        Task {
+            defer { isGeneratingPortrait = false }
+            do {
+                let ticket = try await BusinessDataService.shared.generatePortrait(
+                    requestID: requestID, profileVersion: version
+                )
+                for _ in 0..<30 {
+                    await session.business.refreshProfile()
+                    guard let portrait = session.business.visualProfile?.portrait else { return }
+                    if portrait.status == "succeeded" || portrait.status == "failed" { return }
+                    try await Task.sleep(for: .milliseconds(max(500, min(ticket.pollAfterMS, 10_000))))
+                }
+            } catch {
+                analysisErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private var usesFixedDemoGallery: Bool {
         SessionManager.shared.context?.features.galleryMode == .fixedDemo
+    }
+
+    private var canGeneratePortrait: Bool {
+        guard let profile = session.business.visualProfile else { return false }
+        if session.isDemoAccount {
+            return session.demoRun?.completed.contains("face_analysis") == true
+                && profile.resultSource == "demo_seed"
+        }
+        return profile.resultSource == "remote_provider"
     }
 
     private func runAnalysis() {
@@ -375,6 +456,10 @@ struct UserProfileDetailView: View {
                 user = profile
                 await session.business.refreshProfile()
                 if session.isDemoAccount { await session.refreshDemoRun() }
+                if canGeneratePortrait,
+                   session.business.visualProfile?.portrait == nil {
+                    showsPortraitConsent = true
+                }
             } catch is CancellationError {
                 isAnalyzing = false
                 analysisErrorMessage = nil
@@ -408,6 +493,10 @@ struct UserProfileDetailView: View {
             user = profile
             await session.business.refreshProfile()
             if session.isDemoAccount { await session.refreshDemoRun() }
+            if canGeneratePortrait,
+               session.business.visualProfile?.portrait == nil {
+                showsPortraitConsent = true
+            }
         } catch is CancellationError {
             isAnalyzing = false
             analysisErrorMessage = nil

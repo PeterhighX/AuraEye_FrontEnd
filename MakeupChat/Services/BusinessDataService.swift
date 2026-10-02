@@ -618,6 +618,26 @@ private struct CheckInRequest: Encodable {
     enum CodingKeys: String, CodingKey { case requestID = "request_id" }
 }
 
+private struct PortraitGenerateRequest: Encodable {
+    let requestID: String
+    let profileVersion: Int
+    let consentVersion: String
+    enum CodingKeys: String, CodingKey {
+        case requestID = "request_id"
+        case profileVersion = "profile_version"
+        case consentVersion = "consent_version"
+    }
+}
+
+struct PortraitGenerateTicketDTO: Decodable, Sendable {
+    let portrait: UserPortraitDTO
+    let pollAfterMS: Int
+    enum CodingKeys: String, CodingKey {
+        case portrait
+        case pollAfterMS = "poll_after_ms"
+    }
+}
+
 private struct CheckInResponse: Decodable {
     let overview: GrowthOverviewDTO
 }
@@ -700,6 +720,17 @@ final class BusinessDataService {
             expectedContentType: "image/png"
         )
         return response.data
+    }
+
+    func generatePortrait(requestID: String, profileVersion: Int) async throws -> PortraitGenerateTicketDTO {
+        return try await client().send(
+            path: "/users/me/portrait/generate",
+            body: PortraitGenerateRequest(
+                requestID: requestID, profileVersion: profileVersion,
+                consentVersion: "portrait-cutout-v1"
+            ),
+            idempotencyKey: requestID, expectedStatusCode: 202
+        )
     }
 
     func portraitPreviewImage(jobID: String) async throws -> Data {

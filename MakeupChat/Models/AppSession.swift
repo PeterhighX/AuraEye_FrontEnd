@@ -16,6 +16,7 @@ final class AppSession {
     var hasCompletedOnboardingCosmeticsStep = false
     var scannedFaceImagePath: String?
     var shouldRequestProfileCapture = false
+    var shouldOfferPortraitConsent = false
     /// 负一屏以首页同层覆盖方式呈现时，暂停根 Tab 的横向切换手势。
     var isAIChatPresented = false
     var selectedLookID = ""
@@ -64,6 +65,7 @@ final class AppSession {
     func markFaceScanned(imagePath: String) {
         hasScannedFace = true
         scannedFaceImagePath = imagePath
+        shouldOfferPortraitConsent = true
     }
 
     func markCosmeticsAdded() {
@@ -210,6 +212,7 @@ final class AppSession {
         hasAddedCosmetics = false
         hasCompletedOnboardingCosmeticsStep = false
         pendingCosmeticSuccessMessage = nil
+        shouldOfferPortraitConsent = false
     }
 
     func syncCosmeticCategoriesFromServer() {
