@@ -313,7 +313,6 @@ struct HomeView: View {
                     .padding(.horizontal, 12)
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
 }
