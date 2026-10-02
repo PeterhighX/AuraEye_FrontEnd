@@ -377,7 +377,7 @@ struct UserProfileDetailView: View {
                 let ticket = try await BusinessDataService.shared.generatePortrait(
                     requestID: requestID, profileVersion: version
                 )
-                for _ in 0..<30 {
+                for _ in 0..<200 {
                     await session.business.refreshProfile()
                     guard let portrait = session.business.visualProfile?.portrait else { return }
                     if portrait.status == "succeeded" || portrait.status == "failed" { return }
