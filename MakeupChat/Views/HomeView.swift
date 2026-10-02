@@ -192,7 +192,7 @@ struct HomeView: View {
                 weather: weatherProvider.snapshot,
                 onRefreshWeather: { weatherProvider.start() },
                 onQuickStart: {
-                    if let route = session.routeForQuickStart() {
+                    if let route = session.routeForNewMakeup(styleID: nil) {
                         path.append(route)
                     } else {
                         quickStartMessage = session.isDemoAccount
@@ -315,7 +315,19 @@ struct HomeView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(recommendedLooks) { look in
-                            HomeRecommendedLookCard(look: look)
+                            Button {
+                                if let route = session.routeForNewMakeup(styleID: look.id) {
+                                    path.append(route)
+                                } else {
+                                    quickStartMessage = session.isDemoAccount
+                                        ? (session.demoRunError ?? "正在打开演示流程，请稍后重试。")
+                                        : (session.business.growthError ?? "正在读取上妆记录，请稍后重试。")
+                                }
+                            } label: {
+                                HomeRecommendedLookCard(look: look)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("查看\(look.title)上妆预览")
                         }
                     }
                     .padding(.horizontal, 12)

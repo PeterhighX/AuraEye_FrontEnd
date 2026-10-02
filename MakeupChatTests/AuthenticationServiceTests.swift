@@ -50,7 +50,7 @@ final class AuthenticationServiceTests: XCTestCase {
         XCTAssertTrue(session.hasScannedFace)
         XCTAssertFalse(session.hasCompletedOnboardingCosmeticsStep)
         XCTAssertTrue(session.onboardingCosmeticCategories.isEmpty)
-        XCTAssertNil(session.routeForQuickStart())
+        XCTAssertNil(session.routeForNewMakeup(styleID: nil))
     }
 
     @MainActor

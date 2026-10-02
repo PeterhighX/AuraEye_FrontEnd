@@ -30,14 +30,13 @@ final class AppSession {
         onboardingCosmeticCategories.isSuperset(of: Set(CosmeticCategory.allCases))
     }
 
-    func routeForQuickStart() -> AppRoute? {
+    /// 快速开始与推荐妆容共用的新任务入口。
+    /// 用户主动从首页开始时，不恢复旧任务；服务端创建的新计划和会话拥有各自唯一 ID。
+    func routeForNewMakeup(styleID: String?) -> AppRoute? {
+        selectedLookID = styleID ?? ""
         if isDemoAccount {
             guard demoRunError == nil, let demoRun else { return nil }
-            if let sessionID = demoRun.activeSessionID {
-                guard business.activeSession?.sessionID == sessionID,
-                      business.activePlan?.planID == demoRun.activePlanID else { return nil }
-                return .makeupSteps
-            }
+            business.clearActiveFlow()
             switch demoRun.nextStep {
             case "face_analysis", "eyeshadow_recognition", "eyeliner_recognition", "brush_recognition":
                 return .firstTimeUse
@@ -47,13 +46,10 @@ final class AppSession {
                 return nil
             }
         }
-        if business.completion == nil,
-           business.activePlan != nil,
-           business.activeSession?.status == "in_progress" {
-            return .makeupSteps
-        }
         guard let growth = business.growth else { return nil }
-        return growth.completedMakeupCount == 0 ? .firstTimeUse : .makeupPreview
+        business.clearActiveFlow()
+        if growth.completedMakeupCount == 0 { return .firstTimeUse }
+        return .makeupPreview
     }
 
     /// 首页与「我的」共用同一档案入口判断。

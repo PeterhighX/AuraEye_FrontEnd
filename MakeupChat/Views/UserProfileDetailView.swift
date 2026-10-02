@@ -322,7 +322,7 @@ struct UserProfileDetailView: View {
             .disabled(isAnalyzing)
 
             Button {
-                if let route = session.routeForQuickStart() {
+                if let route = session.routeForNewMakeup(styleID: nil) {
                     path.append(route)
                 } else {
                     quickStartMessage = session.isDemoAccount

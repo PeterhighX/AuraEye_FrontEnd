@@ -3,6 +3,22 @@ import SwiftUI
 struct MakeupHistoryCard: View {
     let item: MakeupHistoryDTO
 
+    private var statusTitle: String {
+        switch item.status {
+        case "abandoned":
+            return "已放弃"
+        case "completed":
+            return item.ordinal.map { "第 \($0) 次上妆" } ?? "上妆已完成"
+        default:
+            return "上妆进行中"
+        }
+    }
+
+    private var statusTime: String {
+        if item.status == "abandoned" { return "未计入完成记录" }
+        return item.completedAt ?? "尚未完成"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -23,11 +39,11 @@ struct MakeupHistoryCard: View {
                     .frame(width: 36, height: 102)
             }
 
-            Text(item.ordinal.map { "第 \($0) 次上妆" } ?? "上妆进行中")
+            Text(statusTitle)
                 .font(.system(size: 16, weight: .light))
                 .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
 
-            Text(item.completedAt ?? "尚未完成")
+            Text(statusTime)
             .font(.system(size: 10, weight: .light))
             .foregroundStyle(.secondary)
         }

@@ -15,9 +15,6 @@ struct MakeupPreviewView: View {
     @State private var errorMessage: String?
     @State private var planRequestID: String?
     @State private var sessionRequestID: String?
-    @State private var renderedImage: UIImage?
-    @State private var renderedPlanID: String?
-    @State private var renderMessage: String?
 
     private let stepColors: [Color] = [
         Color(red: 253 / 255, green: 235 / 255, blue: 235 / 255),
@@ -52,11 +49,14 @@ struct MakeupPreviewView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        LiveWeatherSummaryCard(
-                            aiMessage: "今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！",
-                            surface: generatedPlan == nil ? "quick_start_preview" : "generated_preview",
-                            styleID: selectedStyle?.id
-                        )
+                        if expandedStepID == nil {
+                            LiveWeatherSummaryCard(
+                                aiMessage: "今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！",
+                                surface: generatedPlan == nil ? "quick_start_preview" : "generated_preview",
+                                styleID: selectedStyle?.id
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
 
                         KnowledgeTipBar(
                             surface: generatedPlan == nil ? "quick_start_preview" : "generated_preview"
@@ -73,16 +73,15 @@ struct MakeupPreviewView: View {
                                 .padding(24)
                         }
 
-                        if let plan = generatedPlan {
-                            renderCard(plan)
-                        }
-
                         if let plan = generatedPlan, plan.status == "ready" {
-                            VStack(spacing: 12) {
-                                ForEach(plan.steps) { step in
-                                    stepCard(step, index: step.order)
+                            VStack(spacing: -64) {
+                                ForEach(Array(plan.steps.enumerated()), id: \.element.id) { offset, step in
+                                    stepCard(step, index: offset + 1)
+                                        .frame(height: expandedStepID == step.id ? 273 : 120)
+                                        .zIndex(Double(offset))
                                 }
                             }
+                            .id("step-stack-\(plan.planID)")
                             .padding(.horizontal, 16)
                         } else if selectedStyle != nil || (!isStylesLoading && session.business.stylesError == nil) {
                             Text("选择妆容后点击“生成妆容”，步骤会根据你的档案和化妆品生成。")
@@ -91,8 +90,9 @@ struct MakeupPreviewView: View {
                                 .padding(.horizontal, 20)
                         }
                     }
-                    .padding(.top, 24)
+                    .padding(.top, expandedStepID == nil ? 24 : 0)
                     .padding(.bottom, 40)
+                    .animation(.spring(response: 0.48, dampingFraction: 0.86), value: expandedStepID)
                 }
             }
 
@@ -111,7 +111,10 @@ struct MakeupPreviewView: View {
             isStylesLoading = false
             usesAutomaticStyle = styles.isEmpty && session.business.stylesError == nil
             await session.business.refreshProfile()
-            if let plan = session.business.activePlan,
+            if let index = styles.firstIndex(where: { $0.id == session.selectedLookID }) {
+                selectedStyleIndex = index
+                usesAutomaticStyle = false
+            } else if let plan = session.business.activePlan,
                (!session.isDemoAccount || session.demoRun?.activePlanID == plan.planID) {
                 if let index = styles.firstIndex(where: { $0.id == plan.styleID }) {
                     selectedStyleIndex = index
@@ -119,15 +122,7 @@ struct MakeupPreviewView: View {
                 } else {
                     usesAutomaticStyle = true
                 }
-            } else if let index = styles.firstIndex(where: { $0.id == session.selectedLookID }) {
-                selectedStyleIndex = index
             }
-        }
-        .task(id: generatedPlan?.planID) {
-            renderedImage = nil
-            renderedPlanID = nil
-            renderMessage = nil
-            if let plan = generatedPlan { await loadRender(for: plan) }
         }
         .alert("妆容暂不可用", isPresented: Binding(
             get: { errorMessage != nil },
@@ -137,6 +132,7 @@ struct MakeupPreviewView: View {
         } message: {
             Text(errorMessage ?? "请稍后重试。")
         }
+        .accessibilityAction(.escape) { expandedStepID = nil }
     }
 
     private func styleCard(_ style: MakeupStyleDTO) -> some View {
@@ -151,14 +147,21 @@ struct MakeupPreviewView: View {
                 }
             }
             .frame(width: 120, height: 120)
+            .scaleEffect(1.1)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.08), radius: 2)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(style.title).font(.system(size: 16, weight: .light))
-                        Text(style.tag).font(.system(size: 11, weight: .light))
+                        Text(style.tag)
+                            .font(.system(size: 11, weight: .light))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 2)
+                            .background(Color(red: 1, green: 0.93, blue: 0.91))
+                            .clipShape(Capsule())
                     }
                     Spacer()
                     Button {
@@ -184,8 +187,10 @@ struct MakeupPreviewView: View {
                     .lineSpacing(4)
 
                 HStack {
-                    ForEach(generatedPlan?.swatchHexes ?? style.swatchHexes, id: \.self) { hex in
-                        Circle().fill(Color(previewHex: hex)).frame(width: 24, height: 24)
+                    HStack(spacing: 6) {
+                        ForEach(generatedPlan?.swatchHexes ?? style.swatchHexes, id: \.self) { hex in
+                            Circle().fill(Color(previewHex: hex)).frame(width: 28, height: 28)
+                        }
                     }
                     Spacer()
                     Button {
@@ -198,10 +203,11 @@ struct MakeupPreviewView: View {
                         Text(generatedPlan?.status == "ready" ? "开始上妆" : "生成妆容")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
+                            .tracking(1)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color(red: 0.15, green: 0.15, blue: 0.15))
-                            .clipShape(Capsule())
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.button))
                     }
                     .buttonStyle(.plain)
                     .disabled(isSubmitting)
@@ -210,7 +216,7 @@ struct MakeupPreviewView: View {
         }
         .padding(12)
         .frame(height: 136)
-        .background(Color.white.opacity(0.55))
+        .background(Color.white.opacity(expandedStepID == nil ? 0.55 : 0.65))
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
         .shadow(color: .black.opacity(0.09), radius: 2, y: 2)
         .padding(.horizontal, 16)
@@ -244,74 +250,55 @@ struct MakeupPreviewView: View {
                 expandedStepID = expanded ? nil : step.id
             }
         } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("step \(index)  \(step.title)")
-                    .font(.system(size: 17, weight: .semibold))
+            VStack(alignment: .leading, spacing: expanded ? 18 : 0) {
+                HStack {
+                    HStack(spacing: 17) {
+                        Text("step \(index)")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text(step.title)
+                            .font(.system(size: 16, weight: .regular, design: .rounded))
+                    }
+                    .foregroundStyle(index >= 4
+                        ? .white
+                        : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle()
+                                .fill(index >= 4
+                                    ? Color.white
+                                    : Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.3))
+                                .frame(width: 4, height: 4)
+                        }
+                    }
+                }
+
                 if expanded {
-                    styledMakeupInstruction(step.instruction, bullet: true)
-                        .font(.system(size: 15, weight: .light))
-                        .multilineTextAlignment(.leading)
+                    styledMakeupInstruction(
+                        step.instruction,
+                        bullet: true,
+                        highlightColor: index >= 4 ? .white : AppTheme.ColorToken.accentCoral
+                    )
+                    .font(.system(size: 16, weight: .light))
+                    .lineSpacing(5)
+                    .foregroundStyle(index >= 4
+                        ? .white
+                        : Color(red: 38 / 255, green: 38 / 255, blue: 38 / 255).opacity(0.75))
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 6)
+                    .transition(.opacity)
                 }
             }
-            .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15))
-            .frame(maxWidth: .infinity, minHeight: expanded ? 185 : 92, alignment: .topLeading)
-            .padding(16)
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(stepColors[(max(index, 1) - 1) % stepColors.count])
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card))
+            .shadow(color: .black.opacity(0.09), radius: 2, y: 2)
         }
         .buttonStyle(.plain)
-    }
-
-    private func renderCard(_ plan: MakeupPlanDTO) -> some View {
-        VStack(spacing: 8) {
-            if renderedPlanID == plan.planID, let renderedImage {
-                Image(uiImage: renderedImage)
-                    .resizable().scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 360)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-            } else {
-                Image(systemName: "person.crop.rectangle")
-                    .font(.system(size: 48))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 150)
-                    .foregroundStyle(.secondary)
-            }
-            Text(renderMessage ?? "妆容文字已就绪，试妆图生成中…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 24))
-        .padding(.horizontal, 16)
-    }
-
-    private func loadRender(for plan: MakeupPlanDTO) async {
-        for _ in 0..<30 {
-            guard !Task.isCancelled else { return }
-            do {
-                let current = try await BusinessDataService.shared.plan(id: plan.planID)
-                guard current.planID == plan.planID else { throw APIClientError.invalidResponse }
-                if current.render.status == "failed" || current.render.status == "skipped" {
-                    renderMessage = current.render.status == "failed" ? "试妆图生成失败，文字步骤仍可使用。" : "本次未生成试妆图。"
-                    return
-                }
-                if current.render.status == "succeeded", let jobID = current.render.jobID,
-                   let result = try await BusinessDataService.shared.renderResult(jobID: jobID, plan: current) {
-                    let data = try await BusinessDataService.shared.renderResultImage(jobID: jobID)
-                    guard !Task.isCancelled, let image = UIImage(data: data) else { return }
-                    renderedImage = image
-                    renderedPlanID = plan.planID
-                    renderMessage = result.resultSource == "demo_seed" ? "演示缓存试妆效果" : "真实试妆效果"
-                    return
-                }
-            } catch {
-                renderMessage = "试妆图暂不可用：\(error.localizedDescription)"
-                return
-            }
-            try? await Task.sleep(for: .seconds(2))
-        }
-        renderMessage = "试妆图仍在生成，请稍后重试。"
     }
 
     private func generatePlan(_ style: MakeupStyleDTO?) {
@@ -357,6 +344,7 @@ struct MakeupPreviewView: View {
                             }
                         }
                         session.business.install(plan: plan)
+                        planRequestID = nil
                         return
                     }
                     if plan.status == "failed" {
@@ -412,6 +400,8 @@ struct MakeupPreviewView: View {
                     }
                 }
                 session.business.install(session: practice)
+                // 成功后结束这次幂等请求；从步骤页返回再次开始时必须创建新会话。
+                sessionRequestID = nil
                 path.append(AppRoute.makeupSteps)
             } catch {
                 await session.handleDemoWriteError(error)
