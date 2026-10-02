@@ -29,12 +29,25 @@ enum ChatDeliveryStatus: String {
     var isRetryable: Bool { self == .failedRetryable }
 }
 
+struct ChatImageAttachment: Hashable, Sendable {
+    let id: String
+    let thumbnailURL: URL
+    let fullURL: URL
+
+    init(id: String = UUID().uuidString, thumbnailURL: URL, fullURL: URL? = nil) {
+        self.id = id
+        self.thumbnailURL = thumbnailURL
+        self.fullURL = fullURL ?? thumbnailURL
+    }
+}
+
 struct ChatMessage: Identifiable {
     let id: String
     let userId: String
     let conversationId: String
     let sender: ChatSender
     let text: String
+    let imageAttachments: [ChatImageAttachment]
     let aiAvatarName: String
     let clientRequestId: String?
     let serverMessageId: String?
@@ -52,6 +65,7 @@ struct ChatMessage: Identifiable {
         conversationId: String,
         sender: ChatSender,
         text: String,
+        imageAttachments: [ChatImageAttachment] = [],
         aiAvatarName: String = "AvatarAI",
         clientRequestId: String? = nil,
         serverMessageId: String? = nil,
@@ -68,6 +82,7 @@ struct ChatMessage: Identifiable {
         self.conversationId = conversationId
         self.sender = sender
         self.text = text
+        self.imageAttachments = imageAttachments
         self.aiAvatarName = aiAvatarName
         self.clientRequestId = clientRequestId
         self.serverMessageId = serverMessageId

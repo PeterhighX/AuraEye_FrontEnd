@@ -67,9 +67,20 @@ struct ContentView: View {
                     .environment(\.layoutDirection, .leftToRight)
             }
 
-            Tab("AI", image: "HomeAIIcon", value: AppTab.ai.rawValue, role: role) {
+            Tab(value: AppTab.ai.rawValue, role: role) {
                 aiTab
                     .environment(\.layoutDirection, .leftToRight)
+            } label: {
+                VStack(spacing: 1) {
+                    Image("HomeAIIcon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                    Text("AI")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("AI")
             }
         }
         .environment(\.layoutDirection, .rightToLeft)

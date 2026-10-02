@@ -31,10 +31,31 @@ struct ChatBubbleView: View {
                 .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(.secondary)
             } else {
-                Text(message.text)
-                    .font(.system(size: 16, weight: .thin))
-                    .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
-                    .lineSpacing(4)
+                ForEach(message.imageAttachments, id: \.id) { attachment in
+                    AsyncImage(url: attachment.thumbnailURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .failure:
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                        default:
+                            ProgressView()
+                        }
+                    }
+                    .frame(width: 238, height: 168)
+                    .background(.white.opacity(0.45))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipped()
+                }
+
+                if !message.text.isEmpty {
+                    Text(message.text)
+                        .font(.system(size: 16, weight: .thin))
+                        .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
+                        .lineSpacing(4)
+                }
             }
 
             if message.sender == .user {

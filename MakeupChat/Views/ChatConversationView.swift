@@ -1,4 +1,3 @@
-import ExyteChat
 import SwiftUI
 
 struct ChatConversationView: View {
@@ -7,6 +6,7 @@ struct ChatConversationView: View {
     @Bindable var viewModel: ChatViewModel
     let layoutMode: LayoutMode
     var onBack: () -> Void = {}
+    @State private var draftText = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,66 +18,69 @@ struct ChatConversationView: View {
             }
             .padding(.top, 8)
 
-            ChatView(messages: exyteMessages) { draft in
-                _ = viewModel.send(text: draft.text)
-            } messageBuilder: { parameters in
-                if let message = viewModel.message(id: parameters.message.id) {
-                    ChatBubbleView(message: message) {
-                        viewModel.retry(message: message)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, message in
+                            if startsNewDay(at: index) {
+                                Text(dayLabel(for: message.createdAt))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, index == 0 ? 20 : 28)
+                                    .padding(.bottom, 8)
+                            }
+
+                            ChatBubbleView(message: message) {
+                                viewModel.retry(message: message)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .id(message.id)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-                } else {
-                    parameters.defaultMessageView()
                 }
-            } inputViewBuilder: { parameters in
+                .defaultScrollAnchor(.top)
+                .onChange(of: viewModel.messages.map(\.id)) { oldIDs, newIDs in
+                    guard oldIDs != newIDs, let newestID = newIDs.last else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(newestID, anchor: .bottom)
+                    }
+                }
+
                 MakeupInputBar(
-                    text: parameters.text,
-                    onSend: { parameters.inputViewActionClosure(.send) },
+                    text: $draftText,
+                    onSend: sendDraft,
                     isSending: viewModel.isSending,
                     initialFocus: layoutMode == .keyboard
                 )
                 .background(.ultraThinMaterial)
             }
-            .chatTheme(colors: .init(mainBG: .clear))
         }
         .onAppear(perform: viewModel.reload)
     }
 
-    private var exyteMessages: [ExyteChat.Message] {
-        let currentUser = ExyteChat.User(
-            id: viewModel.user?.userId ?? "current-user",
-            name: viewModel.user?.displayName ?? "我",
-            avatarURL: nil,
-            isCurrentUser: true
-        )
-        let assistant = ExyteChat.User(
-            id: "auraeye-agent",
-            name: "AuraEye",
-            avatarURL: nil,
-            isCurrentUser: false
-        )
-
-        return viewModel.messages.map { message in
-            ExyteChat.Message(
-                id: message.id,
-                user: message.sender == .user ? currentUser : assistant,
-                status: exyteStatus(for: message),
-                createdAt: message.createdAt,
-                // ExyteChat 会过滤完全没有内容的消息；零宽字符确保流式占位行存在，
-                // 实际气泡仍读取领域模型中的空文本并展示“正在思考”。
-                text: message.text.isEmpty ? "\u{200B}" : message.text
-            )
-        }
+    private func sendDraft() {
+        guard viewModel.send(text: draftText) else { return }
+        draftText = ""
     }
 
-    private func exyteStatus(for message: ChatMessage) -> ExyteChat.Message.Status {
-        switch message.deliveryStatus {
-        case .sending, .streaming:
-            return .sending
-        case .completed, .failedRetryable, .failedPermanent:
-            return .sent
-        }
+    private func startsNewDay(at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        return !Calendar.current.isDate(
+            viewModel.messages[index].createdAt,
+            inSameDayAs: viewModel.messages[index - 1].createdAt
+        )
     }
+
+    private func dayLabel(for date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "今天" }
+        if calendar.isDateInYesterday(date) { return "昨天" }
+        return date.formatted(.dateTime.year().month().day())
+    }
+}
+
+#Preview {
+    Text("ChatConversationView requires an authenticated chat session")
 }
