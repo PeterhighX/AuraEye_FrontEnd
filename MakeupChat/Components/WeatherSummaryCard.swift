@@ -233,7 +233,7 @@ private struct PreviewAgentOutput: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(usesFirstTimeAvatar ? "FirstTimeAssistant" : "AvatarAI")
+            Image("AgentHead")
                 .resizable()
                 .scaledToFill()
                 .frame(width: 36, height: 36)

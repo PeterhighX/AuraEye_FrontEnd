@@ -8,7 +8,7 @@ struct ChatBubbleView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if message.sender == .ai {
-                avatarImage(message.aiAvatarName)
+                agentAvatar
                 bubbleContent
                 Color.clear.frame(width: 36, height: 36)
             } else {
@@ -108,19 +108,12 @@ struct ChatBubbleView: View {
             : UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 13, bottomTrailingRadius: 13, topTrailingRadius: 13)
     }
 
-    private func avatarImage(_ name: String) -> some View {
-        let image = UIImage(named: name)
-            ?? (name.hasPrefix("AvatarAI") ? UIImage(named: "AvatarAI2") : nil)
-        return ZStack {
+    private var agentAvatar: some View {
+        ZStack {
             Circle().fill(Color.white.opacity(0.9))
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: name.hasPrefix("AvatarAI") ? "sparkles" : "person.fill")
-                    .foregroundStyle(Color.purple.opacity(0.8))
-            }
+            Image("AgentHead")
+                .resizable()
+                .scaledToFill()
         }
         .frame(width: 36, height: 36)
         .clipShape(Circle())
