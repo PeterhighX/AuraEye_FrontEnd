@@ -1,7 +1,13 @@
 import SwiftUI
+import UIKit
 
 struct MakeupHistoryCard: View {
     let item: MakeupHistoryDTO
+    let styles: [MakeupStyleDTO]
+
+    private var imageAssetName: String? {
+        styles.first(where: { $0.title == item.styleTitle })?.heroAssetKey
+    }
 
     private var statusTitle: String {
         switch item.status {
@@ -22,16 +28,24 @@ struct MakeupHistoryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: "paintbrush.pointed.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(36)
-                    .foregroundStyle(AppTheme.ColorToken.accentOrange)
-                    .frame(width: 120, height: 120)
-                    .scaleEffect(1.1)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: Color.black.opacity(0.08), radius: 2)
+                Group {
+                    if let imageAssetName, UIImage(named: imageAssetName) != nil {
+                        Image(imageAssetName)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "paintbrush.pointed.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(36)
+                            .foregroundStyle(AppTheme.ColorToken.accentOrange)
+                    }
+                }
+                .frame(width: 120, height: 120)
+                .scaleEffect(1.1)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: Color.black.opacity(0.08), radius: 2)
 
                 Text(item.styleTitle)
                     .font(.caption)
@@ -44,8 +58,8 @@ struct MakeupHistoryCard: View {
                 .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15).opacity(0.75))
 
             Text(statusTime)
-            .font(.system(size: 10, weight: .light))
-            .foregroundStyle(.secondary)
+                .font(.system(size: 10, weight: .light))
+                .foregroundStyle(.secondary)
         }
         .padding(12)
         .frame(width: 184)

@@ -36,6 +36,7 @@ struct ProfileView: View {
         .onAppear { viewModel.reload() }
         .task {
             await session.business.refreshGrowth()
+            if session.business.styles.isEmpty { await session.business.refreshStyles() }
             await session.business.refreshHistory()
             await session.business.refreshStats()
         }
@@ -247,7 +248,7 @@ struct ProfileView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(session.business.makeupHistory) { item in
-                            MakeupHistoryCard(item: item)
+                            MakeupHistoryCard(item: item, styles: session.business.styles)
                         }
                     }
                     .padding(.horizontal, 16)

@@ -43,27 +43,34 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
 
     private let locationManager = CLLocationManager()
     private var isLoading = false
+    private var isRequestingLocation = false
     private var lastLocation: CLLocation?
+    private var retryTask: Task<Void, Never>?
+    private var consecutiveFailures = 0
 
     override init() {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
+        locationManager.distanceFilter = 1_000
     }
 
     func start() {
-        guard !isLoading else { return }
-
-        if let lastLocation {
-            requestWeather(at: lastLocation)
-            return
-        }
+        guard !isLoading, !isRequestingLocation else { return }
 
         switch locationManager.authorizationStatus {
         case .notDetermined:
+            isRequestingLocation = true
             locationManager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            locationManager.requestLocation()
+            if let location = lastLocation ?? locationManager.location,
+               location.horizontalAccuracy >= 0 {
+                lastLocation = location
+                requestWeather(at: location)
+            } else {
+                isRequestingLocation = true
+                locationManager.requestLocation()
+            }
         case .denied, .restricted:
             markLocationUnavailable(as: "未授权")
         @unknown default:
@@ -72,9 +79,10 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        isRequestingLocation = false
         switch manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
-            manager.requestLocation()
+            start()
         case .denied, .restricted:
             markLocationUnavailable(as: "未授权")
         case .notDetermined:
@@ -85,19 +93,41 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last, !isLoading else { return }
+        isRequestingLocation = false
+        guard let location = locations.last(where: { $0.horizontalAccuracy >= 0 }) else {
+            scheduleRetry()
+            return
+        }
         lastLocation = location
         requestWeather(at: location)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        markLocationUnavailable(as: "定位失败")
+        isRequestingLocation = false
+        if let location = lastLocation ?? manager.location,
+           location.horizontalAccuracy >= 0 {
+            lastLocation = location
+            requestWeather(at: location)
+            return
+        }
+        if (error as? CLError)?.code == .denied {
+            markLocationUnavailable(as: "未授权")
+        } else {
+            if snapshot.observedAt == nil { snapshot.district = "正在定位" }
+            scheduleRetry()
+        }
     }
 
     private func markLocationUnavailable(as district: String) {
+        retryTask?.cancel()
         isLoading = false
+        isRequestingLocation = false
         isLive = false
-        snapshot = Self.fallbackSnapshot(district: district)
+        if snapshot.observedAt == nil {
+            snapshot = Self.fallbackSnapshot(district: district)
+        } else {
+            snapshot.district = district
+        }
     }
 
     private func requestWeather(at location: CLLocation) {
@@ -110,24 +140,31 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
     }
 
     private func loadWeather(at location: CLLocation) async {
+        async let districtName = resolveDistrict(at: location)
         do {
             let response = try await fetchWeather(at: location)
             let condition = Self.condition(for: response.current.weatherCode, isDay: response.current.isDay == 1)
+            let district = await districtName ?? snapshot.district
 
             snapshot = LiveWeatherSnapshot(
                 temperature: Int(response.current.temperature.rounded()),
                 conditionText: condition.text,
                 symbolName: condition.symbolName,
                 uvIndex: max(0, Int(response.current.uvIndex.rounded())),
-                district: snapshot.district,
+                district: district,
                 observedAt: Date(timeIntervalSince1970: response.current.time)
             )
             isLive = true
-
-            await loadDistrict(at: location)
+            consecutiveFailures = 0
+            retryTask?.cancel()
         } catch {
             isLive = false
-            snapshot = Self.fallbackSnapshot(district: "离线天气")
+            if let district = await districtName {
+                snapshot.district = district
+            } else if snapshot.observedAt == nil {
+                snapshot = Self.fallbackSnapshot(district: "天气重试中")
+            }
+            scheduleRetry()
         }
     }
 
@@ -159,19 +196,30 @@ final class LiveWeatherProvider: NSObject, ObservableObject, @preconcurrency CLL
         return try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
     }
 
-    private func loadDistrict(at location: CLLocation) async {
+    private func resolveDistrict(at location: CLLocation) async -> String? {
         do {
             let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
             guard let place = placemarks.first,
                   let district = place.subLocality ?? place.locality ?? place.administrativeArea,
                   !district.isEmpty else {
-                snapshot.district = "地区不可用"
-                return
+                return nil
             }
-            snapshot.district = district
+            return district
         } catch {
-            // Weather remains usable even if the network reverse-geocoding request fails.
-            snapshot.district = "地区不可用"
+            return nil
+        }
+    }
+
+    private func scheduleRetry() {
+        guard locationManager.authorizationStatus == .authorizedAlways ||
+                locationManager.authorizationStatus == .authorizedWhenInUse else { return }
+        consecutiveFailures += 1
+        let delay = min(5 * (1 << min(consecutiveFailures - 1, 3)), 60)
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.start()
         }
     }
 

@@ -50,7 +50,7 @@ struct MakeupCompleteView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
                                     ForEach(session.business.makeupHistory.prefix(5)) { item in
-                                        MakeupHistoryCard(item: item)
+                                        MakeupHistoryCard(item: item, styles: session.business.styles)
                                     }
                                 }
                                 .padding(.horizontal, 16)
@@ -72,6 +72,7 @@ struct MakeupCompleteView: View {
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) { completionNavigationBar }
         .task {
+            if session.business.styles.isEmpty { await session.business.refreshStyles() }
             await session.business.refreshHistory()
             await session.business.refreshStats()
             await session.business.refreshGrowth()

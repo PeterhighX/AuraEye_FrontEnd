@@ -88,20 +88,18 @@ struct MakeupStepsView: View {
             progressCard(plan: plan, practice: practice, step: step, index: currentIndex)
                 .padding(.top, 24)
 
-            VStack(spacing: 2) {
-                Image(step.previewAssetKey ?? "PracticeStep\(step.order)")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 68)
-                Text("\(step.title) · \(step.toolName ?? "按教程操作")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 90)
-            .background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 24))
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
+            Image(previewAssetName(for: step))
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 90)
+                .clipped()
+                .contentShape(Rectangle())
+                .background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 24))
+                .clipShape(RoundedRectangle(cornerRadius: 24))
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .accessibilityLabel("第 \(currentIndex + 1) 步眼部线条预览")
 
             resistantPager(plan: plan, practice: practice, currentIndex: currentIndex)
                 .frame(height: 422)
@@ -148,24 +146,27 @@ struct MakeupStepsView: View {
             }
 
             Spacer(minLength: 0)
-            Group {
+            ZStack(alignment: .bottom) {
                 if let portraitImage {
-                    Image(uiImage: portraitImage).resizable().scaledToFit()
+                    Image(uiImage: portraitImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 } else {
                     Image(systemName: "person.crop.rectangle")
                         .resizable().scaledToFit().padding(16)
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 88, height: 116)
-            .offset(y: 10)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(width: 88, height: 103, alignment: .bottom)
+            .clipped()
             .accessibilityLabel("本次计划的人物效果预览")
         }
         .padding(.horizontal, 16)
         .frame(height: 103)
         .background(Color(red: 1, green: 237 / 255, blue: 232 / 255).opacity(0.4),
                     in: RoundedRectangle(cornerRadius: 24))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.08), radius: 3, y: 2)
         .padding(.horizontal, 16)
     }
@@ -207,11 +208,11 @@ struct MakeupStepsView: View {
                 Text(step.toolName ?? "按教程操作").font(.headline).underline()
             }
 
-            Image(step.previewAssetKey ?? "PracticeStep\(step.order)")
+            Image("EyelinerProductIcon")
                 .resizable()
                 .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .frame(height: 92)
+                .frame(width: 112, height: 112)
+                .accessibilityLabel(step.toolName ?? "当前工具")
 
             styledMakeupInstruction(step.instruction)
                 .font(.callout)
@@ -237,6 +238,12 @@ struct MakeupStepsView: View {
         .background(.white.opacity(0.58))
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+    }
+
+    private func previewAssetName(for step: MakeupPlanStepDTO) -> String {
+        if let key = step.previewAssetKey, UIImage(named: key) != nil { return key }
+        let order = min(max(step.order, 1), 5)
+        return "PracticeStep\(order)"
     }
 
     private func pagerGesture(
@@ -392,7 +399,7 @@ struct MakeupStepsView: View {
             id: portrait.portraitID, variant: "full"
         ) {
             if !session.isDemoAccount || session.demoRun?.activePlanID == plan.planID {
-                portraitImage = UIImage(data: data)
+                portraitImage = UIImage(data: data)?.croppedToVisibleAlphaBounds()
             }
         }
         for _ in 0..<30 {
@@ -405,7 +412,7 @@ struct MakeupStepsView: View {
                    let data = try? await BusinessDataService.shared.portraitPreviewImage(jobID: jobID),
                    let image = UIImage(data: data) {
                     if !session.isDemoAccount || session.demoRun?.activePlanID == plan.planID {
-                        portraitImage = image
+                        portraitImage = image.croppedToVisibleAlphaBounds()
                     }
                 }
                 return
@@ -413,6 +420,55 @@ struct MakeupStepsView: View {
             if updated.render.status == "failed" || updated.render.status == "skipped" { return }
             try? await Task.sleep(for: .seconds(2))
         }
+    }
+}
+
+private extension UIImage {
+    /// Removes transparent canvas padding so cutout portraits fill their assigned UI frame.
+    func croppedToVisibleAlphaBounds(alphaThreshold: UInt8 = 8) -> UIImage {
+        guard let source = cgImage else { return self }
+        let width = source.width
+        let height = source.height
+        guard width > 0, height > 0 else { return self }
+
+        let bytesPerPixel = 4
+        let bytesPerRow = width * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: height * bytesPerRow)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return self }
+
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var minX = width
+        var minY = height
+        var maxX = -1
+        var maxY = -1
+        for y in 0..<height {
+            for x in 0..<width where pixels[y * bytesPerRow + x * bytesPerPixel + 3] > alphaThreshold {
+                minX = min(minX, x)
+                minY = min(minY, y)
+                maxX = max(maxX, x)
+                maxY = max(maxY, y)
+            }
+        }
+
+        guard maxX >= minX, maxY >= minY else { return self }
+        let padding = max(2, min(width, height) / 100)
+        let cropRect = CGRect(
+            x: max(0, minX - padding),
+            y: max(0, minY - padding),
+            width: min(width - max(0, minX - padding), maxX - minX + 1 + padding * 2),
+            height: min(height - max(0, minY - padding), maxY - minY + 1 + padding * 2)
+        )
+        guard let cropped = source.cropping(to: cropRect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }
 
