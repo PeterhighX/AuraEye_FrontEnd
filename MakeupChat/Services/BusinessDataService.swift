@@ -183,6 +183,40 @@ struct UserVisualProfileDTO: Decodable, Sendable {
         let narrativeStatus: String?
         let portrait: UserPortraitDTO?
 
+        var eyeFeatureSummary: String? {
+            guard case let .object(eyes)? = snapshot["eyes"] else { return nil }
+            let features = [
+                pairedEyeFeature(eyes, field: "shape", labels: [
+                    "almond": "杏眼", "round": "圆眼", "narrow": "细长眼"
+                ]),
+                pairedEyeFeature(eyes, field: "eyelid", labels: [
+                    "single_lid": "单眼皮", "double_lid": "双眼皮",
+                    "hooded_lid": "内双", "deep_set": "深眼窝"
+                ]),
+                pairedEyeFeature(eyes, field: "angle", labels: [
+                    "upturned": "眼尾上扬", "downturned": "眼尾下垂"
+                ])
+            ].compactMap { $0 }
+            return features.isEmpty ? nil : features.prefix(2).joined(separator: " · ")
+        }
+
+        private func pairedEyeFeature(
+            _ eyes: [String: JSONValue], field: String, labels: [String: String]
+        ) -> String? {
+            let left: String? = if case let .string(value)? = eyes["left_\(field)"] {
+                labels[value]
+            } else { nil }
+            let right: String? = if case let .string(value)? = eyes["right_\(field)"] {
+                labels[value]
+            } else { nil }
+            switch (left, right) {
+            case let (left?, right?): return left == right ? left : "左\(left)·右\(right)"
+            case let (left?, nil): return "左\(left)"
+            case let (nil, right?): return "右\(right)"
+            case (nil, nil): return nil
+            }
+        }
+
         enum CodingKeys: String, CodingKey {
             case portrait, snapshot, narrative
             case profileVersion = "profile_version"

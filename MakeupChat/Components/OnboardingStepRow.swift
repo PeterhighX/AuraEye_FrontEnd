@@ -27,9 +27,9 @@ struct OnboardingStepRow: View {
                     HStack(spacing: 8) {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(
-                                (isActionEnabled || step.isCompleted)
-                                    ? Color(red: 1, green: 225 / 255, blue: 216 / 255)
-                                    : Color(red: 217 / 255, green: 217 / 255, blue: 217 / 255)
+                                (step.isActive || step.isCompleted)
+                                    ? AppTheme.ColorToken.stepCompleted
+                                    : AppTheme.ColorToken.stepPending
                             )
                             .frame(width: 9, height: 24)
 
@@ -41,7 +41,7 @@ struct OnboardingStepRow: View {
                     Button(action: action) {
                         Text(step.buttonTitle)
                             .font(AppTheme.Typography.buttonLabel)
-                            .foregroundStyle(step.isCompleted ? AppTheme.ColorToken.accentCoral : .white)
+                            .foregroundStyle(.white)
                             .frame(width: 90, height: 28)
                             .background(buttonBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -64,8 +64,8 @@ struct OnboardingStepRow: View {
     }
 
     private var buttonBackground: Color {
-        if step.isCompleted { return AppTheme.ColorToken.accentCoral.opacity(0.14) }
-        if step.isActive && isActionEnabled { return AppTheme.ColorToken.buttonPrimary }
+        if step.isCompleted { return AppTheme.ColorToken.stepCompleted }
+        if step.isActive { return AppTheme.ColorToken.buttonPrimary }
         return AppTheme.ColorToken.buttonDisabled
     }
 }

@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import MakeupChat
 
@@ -809,6 +810,81 @@ private struct ChatImageReplyStub: AIAgentServicing {
             )))
             continuation.finish()
         }
+    }
+}
+
+final class WeatherSummaryCardLayoutTests: XCTestCase {
+    @MainActor
+    func testCardGrowsAndShrinksWithReply() throws {
+        let shortReply = "当前天气晴朗、气温适宜，\n是练习眼妆的好时机。"
+        let longReply = Array(repeating: "请根据天气选择适合自己的眼妆。", count: 8).joined(separator: "\n")
+        let renderer = ImageRenderer(content: WeatherSummaryCard(aiMessage: "晴朗").frame(width: 393))
+        renderer.scale = 2
+        let minimumImage = try XCTUnwrap(renderer.uiImage)
+
+        renderer.content = WeatherSummaryCard(aiMessage: shortReply).frame(width: 393)
+        let shortImage = try XCTUnwrap(renderer.uiImage)
+        // An actual second line adds the configured 3-point interline spacing.
+        XCTAssertEqual(shortImage.size.height, minimumImage.size.height, accuracy: 3)
+        XCTAssertLessThan(shortImage.size.height, 200)
+
+        renderer.content = WeatherSummaryCard(aiMessage: longReply).frame(width: 393)
+        let longImage = try XCTUnwrap(renderer.uiImage)
+        XCTAssertGreaterThan(longImage.size.height, shortImage.size.height + 80)
+
+        renderer.content = WeatherSummaryCard(aiMessage: shortReply).frame(width: 393)
+        let shrunkImage = try XCTUnwrap(renderer.uiImage)
+        XCTAssertEqual(shrunkImage.size.height, shortImage.size.height, accuracy: 1)
+
+        for (name, image) in [("two-line-reply", shrunkImage), ("long-reply", longImage)] {
+            let attachment = XCTAttachment(image: image)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+}
+
+final class CabinetGuideLayoutTests: XCTestCase {
+    @MainActor
+    func testSpotlightPreservesTargetsAndDimsSurroundings() throws {
+        for (name, step, highlights) in [
+            ("add-card", CabinetGuideStep.addProduct, [CGRect(x: 16, y: 110, width: 156, height: 250)]),
+            ("category-headers", CabinetGuideStep.categories, [
+                CGRect(x: 16, y: 90, width: 361, height: 30),
+                CGRect(x: 16, y: 390, width: 361, height: 30)
+            ])
+        ] {
+            let renderer = ImageRenderer(content:
+                Color.white
+                    .overlay {
+                        CabinetGuideOverlay(step: step, highlights: highlights, onContinue: {})
+                    }
+                    .frame(width: 393, height: 852)
+            )
+            renderer.scale = 1
+            let image = try XCTUnwrap(renderer.uiImage)
+            for rect in highlights {
+                let brightness = try brightness(image, at: CGPoint(x: rect.midX, y: rect.midY))
+                XCTAssertGreaterThan(brightness, 0.95, "The highlighted target must remain undimmed")
+            }
+            XCTAssertLessThan(try brightness(image, at: CGPoint(x: 200, y: 30)), 0.5)
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "cabinet-guide-\(name)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+
+    private func brightness(_ image: UIImage, at point: CGPoint) throws -> Double {
+        let pixel = try XCTUnwrap(image.cgImage?.cropping(to: CGRect(origin: point, size: CGSize(width: 1, height: 1))))
+        var rgba = [UInt8](repeating: 0, count: 4)
+        let context = try XCTUnwrap(CGContext(
+            data: &rgba, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return Double(Int(rgba[0]) + Int(rgba[1]) + Int(rgba[2])) / (3 * 255)
     }
 }
 

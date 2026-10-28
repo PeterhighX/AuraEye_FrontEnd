@@ -7,12 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		EC0000000000000000000001 /* ExyteChat in Frameworks */ = {isa = PBXBuildFile; productRef = EC0000000000000000000004 /* ExyteChat */; };
-		FB0000000000000000000001 /* PhotoSourceRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */; };
-		FB0000000000000000000003 /* VisionJobServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000004 /* VisionJobServiceTests.swift */; };
-		FB0000000000000000000005 /* DemoProviderFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000006 /* DemoProviderFallbackTests.swift */; };
-		FB0000000000000000000007 /* DemoBundlePhotoSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */; };
-		FB0000000000000000000009 /* AuthenticationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB000000000000000000000A /* AuthenticationServiceTests.swift */; };
 		00AA29009FFF48569B711095 /* ProfileHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */; };
 		02BFB02413C14354A88D8F10 /* MakeupPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD664959B1B4D82B924A2D8 /* MakeupPreviewView.swift */; };
 		1022CE4C77584DB7B4719786 /* NegativeOneScreen02View.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5167CF2B2DB44014B0E56A44 /* NegativeOneScreen02View.swift */; };
@@ -76,20 +70,27 @@
 		E6AED591F1454547A1B3AE8F /* StepPreviewThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2592F2B2A7A44ADC8155C62A /* StepPreviewThumbnail.swift */; };
 		E70000000000000000000001 /* SharedFluidBackground.metal in Sources */ = {isa = PBXBuildFile; fileRef = E70000000000000000000002 /* SharedFluidBackground.metal */; };
 		E916CC97DB304069962716CE /* MakeupCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB30D17985AC47EF8B835E70 /* MakeupCompleteView.swift */; };
+		EC0000000000000000000001 /* ExyteChat in Frameworks */ = {isa = PBXBuildFile; productRef = EC0000000000000000000004 /* ExyteChat */; };
 		EFA36B954A85485D85DB3599 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5CC419665F41C69594A3D8 /* HomeView.swift */; };
 		F10000000000000000000001 /* SessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* SessionContext.swift */; };
 		F10000000000000000000003 /* VisionInfrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* VisionInfrastructure.swift */; };
 		F10000000000000000000005 /* VisualProfilePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* VisualProfilePipeline.swift */; };
 		F10000000000000000000007 /* ItemRecognitionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* ItemRecognitionPipeline.swift */; };
+		F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D27055640E4E4BAF83ADD9 /* AppSession.swift */; };
+		F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */; };
+		F4AE45A40A484409AA22212C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBC6A33E5A54F29A9A14162 /* AppTheme.swift */; };
 		FA0000000000000000000001 /* PhotoSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000002 /* PhotoSource.swift */; };
 		FA0000000000000000000003 /* OfficialGalleryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000004 /* OfficialGalleryViewModel.swift */; };
 		FA0000000000000000000005 /* OfficialGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000006 /* OfficialGalleryView.swift */; };
 		FA0000000000000000000007 /* VisionJobPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000008 /* VisionJobPersistence.swift */; };
 		FA0000000000000000000009 /* DemoFixtures in Resources */ = {isa = PBXBuildFile; fileRef = FA000000000000000000000A /* DemoFixtures */; };
-		F243E22EA90E4210A11A7514 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D27055640E4E4BAF83ADD9 /* AppSession.swift */; };
-		F2D00BFF4C28485287D329F2 /* DisplayCabinetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15548CE130464A2F85BBDD87 /* DisplayCabinetViewModel.swift */; };
-		F4AE45A40A484409AA22212C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBC6A33E5A54F29A9A14162 /* AppTheme.swift */; };
+		FB0000000000000000000001 /* PhotoSourceRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */; };
+		FB0000000000000000000003 /* VisionJobServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000004 /* VisionJobServiceTests.swift */; };
+		FB0000000000000000000005 /* DemoProviderFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000006 /* DemoProviderFallbackTests.swift */; };
+		FB0000000000000000000007 /* DemoBundlePhotoSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */; };
+		FB0000000000000000000009 /* AuthenticationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB000000000000000000000A /* AuthenticationServiceTests.swift */; };
 		FD200DEA3B3E41D8BD0BD0BF /* UserProfileDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCF3251D2B34B1AA460A9BB /* UserProfileDetailView.swift */; };
+		FE135C02B8494C04B349A581 /* CabinetOnboardingGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE135C02B8494C04B349A582 /* CabinetOnboardingGuide.swift */; };
 		FEE4B7004550451DA62A2B1A /* OnboardingStepRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */; };
 /* End PBXBuildFile section */
 
@@ -104,12 +105,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSourceRoutingTests.swift; sourceTree = "<group>"; };
-		FB0000000000000000000004 /* VisionJobServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionJobServiceTests.swift; sourceTree = "<group>"; };
-		FB0000000000000000000006 /* DemoProviderFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoProviderFallbackTests.swift; sourceTree = "<group>"; };
-		FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoBundlePhotoSourceTests.swift; sourceTree = "<group>"; };
-		FB000000000000000000000A /* AuthenticationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationServiceTests.swift; sourceTree = "<group>"; };
-		F80000000000000000000003 /* MakeupChatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MakeupChatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CosmeticImagePlaceholder.swift; sourceTree = "<group>"; };
 		05D923C6A2AE4830BA53CFAC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0687403EBC444042B8C17AE1 /* CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPickerView.swift; sourceTree = "<group>"; };
@@ -179,17 +174,24 @@
 		F10000000000000000000004 /* VisionInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionInfrastructure.swift; sourceTree = "<group>"; };
 		F10000000000000000000006 /* VisualProfilePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualProfilePipeline.swift; sourceTree = "<group>"; };
 		F10000000000000000000008 /* ItemRecognitionPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemRecognitionPipeline.swift; sourceTree = "<group>"; };
+		F12CF94986254D17BB169BFA /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepRow.swift; sourceTree = "<group>"; };
+		F65E8B42F5E34163A60327F0 /* HomeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeComponents.swift; sourceTree = "<group>"; };
+		F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderView.swift; sourceTree = "<group>"; };
+		F80000000000000000000003 /* MakeupChatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MakeupChatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupStepsView.swift; sourceTree = "<group>"; };
 		FA0000000000000000000002 /* PhotoSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSource.swift; sourceTree = "<group>"; };
 		FA0000000000000000000004 /* OfficialGalleryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialGalleryViewModel.swift; sourceTree = "<group>"; };
 		FA0000000000000000000006 /* OfficialGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialGalleryView.swift; sourceTree = "<group>"; };
 		FA0000000000000000000008 /* VisionJobPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionJobPersistence.swift; sourceTree = "<group>"; };
 		FA000000000000000000000A /* DemoFixtures */ = {isa = PBXFileReference; explicitFileType = folder; path = DemoFixtures; sourceTree = "<group>"; };
+		FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSourceRoutingTests.swift; sourceTree = "<group>"; };
+		FB0000000000000000000004 /* VisionJobServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionJobServiceTests.swift; sourceTree = "<group>"; };
+		FB0000000000000000000006 /* DemoProviderFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoProviderFallbackTests.swift; sourceTree = "<group>"; };
+		FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoBundlePhotoSourceTests.swift; sourceTree = "<group>"; };
+		FB000000000000000000000A /* AuthenticationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationServiceTests.swift; sourceTree = "<group>"; };
 		FC0000000000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		F12CF94986254D17BB169BFA /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
-		F4E49807D94448C2B35258C3 /* OnboardingStepRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepRow.swift; sourceTree = "<group>"; };
-		F65E8B42F5E34163A60327F0 /* HomeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeComponents.swift; sourceTree = "<group>"; };
-		F7FB76FFF3E64242B29E7D67 /* ProfileHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileHeaderView.swift; sourceTree = "<group>"; };
-		F8C207396B3E45FB88EE936D /* MakeupStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeupStepsView.swift; sourceTree = "<group>"; };
+		FE135C02B8494C04B349A582 /* CabinetOnboardingGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CabinetOnboardingGuide.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -320,18 +322,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		F80000000000000000000004 /* MakeupChatTests */ = {
-			isa = PBXGroup;
-			children = (
-				FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */,
-				FB0000000000000000000004 /* VisionJobServiceTests.swift */,
-				FB0000000000000000000006 /* DemoProviderFallbackTests.swift */,
-				FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */,
-				FB000000000000000000000A /* AuthenticationServiceTests.swift */,
-			);
-			path = MakeupChatTests;
-			sourceTree = "<group>";
-		};
 		A1000000000000000000000D /* MakeupChat */ = {
 			isa = PBXGroup;
 			children = (
@@ -355,14 +345,6 @@
 			path = MakeupChat;
 			sourceTree = "<group>";
 		};
-		FC0000000000000000000002 /* Supporting */ = {
-			isa = PBXGroup;
-			children = (
-				FC0000000000000000000001 /* Info.plist */,
-			);
-			path = Supporting;
-			sourceTree = "<group>";
-		};
 		A799DC10421B43AE873825D8 /* Repositories */ = {
 			isa = PBXGroup;
 			children = (
@@ -372,24 +354,6 @@
 				B97E76971D064523B4D89FAC /* UserRepository.swift */,
 			);
 			path = Repositories;
-			sourceTree = "<group>";
-		};
-		FA000000000000000000000B /* Features */ = {
-			isa = PBXGroup;
-			children = (
-				FA000000000000000000000C /* PhotoGallery */,
-			);
-			path = Features;
-			sourceTree = "<group>";
-		};
-		FA000000000000000000000C /* PhotoGallery */ = {
-			isa = PBXGroup;
-			children = (
-				FA0000000000000000000002 /* PhotoSource.swift */,
-				FA0000000000000000000004 /* OfficialGalleryViewModel.swift */,
-				FA0000000000000000000006 /* OfficialGalleryView.swift */,
-			);
-			path = PhotoGallery;
 			sourceTree = "<group>";
 		};
 		AD42CBA390FE425895EE44D9 /* Views */ = {
@@ -414,10 +378,23 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		F80000000000000000000004 /* MakeupChatTests */ = {
+			isa = PBXGroup;
+			children = (
+				FB0000000000000000000002 /* PhotoSourceRoutingTests.swift */,
+				FB0000000000000000000004 /* VisionJobServiceTests.swift */,
+				FB0000000000000000000006 /* DemoProviderFallbackTests.swift */,
+				FB0000000000000000000008 /* DemoBundlePhotoSourceTests.swift */,
+				FB000000000000000000000A /* AuthenticationServiceTests.swift */,
+			);
+			path = MakeupChatTests;
+			sourceTree = "<group>";
+		};
 		F8AA73CDAA5D4D20BF004C75 /* Components */ = {
 			isa = PBXGroup;
 			children = (
 				BF82E8B7851D4C798305E0D3 /* CabinetSectionHeader.swift */,
+				FE135C02B8494C04B349A582 /* CabinetOnboardingGuide.swift */,
 				0687403EBC444042B8C17AE1 /* CameraPickerView.swift */,
 				E413FB9F8DBF4A4C92AF37EE /* ChatBubbleView.swift */,
 				05079FAD567642FE99E9DA3E /* CosmeticImagePlaceholder.swift */,
@@ -437,6 +414,32 @@
 				2F1BDC37469D47A4A6737DCC /* WeatherSummaryCard.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		FA000000000000000000000B /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				FA000000000000000000000C /* PhotoGallery */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		FA000000000000000000000C /* PhotoGallery */ = {
+			isa = PBXGroup;
+			children = (
+				FA0000000000000000000002 /* PhotoSource.swift */,
+				FA0000000000000000000004 /* OfficialGalleryViewModel.swift */,
+				FA0000000000000000000006 /* OfficialGalleryView.swift */,
+			);
+			path = PhotoGallery;
+			sourceTree = "<group>";
+		};
+		FC0000000000000000000002 /* Supporting */ = {
+			isa = PBXGroup;
+			children = (
+				FC0000000000000000000001 /* Info.plist */,
+			);
+			path = Supporting;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -536,6 +539,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		F90000000000000000000001 /* Verify Release Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Verify Release Configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  case \" ${SWIFT_ACTIVE_COMPILATION_CONDITIONS} ${OTHER_SWIFT_FLAGS} \" in\n    *AURAEYE_ENABLE_LOCAL_AUTH_STUB*)\n      echo \"error: Release must not enable AURAEYE_ENABLE_LOCAL_AUTH_STUB\"\n      exit 1\n      ;;\n  esac\nfi\n";
+		};
 		F90000000000000000000002 /* Stamp Demo Build ID */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -556,25 +578,6 @@
 			shellPath = /bin/sh;
 			shellScript = "set -eu\nresource_dir=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nmkdir -p \"$resource_dir\"\nuuidgen > \"$resource_dir/AuraEyeDemoBuildID.txt\"\ntest -s \"$resource_dir/AuraEyeDemoBuildID.txt\"\n";
 		};
-		F90000000000000000000001 /* Verify Release Configuration */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Verify Release Configuration";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  case \" ${SWIFT_ACTIVE_COMPILATION_CONDITIONS} ${OTHER_SWIFT_FLAGS} \" in\n    *AURAEYE_ENABLE_LOCAL_AUTH_STUB*)\n      echo \"error: Release must not enable AURAEYE_ENABLE_LOCAL_AUTH_STUB\"\n      exit 1\n      ;;\n  esac\nfi\n";
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -583,6 +586,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				71A56F9D820F4D6EBA28FF9C /* CabinetSectionHeader.swift in Sources */,
+				FE135C02B8494C04B349A581 /* CabinetOnboardingGuide.swift in Sources */,
 				5398B14D9C654B9BBE113213 /* CameraPickerView.swift in Sources */,
 				C945D6CEBBF5496EBEFC2E0C /* ChatBubbleView.swift in Sources */,
 				1F6D0886E0FC41ADBAE39918 /* CosmeticImagePlaceholder.swift in Sources */,
@@ -684,36 +688,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		F80000000000000000000009 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MakeupChat.app/MakeupChat";
-			};
-			name = Debug;
-		};
-		F8000000000000000000000A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MakeupChat.app/MakeupChat";
-			};
-			name = Release;
-		};
 		A10000000000000000000007 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -813,8 +787,8 @@
 		A10000000000000000000009 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				AURAEYE_API_BASE_URL = "https://api-dev.peterhigh.xyz/v1";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				AURAEYE_API_BASE_URL = "https://api-dev.peterhigh.xyz/v1";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -844,8 +818,8 @@
 		A1000000000000000000000A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				AURAEYE_API_BASE_URL = "https://api-dev.peterhigh.xyz/v1";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				AURAEYE_API_BASE_URL = "https://api-dev.peterhigh.xyz/v1";
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -872,18 +846,39 @@
 			};
 			name = Release;
 		};
+		F80000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MakeupChat.app/MakeupChat";
+			};
+			name = Debug;
+		};
+		F8000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.makeup.chat.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MakeupChat.app/MakeupChat";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F80000000000000000000008 /* Build configuration list for PBXNativeTarget "MakeupChatTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				F80000000000000000000009 /* Debug */,
-				F8000000000000000000000A /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		A10000000000000000000005 /* Build configuration list for PBXProject "MakeupChat" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -898,6 +893,15 @@
 			buildConfigurations = (
 				A10000000000000000000009 /* Debug */,
 				A1000000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F80000000000000000000008 /* Build configuration list for PBXNativeTarget "MakeupChatTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F80000000000000000000009 /* Debug */,
+				F8000000000000000000000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -19,7 +19,6 @@ struct AnimatedWeatherSymbol: View {
 
 struct LiveWeatherSummaryCard: View {
     let aiMessage: String
-    var showFirstTimeHint = false
     var surface = "quick_start_preview"
     var styleID: String?
     @StateObject private var weatherProvider = LiveWeatherProvider.shared
@@ -46,7 +45,6 @@ struct LiveWeatherSummaryCard: View {
     var body: some View {
         WeatherSummaryCard(
             aiMessage: displayedMessage,
-            showFirstTimeHint: showFirstTimeHint,
             weather: weatherProvider.snapshot,
             onRefreshWeather: { weatherProvider.start() }
         )
@@ -104,18 +102,11 @@ struct LiveWeatherSummaryCard: View {
 
 struct WeatherSummaryCard: View {
     var aiMessage: String
-    var showFirstTimeHint: Bool = false
     var weather = LiveWeatherSnapshot()
     var onRefreshWeather: () -> Void = {}
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color(red: 1.0, green: 0.93, blue: 0.91).opacity(0.4))
-                .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
-                .frame(height: showFirstTimeHint ? 205 : 161)
-                .offset(y: 19)
-
+        VStack(spacing: 24) {
             Button(action: onRefreshWeather) {
                 HStack(alignment: .bottom, spacing: 0) {
                     PreviewWeatherAnimation(weather: weather)
@@ -137,19 +128,20 @@ struct WeatherSummaryCard: View {
                 : "\(weather.conditionText ?? "天气")，\(weather.temperature ?? 25)度")
 
             PreviewAgentOutput(
-                message: aiMessage,
-                usesFirstTimeAvatar: showFirstTimeHint
+                message: aiMessage
             )
-            .frame(
-                maxWidth: .infinity,
-                minHeight: showFirstTimeHint ? 105 : 58,
-                maxHeight: showFirstTimeHint ? 105 : 58,
-                alignment: .top
-            )
+            .frame(maxWidth: .infinity, alignment: .top)
             .padding(.horizontal, 16)
-            .offset(y: 109)
         }
-        .frame(height: showFirstTimeHint ? 230 : 186)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.bottom, 19)
+        .background {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color(red: 1.0, green: 0.93, blue: 0.91).opacity(0.4))
+                .shadow(color: Color.black.opacity(0.09), radius: 2, y: 2)
+                .padding(.top, 19)
+                .padding(.bottom, 6)
+        }
         .padding(.horizontal, 16)
     }
 }
@@ -229,7 +221,6 @@ private struct PreviewWeatherData: View {
 
 private struct PreviewAgentOutput: View {
     let message: String
-    let usesFirstTimeAvatar: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -243,11 +234,11 @@ private struct PreviewAgentOutput: View {
                 .font(.system(size: 13, weight: .thin))
                 .foregroundStyle(Color(red: 51 / 255, green: 51 / 255, blue: 51 / 255))
                 .lineSpacing(3)
-                .lineLimit(usesFirstTimeAvatar ? 4 : 2)
-                .minimumScaleFactor(0.8)
+                .lineLimit(2...)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 7)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(Color.white.opacity(0.75))
                 .clipShape(
                     UnevenRoundedRectangle(

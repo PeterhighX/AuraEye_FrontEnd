@@ -7,7 +7,6 @@ struct UserProfileDetailView: View {
     @Bindable var session: AppSession
     @Binding var path: NavigationPath
     @State private var user: UserProfile?
-    @State private var capturedPortrait: UIImage?
     @State private var showsCamera = false
     @State private var showsPhotoLibrary = false
     @State private var showsSourcePicker = false
@@ -15,10 +14,10 @@ struct UserProfileDetailView: View {
     @State private var isAnalyzing = false
     @State private var analysisErrorMessage: String?
     @State private var showsProfileMenu = false
-    @State private var showsPortraitConsent = false
     @State private var isGeneratingPortrait = false
     @State private var portraitRequestID: String?
     @State private var quickStartMessage: String?
+    @State private var statusMessage: String?
 
     private let userRepository = UserRepository()
     private let faceAnalysisService: any FaceAnalysisServicing = AccountAwareFaceAnalysisService()
@@ -61,21 +60,9 @@ struct UserProfileDetailView: View {
                 showsSourcePicker = true
             }
             Button("重新分析") {
-                runAnalysis()
+                regenerateNarrative()
             }
             Button("取消", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "生成透明头像",
-            isPresented: $showsPortraitConsent,
-            titleVisibility: .visible
-        ) {
-            Button("同意使用本次照片生成头像与教程人物图") {
-                requestPortrait()
-            }
-            Button("暂不生成", role: .cancel) {}
-        } message: {
-            Text("将本次面部分析使用的照片去除背景，生成仅本账号可读取的透明肖像。")
         }
         .alert(
             "分析未完成",
@@ -127,11 +114,49 @@ struct UserProfileDetailView: View {
         .onAppear { loadUser() }
         .task {
             await session.business.refreshProfile()
-            if session.shouldOfferPortraitConsent,
-               canGeneratePortrait,
-               session.business.visualProfile?.portrait == nil {
-                session.shouldOfferPortraitConsent = false
-                showsPortraitConsent = true
+        }
+        .onChange(of: session.business.visualProfile?.narrativeStatus) { _, status in
+            switch status {
+            case "pending", "running": showStatus("正在生成文字分析报告…")
+            case "completed": showStatus("文字分析报告已更新")
+            case "unavailable": showStatus("文字分析报告暂不可用")
+            default: break
+            }
+        }
+        .onChange(of: session.business.visualProfile?.portrait?.status) { _, status in
+            if status != nil {
+                showStatus(portraitStatus(session.business.visualProfile?.portrait))
+            }
+        }
+        .overlay(alignment: .top) {
+            if let statusMessage {
+                HStack(spacing: 10) {
+                    Image(systemName: AppTheme.Symbol.sparkle)
+                        .symbolEffect(.pulse, options: .repeating)
+                    Text(statusMessage)
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(AppTheme.ColorToken.textPrimary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                .padding(.horizontal, 24)
+                .padding(.top, 56)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityAddTraits(.updatesFrequently)
+                .allowsHitTesting(false)
+            }
+        }
+        .animation(AppTheme.Motion.quickSpring, value: statusMessage)
+        .task(id: statusMessage) {
+            guard statusMessage != nil else { return }
+            do {
+                try await Task.sleep(for: .seconds(2))
+                statusMessage = nil
+            } catch {
+                // A new status restarts the two-second display interval.
             }
         }
     }
@@ -161,7 +186,7 @@ struct UserProfileDetailView: View {
             }
             .accessibilityLabel("档案操作")
 
-            portraitImage
+            portraitImage(placeholderSize: 36)
                 .frame(width: 36, height: 36)
                 .clipShape(Circle())
         }
@@ -173,27 +198,21 @@ struct UserProfileDetailView: View {
     // MARK: - Profile summary
 
     private var profileCard: some View {
-        HStack(alignment: .bottom, spacing: 18) {
-            portraitImage
-                .frame(width: 111, height: 148)
+        HStack(alignment: .center, spacing: 18) {
+            portraitImage(placeholderSize: 72)
+                .frame(width: 111, height: 112)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .offset(y: -16)
 
-            VStack(alignment: .trailing, spacing: 0) {
+            VStack(alignment: .trailing, spacing: 10) {
                 Text(session.authenticatedAccount?.displayName ?? "用户")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.ColorToken.textPrimary)
                     .lineLimit(1)
 
-                Text("整体评价")
-                    .padding(.top, 4)
-
-                Text(session.business.visualProfile == nil
-                    ? "分析报告尚未生成"
-                    : (session.business.visualProfile?.narrative?.overall ?? "面部分析已完成"))
+                Text(session.business.visualProfile?.eyeFeatureSummary
+                    ?? (session.business.visualProfile == nil ? "眼型待分析" : "眼型特征待完善"))
+                    .font(.system(size: 12, weight: .light))
                     .lineLimit(1)
-
-                Spacer(minLength: 8)
 
                 HStack(spacing: 8) {
                     profileActionButton(title: "重新上传", color: AppTheme.ColorToken.accentCoral) {
@@ -208,27 +227,12 @@ struct UserProfileDetailView: View {
                     }
                     .disabled(isAnalyzing)
                 }
-
-                if let profile = session.business.visualProfile {
-                    Text(portraitStatus(profile.portrait))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    if canGeneratePortrait,
-                       (profile.portrait == nil || profile.portrait?.status == "failed") {
-                        Button(isGeneratingPortrait ? "生成中…" : "生成透明头像") {
-                            showsPortraitConsent = true
-                        }
-                        .font(.caption)
-                        .disabled(isGeneratingPortrait)
-                    }
-                }
             }
             .font(.system(size: 14, weight: .thin))
             .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
         }
-        .frame(height: 148)
         .padding(.horizontal, 16)
         .background {
             RoundedRectangle(cornerRadius: AppTheme.CornerRadius.hero)
@@ -238,7 +242,7 @@ struct UserProfileDetailView: View {
         .padding(.horizontal, 16)
     }
 
-    private var portraitImage: some View {
+    private func portraitImage(placeholderSize: CGFloat) -> some View {
         Group {
             if let data = session.business.avatarData,
                let image = UIImage(data: data) {
@@ -248,8 +252,10 @@ struct UserProfileDetailView: View {
             } else {
                 Image(systemName: "person.crop.circle.fill")
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
+                    .frame(width: placeholderSize, height: placeholderSize)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -313,8 +319,8 @@ struct UserProfileDetailView: View {
 
     private var bottomActions: some View {
         HStack(spacing: 14) {
-            Button(action: { runAnalysis() }) {
-                bottomButtonLabel(isAnalyzing ? "分析中…" : "重新分析")
+            Button(action: regenerateNarrative) {
+                bottomButtonLabel("重新分析")
                     .foregroundStyle(AppTheme.ColorToken.textSecondary)
                     .background(Color.white.opacity(0.5))
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.button))
@@ -361,7 +367,16 @@ struct UserProfileDetailView: View {
         }
     }
 
-    private func requestPortrait() {
+    private func showStatus(_ message: String) {
+        statusMessage = message
+    }
+
+    private func regenerateNarrative() {
+        // Keep this separate from face analysis until the text-only API is available.
+        showStatus("文字报告重新生成暂不可用")
+    }
+
+    private func requestPortrait() async throws {
         guard let version = session.business.visualProfile?.profileVersion,
               canGeneratePortrait,
               !isGeneratingPortrait else { return }
@@ -371,22 +386,56 @@ struct UserProfileDetailView: View {
         let requestID = portraitRequestID ?? UUID().uuidString
         portraitRequestID = requestID
         isGeneratingPortrait = true
-        Task {
-            defer { isGeneratingPortrait = false }
-            do {
-                let ticket = try await BusinessDataService.shared.generatePortrait(
-                    requestID: requestID, profileVersion: version
-                )
-                for _ in 0..<200 {
-                    await session.business.refreshProfile()
-                    guard let portrait = session.business.visualProfile?.portrait else { return }
-                    if portrait.status == "succeeded" || portrait.status == "failed" { return }
-                    try await Task.sleep(for: .milliseconds(max(500, min(ticket.pollAfterMS, 10_000))))
+        defer { isGeneratingPortrait = false }
+        showStatus("正在生成透明头像…")
+        let ticket = try await BusinessDataService.shared.generatePortrait(
+            requestID: requestID, profileVersion: version
+        )
+        for _ in 0..<200 {
+            try Task.checkCancellation()
+            await session.business.refreshProfile()
+            if let error = session.business.profileError {
+                throw NSError(domain: "ProfileGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+            guard let profile = session.business.visualProfile,
+                  profile.profileVersion == version else { throw VisionAPIError.resultInvalid }
+            if let portrait = profile.portrait {
+                if portrait.status == "succeeded" {
+                    guard portrait.hasAlpha else { throw VisionAPIError.resultInvalid }
+                    if let data = session.business.avatarData, UIImage(data: data) != nil {
+                        showStatus("透明头像已更新")
+                        return
+                    }
                 }
-            } catch {
-                analysisErrorMessage = error.localizedDescription
+                if portrait.status == "failed" {
+                    throw NSError(domain: "ProfileGeneration", code: 2, userInfo: [
+                        NSLocalizedDescriptionKey: portrait.error?.message ?? "透明头像生成失败，文字分析报告已保留。"
+                    ])
+                }
+            }
+            try await Task.sleep(for: .milliseconds(max(500, min(ticket.pollAfterMS, 10_000))))
+        }
+        throw VisionAPIError.jobTimedOut
+    }
+
+    private func waitForNarrative() async throws -> Bool {
+        guard let version = session.business.visualProfile?.profileVersion else {
+            throw VisionAPIError.resultInvalid
+        }
+        for _ in 0..<200 {
+            try Task.checkCancellation()
+            guard let profile = session.business.visualProfile,
+                  profile.profileVersion == version else { throw VisionAPIError.resultInvalid }
+            guard profile.narrativeStatus == "pending" || profile.narrativeStatus == "running" else {
+                return profile.narrative != nil && profile.narrativeStatus != "unavailable"
+            }
+            try await Task.sleep(for: .milliseconds(1_500))
+            await session.business.refreshProfile()
+            if let error = session.business.profileError {
+                throw NSError(domain: "ProfileGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
             }
         }
+        throw VisionAPIError.jobTimedOut
     }
 
     private var usesFixedDemoGallery: Bool {
@@ -404,11 +453,6 @@ struct UserProfileDetailView: View {
 
     private func runAnalysis() {
         guard !isAnalyzing else { return }
-
-        if !usesFixedDemoGallery, let capturedPortrait {
-            generateVirtualAvatar(from: capturedPortrait)
-            return
-        }
 
         guard let storedPath = user?.userPortraitPath,
               let data = LocalMediaStore.loadData(fromStoredPath: storedPath),
@@ -436,41 +480,8 @@ struct UserProfileDetailView: View {
     }
 
     private func generateVirtualAvatar(from image: UIImage) {
-        guard !isAnalyzing else { return }
-        isAnalyzing = true
         Task {
-            defer { isAnalyzing = false }
-            guard var profile = try? userRepository.currentUser() else { return }
-            var failureStage = VisionRequestStage.processingResult
-            do {
-                let result = try await faceAnalysisService.analyze(
-                    image: image,
-                    userId: profile.userId
-                )
-
-                failureStage = .savingProfile
-                profile.userPortraitPath = result.portraitPath
-                profile.userFileJSON = result.profileJSON
-                try userRepository.update(profile)
-                capturedPortrait = nil
-                user = profile
-                await session.business.refreshProfile()
-                if session.isDemoAccount { await session.refreshDemoRun() }
-                if canGeneratePortrait,
-                   session.business.visualProfile?.portrait == nil {
-                    showsPortraitConsent = true
-                }
-            } catch is CancellationError {
-                isAnalyzing = false
-                analysisErrorMessage = nil
-                return
-            } catch where isExplicitVisionCancellation(error) {
-                isAnalyzing = false
-                analysisErrorMessage = nil
-                return
-            } catch {
-                analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
-            }
+            await generateVirtualAvatar(from: VisionImageInput(image: image))
         }
     }
 
@@ -479,6 +490,8 @@ struct UserProfileDetailView: View {
         isAnalyzing = true
         defer { isAnalyzing = false }
         guard var profile = try? userRepository.currentUser() else { return }
+        analysisErrorMessage = nil
+        showStatus("正在分析面部并生成文字报告…")
         var failureStage = VisionRequestStage.processingResult
         do {
             let result = try await faceAnalysisService.analyze(
@@ -489,13 +502,22 @@ struct UserProfileDetailView: View {
             profile.userPortraitPath = result.portraitPath
             profile.userFileJSON = result.profileJSON
             try userRepository.update(profile)
-            capturedPortrait = nil
             user = profile
+            failureStage = .processingResult
             await session.business.refreshProfile()
+            if let error = session.business.profileError {
+                throw NSError(domain: "ProfileGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+            }
             if session.isDemoAccount { await session.refreshDemoRun() }
-            if canGeneratePortrait,
-               session.business.visualProfile?.portrait == nil {
-                showsPortraitConsent = true
+            portraitRequestID = nil
+            if canGeneratePortrait {
+                try await requestPortrait()
+            }
+            let hasNarrative = try await waitForNarrative()
+            if !hasNarrative {
+                showStatus("面部分析已完成，文字报告暂不可用")
+            } else {
+                showStatus(canGeneratePortrait ? "文字报告与透明头像已更新" : "文字报告已更新，当前照片暂不支持透明头像")
             }
         } catch is CancellationError {
             isAnalyzing = false
@@ -507,6 +529,7 @@ struct UserProfileDetailView: View {
             return
         } catch {
             analysisErrorMessage = visionFailureMessage(error, fallbackStage: failureStage)
+            showStatus("分析未完成，请稍后重试")
         }
     }
 }

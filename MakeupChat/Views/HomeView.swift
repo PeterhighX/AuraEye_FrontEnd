@@ -26,8 +26,41 @@ struct HomeView: View {
 
     var body: some View {
         homeForeground
-        .appDynamicBackground()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .backgroundPreferenceValue(HomeBackgroundAnchorKey.self) { anchors in
+            GeometryReader { geometry in
+                let buttonMidpoint = anchors[.quickActions].map { geometry[$0].midY } ?? 0
+                let tipBottom = anchors[.knowledgeTip].map { geometry[$0].maxY } ?? buttonMidpoint
+                let gradientHeight = max(0, min(buttonMidpoint, tipBottom))
+
+                ZStack {
+                    Color.white
+
+                    AppDynamicBackgroundView(isActive: true)
+                        .mask(alignment: .top) {
+                            VStack(spacing: 0) {
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .black, location: 0),
+                                        .init(color: .black, location: 0.6),
+                                        .init(color: .black.opacity(0.75), location: 0.75),
+                                        .init(color: .black.opacity(0.25), location: 0.9),
+                                        .init(color: .clear, location: 1)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: gradientHeight)
+
+                                Spacer(minLength: 0)
+                            }
+                        }
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.reload()
@@ -122,6 +155,9 @@ struct HomeView: View {
                         growthProgress
                         teachingSection
                         KnowledgeTipBar(surface: "home")
+                            .anchorPreference(key: HomeBackgroundAnchorKey.self, value: .bounds) {
+                                [.knowledgeTip: $0]
+                            }
                         recommendedSection
                     }
                     .padding(.top, 32)
@@ -224,6 +260,9 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .anchorPreference(key: HomeBackgroundAnchorKey.self, value: .bounds) {
+                [.quickActions: $0]
+            }
         }
     }
 
@@ -334,6 +373,22 @@ struct HomeView: View {
                 }
             }
         }
+    }
+}
+
+private enum HomeBackgroundTarget: Hashable {
+    case quickActions
+    case knowledgeTip
+}
+
+private struct HomeBackgroundAnchorKey: PreferenceKey {
+    static var defaultValue: [HomeBackgroundTarget: Anchor<CGRect>] { [:] }
+
+    static func reduce(
+        value: inout [HomeBackgroundTarget: Anchor<CGRect>],
+        nextValue: () -> [HomeBackgroundTarget: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 

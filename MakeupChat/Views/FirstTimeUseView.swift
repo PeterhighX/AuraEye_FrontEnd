@@ -30,8 +30,7 @@ struct FirstTimeUseView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         LiveWeatherSummaryCard(
-                            aiMessage: "今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！\n您是第一次使用APP，推荐先完善用户档案再开始化妆，下面是推荐的妆容！！",
-                            showFirstTimeHint: true
+                            aiMessage: "今日天气多云，气温26℃，紫外线指数偏弱，可以放心大胆的出门哦！\n您是第一次使用APP，推荐先完善用户档案再开始化妆，下面是推荐的妆容！！"
                         )
 
                         KnowledgeTipBar(surface: "onboarding")

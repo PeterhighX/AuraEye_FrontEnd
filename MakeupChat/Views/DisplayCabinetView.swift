@@ -18,37 +18,74 @@ struct DisplayCabinetView: View {
     @State private var showTopAddPrompt = false
     @State private var imageSource: UIImagePickerController.SourceType = .camera
     @State private var successMessage: String?
-    @State private var guideHandPressed = false
+    @State private var guideStep: CabinetGuideStep?
+    @State private var guideCategory: CosmeticCategory?
     @State private var isAddingProduct = false
     @State private var editingProduct: CosmeticDTO?
     @State private var editedProductName = ""
     @State private var deletingProduct: CosmeticDTO?
 
     var body: some View {
-        VStack(spacing: 0) {
-            if presentationMode == .onboarding {
-                onboardingBackHeader
-            }
+        ScrollViewReader { scrollProxy in
+            VStack(spacing: 0) {
+                if presentationMode == .onboarding {
+                    onboardingBackHeader
+                }
 
-            if presentationMode == .mainTab {
-                cabinetHeader
-                    .padding(.top, 8)
-            }
+                if presentationMode == .mainTab {
+                    cabinetHeader
+                        .padding(.top, 8)
+                }
 
-            ScrollView {
-                VStack(spacing: 32) {
-                    if let error = viewModel.loadErrorMessage {
-                        Text("化妆品柜暂不可用：\(error)")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 16)
+                ScrollView {
+                    VStack(spacing: 32) {
+                        if let error = viewModel.loadErrorMessage {
+                            Text("化妆品柜暂不可用：\(error)")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 16)
+                        }
+                        ForEach(visibleSections) { section in
+                            cabinetSection(section)
+                                .id(section.category)
+                        }
                     }
-                    ForEach(visibleSections) { section in
-                        cabinetSection(section)
+                    .id("cabinet-top")
+                    .padding(.top, presentationMode == .onboarding ? 16 : 32)
+                    .padding(.bottom, 100)
+                    .overlay(alignment: .bottom) {
+                        Color.clear.frame(height: 1).id("cabinet-bottom")
                     }
                 }
-                .padding(.top, presentationMode == .onboarding ? 16 : 32)
-                .padding(.bottom, 100)
+                .scrollDisabled(guideStep != nil)
+            }
+            .allowsHitTesting(guideStep == nil)
+            .accessibilityHidden(guideStep != nil)
+            .overlayPreferenceValue(CabinetGuideAnchorKey.self) { anchors in
+                if let guideStep, let guideCategory {
+                    GeometryReader { geometry in
+                        CabinetGuideOverlay(
+                            step: guideStep,
+                            highlights: guideStep.targets(for: guideCategory).compactMap {
+                                anchors[$0].map { geometry[$0] }
+                            },
+                            onContinue: advanceGuide
+                        )
+                    }
+                    .ignoresSafeArea()
+                }
+            }
+            .onChange(of: guideStep) { _, step in
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    switch step {
+                    case .addProduct:
+                        if let guideCategory { scrollProxy.scrollTo(guideCategory, anchor: .top) }
+                    case .categories:
+                        scrollProxy.scrollTo("cabinet-bottom", anchor: .bottom)
+                    case nil:
+                        scrollProxy.scrollTo("cabinet-top", anchor: .top)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,7 +95,7 @@ struct DisplayCabinetView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 28)
                 .onEnded { value in
-                    guard presentationMode == .onboarding else { return }
+                    guard presentationMode == .onboarding, guideStep == nil else { return }
                     let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
                     if isHorizontal,
                        value.translation.width < -85,
@@ -71,7 +108,7 @@ struct DisplayCabinetView: View {
             await viewModel.reload()
             if viewModel.loadErrorMessage == nil { session.syncCosmeticCategoriesFromServer() }
             showPendingSuccessFeedback()
-            startAddGuideAnimation()
+            startGuideIfNeeded()
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(
@@ -310,25 +347,36 @@ struct DisplayCabinetView: View {
     private func cabinetSection(_ section: CabinetSection) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             CabinetSectionHeader(category: section.category)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: section.category == .eyeshadow ? 12 : 14) {
-                    ForEach(section.items) { item in
-                        CosmeticProductCard(item: item, category: section.category)
-                            .contextMenu {
-                                Button("修改名称") {
-                                    editedProductName = item.displayName
-                                    editingProduct = item
-                                }
-                                Button("删除商品", role: .destructive) {
-                                    deletingProduct = item
-                                }
-                            }
-                    }
-
-                    addProductButton(for: section.category)
+                .anchorPreference(key: CabinetGuideAnchorKey.self, value: .bounds) {
+                    [.sectionHeader(section.category): $0]
                 }
-                .padding(.horizontal, 16)
+
+            ScrollViewReader { scrollProxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: section.category == .eyeshadow ? 12 : 14) {
+                        ForEach(section.items) { item in
+                            CosmeticProductCard(item: item, category: section.category)
+                                .contextMenu {
+                                    Button("修改名称") {
+                                        editedProductName = item.displayName
+                                        editingProduct = item
+                                    }
+                                    Button("删除商品", role: .destructive) {
+                                        deletingProduct = item
+                                    }
+                                }
+                        }
+
+                        addProductButton(for: section.category)
+                            .id(CabinetGuideTarget.addCard(section.category))
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .onChange(of: guideStep) { _, step in
+                    if step == .addProduct, section.category == guideCategory {
+                        scrollProxy.scrollTo(CabinetGuideTarget.addCard(section.category), anchor: .center)
+                    }
+                }
             }
         }
     }
@@ -340,23 +388,8 @@ struct DisplayCabinetView: View {
             presentImageSourcePicker()
         } label: {
             AddCosmeticCard(category: category)
-                .overlay(alignment: .topTrailing) {
-                    if category == highlightedCategory {
-                        Image("AddGuideHand")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 52, height: 64)
-                            .scaleEffect(guideHandPressed ? 0.88 : 1)
-                            .offset(
-                                x: 6,
-                                y: guideHandPressed ? 24 : 13
-                            )
-                            .shadow(
-                                color: Color(red: 1, green: 0.72, blue: 0.14).opacity(0.55),
-                                radius: 8
-                            )
-                            .allowsHitTesting(false)
-                    }
+                .anchorPreference(key: CabinetGuideAnchorKey.self, value: .bounds) {
+                    [.addCard(category): $0]
                 }
         }
         .buttonStyle(.plain)
@@ -447,11 +480,29 @@ struct DisplayCabinetView: View {
         }
     }
 
-    private func startAddGuideAnimation() {
-        guard highlightedCategory != nil else { return }
-        guideHandPressed = false
-        withAnimation(.easeInOut(duration: 0.62).repeatForever(autoreverses: true)) {
-            guideHandPressed = true
+    private var guideCompletionKey: String {
+        "cabinet.introduction.completed.\(viewModel.user.userId)"
+    }
+
+    private func startGuideIfNeeded() {
+        guard viewModel.loadErrorMessage == nil,
+              !viewModel.user.userId.isEmpty,
+              !UserDefaults.standard.bool(forKey: guideCompletionKey),
+              guideStep == nil,
+              let category = highlightedCategory else { return }
+        guideCategory = category
+        guideStep = .addProduct
+    }
+
+    private func advanceGuide() {
+        switch guideStep {
+        case .addProduct:
+            guideStep = .categories
+        case .categories:
+            UserDefaults.standard.set(true, forKey: guideCompletionKey)
+            guideStep = nil
+        case nil:
+            break
         }
     }
 }
